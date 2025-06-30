@@ -1,36 +1,63 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+/node_modules
+/.expo/
+/.expo-shared/
+/web-build/
+/android/
+/ios/build/
+/npm-debug.*
+/yarn-debug.*
+/yarn-error.log
 
 # macOS
 .DS_Store
-*.pem
 
 # local env files
-.env*.local
+.env
+.env.local
+*.env
+*.env.*
 
-# typescript
-*.tsbuildinfo
+# IDEs and other
+.vscode
+.idea
+*.iml
+*.class
+*.jar
+*.war
+*.log
+
+# firebase
+google-services.json # <--- IMPORTANT: DO NOT UPLOAD YOUR ACTUAL FIREBASE CONFIG FILE
+GoogleService-Info.plist # <--- IMPORTANT: DO NOT UPLOAD YOUR ACTUAL FIREBASE CONFIG FILE
+
+# EAS build artifacts
+/.eas/
+/dist/
+/build/
+
+# Metro bundler cache
+.history
+.vscode-test
+
+# React Native specific
+/ios/Pods/
+/ios/.symlinks/
+/ios/DerivedData/
+/ios/*.xcworkspace/
+/ios/*.xcodeproj/xcuserdata/
+/ios/*.xcodeproj/project.xcworkspace/
+/android/.gradle/
+/android/app/build/
+/android/app/.cxx/
+/android/app/src/main/assets/
+/android/app/src/debug/
+/android/app/.idea/
+/android/local.properties
+/android/.idea
+/android/captures
+/android/lint-results.xml
+/android/test-results.xml
+
+# Open AI config (if it holds your key directly)
+OpenAIConfig.js

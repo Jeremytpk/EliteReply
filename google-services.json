@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "796596006633",
+    "firebase_url": "https://elitereply-bd74d-default-rtdb.firebaseio.com",
+    "project_id": "elitereply-bd74d",
+    "storage_bucket": "elitereply-bd74d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:796596006633:android:3b441a438edd66876b0a78",
+        "android_client_info": {
+          "package_name": "com.yourcompany.elitereply"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4KK22utZ5BSsX3J4nWzCbWXbjPJgpR2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

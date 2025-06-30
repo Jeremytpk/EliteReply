@@ -1,0 +1,744 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView, Modal, TextInput, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker'; // This import can be removed if pickImage/uploadImage are completely removed
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '../../firebase';
+import { v4 as uuidv4 } from 'uuid'; // This import can be removed if pickImage/uploadImage are completely removed
+import { useNavigation } from '@react-navigation/native';
+
+// Helper function to check if a URL is a valid Firebase Storage URL
+const isFirebaseStorageUrl = (url) => {
+  return typeof url === 'string' && (url.startsWith('https://firebasestorage.googleapis.com/') || url.startsWith('gs://'));
+};
+
+const PartnerDetails = ({ route }) => {
+  const { partnerId } = route.params;
+  const navigation = useNavigation();
+  const [partner, setPartner] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false); // For overall saving/uploading operations (e.g., delete partner)
+
+  // New state for Revenues Modal (kept as it was part of your provided code)
+  const [isRevenuesModalVisible, setIsRevenuesModalVisible] = useState(false);
+  const [partnerRevenueStats, setPartnerRevenueStats] = useState(null);
+  const [revenuesModalLoading, setRevenuesModalLoading] = useState(false);
+
+  // Use useCallback for fetchData for optimization
+  const fetchPartner = useCallback(async () => {
+    setLoading(true);
+    try {
+      const docRef = doc(db, 'partners', partnerId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const partnerData = { id: docSnap.id, ...docSnap.data() };
+        setPartner(partnerData);
+      } else {
+        Alert.alert("Erreur", "Partenaire non trouvé.");
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement du partenaire:", error);
+      Alert.alert("Erreur", "Échec du chargement des détails du partenaire.");
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  }, [partnerId, navigation]);
+
+  useEffect(() => {
+    // This will fetch partner data initially and on any focus event, ensuring fresh data after edit
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      fetchPartner();
+    });
+
+    // Also fetch data on component mount
+    fetchPartner();
+
+    // Clean up the listener when the component unmounts
+    return unsubscribeFocus;
+  }, [fetchPartner, navigation]); // Added navigation to dependency list
+
+  // --- REMOVED: requestImagePickerPermission, pickImage, uploadImage ---
+  // These functions are no longer needed in PartnerDetails.js as image handling is now in PartnerEdit.js
+  // and the logo is no longer directly editable from this screen.
+  // The 'uuidv4' import will also become unnecessary if no longer directly uploading.
+
+  const handleDeletePartner = () => {
+    Alert.alert(
+      "Supprimer le Partenaire",
+      `Êtes-vous sûr de vouloir supprimer ${partner.nom} ? Cette action est irréversible.`, // French key
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          onPress: async () => {
+            setUploading(true);
+            try {
+              if (partner.logo && isFirebaseStorageUrl(partner.logo)) {
+                try {
+                  const logoPath = new URL(partner.logo).pathname.split('/o/')[1].split('?')[0];
+                  const decodedLogoPath = decodeURIComponent(logoPath);
+                  const imageRef = ref(storage, decodedLogoPath);
+                  await deleteObject(imageRef);
+                  console.log("Logo du partenaire supprimé du stockage.");
+                } catch (deleteError) {
+                  console.warn("Erreur lors de la suppression du logo du partenaire du stockage:", deleteError);
+                }
+              }
+
+              await deleteDoc(doc(db, 'partners', partnerId));
+              Alert.alert("Succès", `${partner.nom} a été supprimé.`); // French key
+              navigation.goBack();
+            } catch (error) {
+              console.error("Erreur lors de la suppression du partenaire:", error);
+              Alert.alert("Erreur", "Échec de la suppression du partenaire.");
+            } finally {
+              setUploading(false);
+            }
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
+  // --- MODIFIED: handleEditPartner now navigates to PartnerEdit.js ---
+  const handleEditPartner = () => {
+    navigation.navigate('PartnerEdit', { partnerId: partner.id });
+  };
+  // --- END MODIFIED ---
+
+  // New: Function to fetch partner's revenue details for the modal
+  const fetchPartnerRevenueDetails = useCallback(async () => {
+    setRevenuesModalLoading(true);
+    try {
+      let monthlyNet = 0;
+      let yearlyNet = 0;
+      let monthlyCommission = 0;
+      let yearlyCommission = 0;
+
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentYearStart = new Date(now.getFullYear(), 0, 1);
+
+      // Query the subcollection for revenue transactions
+      const partnerRevenueTransactionsQuery = query(
+        collection(db, 'partners', partnerId, 'revenue_transactions')
+      );
+      const revenueTransactionsSnapshot = await getDocs(partnerRevenueTransactionsQuery);
+
+      revenueTransactionsSnapshot.forEach(doc => {
+        const transaction = doc.data();
+        const transactionDate = transaction.transactionDate?.toDate(); // Convert Firestore Timestamp to Date
+
+        if (typeof transaction.amountReceived === 'number' && typeof transaction.commissionAmount === 'number') {
+          const netAmount = transaction.amountReceived - transaction.commissionAmount;
+          if (transactionDate >= currentMonthStart) {
+            monthlyNet += netAmount;
+            monthlyCommission += transaction.commissionAmount;
+          }
+          if (transactionDate >= currentYearStart) {
+            yearlyNet += netAmount;
+            yearlyCommission += transaction.commissionAmount;
+          }
+        }
+      });
+
+      setPartnerRevenueStats({
+        monthlyNet,
+        yearlyNet,
+        monthlyCommission,
+        yearlyCommission,
+      });
+      setIsRevenuesModalVisible(true); // Show modal after data is fetched
+
+    } catch (error) {
+      console.error("Erreur lors du chargement des détails des revenus du partenaire:", error);
+      Alert.alert("Erreur", "Impossible de charger les détails des revenus du partenaire. " + error.message);
+    } finally {
+      setRevenuesModalLoading(false);
+    }
+  }, [partnerId]); // Dependency on partnerId ensures it refetches if partnerId changes
+
+  // Helper function to format date for display (e.g., in modal)
+  const formatDateTimeForDisplay = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      let date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      console.error("Erreur lors du formatage de la date/heure pour l'affichage:", e);
+      return 'Date invalide';
+    }
+  };
+
+
+  if (loading || !partner) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0a8fdf" />
+        <Text style={{ marginTop: 10, fontSize: 16, color: '#666' }}>Chargement des détails du partenaire...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.logoContainer}>
+        {partner.logo ? (
+          // --- MODIFIED: Image is no longer touchable ---
+          <Image source={{ uri: partner.logo }} style={styles.logo} />
+        ) : (
+          <View style={styles.uploadPlaceholder}>
+            <Ionicons name="business" size={40} color="#ccc" />
+            <Text style={styles.uploadPlaceholderText}>Pas de logo</Text>
+          </View>
+        )}
+
+        {/* --- REMOVED: uploadIcon TouchableOpacity --- */}
+        {/* The photo upload icon is removed from here as per request. */}
+        {/* The functionality is now fully handled by PartnerEdit.js */}
+      </View>
+
+      <View style={styles.infoContainer}>
+        <Text style={styles.name}>{partner.nom}</Text>
+        <Text style={styles.category}>Catégorie: {partner.categorie}</Text>
+        {partner.ceo && <Text style={styles.infoText}>CEO: {partner.ceo}</Text>}
+        {partner.manager && <Text style={styles.infoText}>Manager: {partner.manager}</Text>}
+        {partner.adresse && <Text style={styles.infoText}>Adresse: {partner.adresse}</Text>}
+        {partner.email && <Text style={styles.email} onPress={() => Linking.openURL(`mailto:${partner.email}`)}>Email: {partner.email}</Text>}
+        {partner.numeroTelephone && <Text style={styles.phone} onPress={() => Linking.openURL(`tel:${partner.numeroTelephone}`)}>Téléphone: {partner.numeroTelephone}</Text>}
+        {partner.siteWeb && <Text style={styles.website} onPress={() => Linking.openURL(partner.siteWeb)}>Site Web: {partner.siteWeb}</Text>}
+        {partner.description && (
+          <View style={styles.descriptionContainer}>
+            <Text style={styles.descriptionLabel}>Description:</Text>
+            <Text style={styles.descriptionText}>{partner.description}</Text>
+          </View>
+        )}
+
+        {partner.promotion && ( // Assuming 'promotion' key is consistent
+          <View style={styles.promotionContainer}>
+            <Text style={styles.promotionLabel}>Promotion Actuelle:</Text>
+            <Text style={styles.promotionText}>{partner.promotion}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Products, Documents, and Revenues Buttons */}
+      <View style={styles.additionalButtonsContainer}>
+        <TouchableOpacity
+          style={styles.productsButton}
+          onPress={() => navigation.navigate('Products', {
+            partnerId: partner.id,
+            partnerName: partner.nom,
+            partnerLogo: partner.logo
+          })}
+        >
+          <Text style={styles.productsButtonText}>Voir les Produits</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.documentsButton}
+          onPress={() => navigation.navigate('PartnerDoc', {
+            partnerId: partner.id,
+            partnerName: partner.nom,
+            isAdmin: true
+          })}
+        >
+          <Text style={styles.productsButtonText}>Documents</Text>
+          <Ionicons name="folder-open" size={20} color="#fff" style={styles.buttonIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.revenuesButton}
+          onPress={fetchPartnerRevenueDetails}
+        >
+          <Text style={styles.productsButtonText}>Revenus</Text>
+          <Ionicons name="stats-chart" size={20} color="#fff" style={styles.buttonIcon} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Edit and Delete Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity style={styles.editButton} onPress={handleEditPartner}>
+          <Ionicons name="create" size={20} color="#fff" />
+          <Text style={styles.actionButtonText}>Modifier</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePartner} disabled={uploading}>
+          {uploading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="trash" size={20} color="#fff" />
+          )}
+          <Text style={styles.actionButtonText}>Supprimer Compte</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Revenues Modal */}
+      <Modal
+        visible={isRevenuesModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsRevenuesModalVisible(false)}
+      >
+        <View style={styles.revenuesModalOverlay}>
+          <View style={styles.revenuesModalContent}>
+            <TouchableOpacity
+              style={styles.revenuesModalCloseButton}
+              onPress={() => setIsRevenuesModalVisible(false)}
+            >
+              <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
+            </TouchableOpacity>
+
+            {revenuesModalLoading ? (
+              <View style={styles.modalLoadingContainer}>
+                <ActivityIndicator size="large" color="#0a8fdf" />
+                <Text style={styles.loadingText}>Chargement des données de revenus...</Text>
+              </View>
+            ) : (
+              partnerRevenueStats && (
+                <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                  <Text style={styles.modalRevenuesTitle}>Revenus de {partner.nom}</Text>
+                  <Text style={styles.modalRevenuesSubtitle}>Statistiques Financières</Text>
+
+                  <View style={styles.modalStatCard}>
+                    <Text style={styles.modalStatLabel}>Revenus Nets ce mois-ci:</Text>
+                    <Text style={styles.modalStatValue}>
+                      {(partnerRevenueStats.monthlyNet ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalStatCard}>
+                    <Text style={styles.modalStatLabel}>Revenus Nets cette année:</Text>
+                    <Text style={styles.modalStatValue}>
+                      {(partnerRevenueStats.yearlyNet ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.modalStatCard, { borderColor: '#9C27B0' }]}>
+                    <Text style={styles.modalStatLabel}>Commission ce mois-ci:</Text>
+                    <Text style={[styles.modalStatValue, { color: '#9C27B0' }]}>
+                      {(partnerRevenueStats.monthlyCommission ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.modalStatCard, { borderColor: '#9C27B0' }]}>
+                    <Text style={styles.modalStatLabel}>Commission cette année:</Text>
+                    <Text style={[styles.modalStatValue, { color: '#9C27B0' }]}>
+                      {(partnerRevenueStats.yearlyCommission ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                    </Text>
+                  </View>
+                </ScrollView>
+              )
+            )}
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    alignSelf: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  logo: { // This is the image style
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  uploadPlaceholder: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  uploadPlaceholderText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 5,
+  },
+  // --- REMOVED: uploadIcon style as it's no longer used ---
+  // uploadIcon: {
+  //   position: 'absolute',
+  //   bottom: 10,
+  //   right: 10,
+  //   backgroundColor: '#0a8fdf',
+  //   width: 40,
+  //   height: 40,
+  //   borderRadius: 20,
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  //   shadowColor: '#000',
+  //   shadowOffset: { width: 0, height: 2 },
+  //   shadowOpacity: 0.3,
+  //   shadowRadius: 3,
+  //   elevation: 5,
+  // },
+  infoContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  name: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+    textAlign: 'center',
+  },
+  category: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  email: {
+    fontSize: 16,
+    color: '#0a8fdf',
+    marginBottom: 8,
+    textDecorationLine: 'underline',
+  },
+  phone: {
+    fontSize: 16,
+    color: '#0a8fdf',
+    marginBottom: 8,
+    textDecorationLine: 'underline',
+  },
+  website: {
+    fontSize: 16,
+    color: '#0a8fdf',
+    marginBottom: 8,
+    textDecorationLine: 'underline',
+  },
+  descriptionContainer: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 10,
+  },
+  descriptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 5,
+  },
+  descriptionText: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 22,
+  },
+  promotionContainer: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#e6f7ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#91d5ff',
+  },
+  promotionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0a8fdf',
+    marginBottom: 5,
+  },
+  promotionText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 22,
+  },
+  additionalButtonsContainer: {
+    flexDirection: 'column',
+    gap: 10,
+    marginBottom: 20,
+  },
+  productsButton: {
+    backgroundColor: '#0a8fdf',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+  },
+  documentsButton: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+  },
+  revenuesButton: {
+    backgroundColor: '#FF9800',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+  },
+  productsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  buttonIcon: {
+    marginLeft: 10,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  editButton: {
+    backgroundColor: '#ffc107',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  deleteButton: {
+    backgroundColor: '#dc3545',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  modalContainer: { // These modal styles were for the inline edit modal that has been removed
+    flex: 1,
+    padding: 20,
+    paddingTop: 50,
+    backgroundColor: '#f8f9fa',
+  },
+  modalHeader: { // These modal styles were for the inline edit modal that has been removed
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: { // These modal styles were for the inline edit modal that has been removed
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  formGroup: { // These modal styles were for the inline edit modal that has been removed
+    marginBottom: 15,
+  },
+  formLabel: { // These modal styles were for the inline edit modal that has been removed
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#555',
+  },
+  textInput: { // These modal styles were for the inline edit modal that has been removed
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  multilineTextInput: { // These modal styles were for the inline edit modal that has been removed
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  logoEditContainer: { // These modal styles were for the inline edit modal that has been removed
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  logoEdit: { // These modal styles were for the inline edit modal that has been removed
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 10,
+  },
+  uploadPlaceholderEdit: { // These modal styles were for the inline edit modal that has been removed
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    marginBottom: 10,
+  },
+  logoUploadIndicator: { // These modal styles were for the inline edit modal that has been removed
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -10,
+    marginTop: -10,
+  },
+  uploadText: { // These modal styles were for the inline edit modal that has been removed
+    marginTop: 5,
+    color: '#999',
+    fontSize: 14,
+  },
+  saveButton: { // These modal styles were for the inline edit modal that has been removed
+    backgroundColor: '#28a745',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  saveButtonText: { // These modal styles were for the inline edit modal that will be removed
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: { // These modal styles were for the inline edit modal that will be removed
+    backgroundColor: '#6c757d',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  cancelButtonText: { // These modal styles were for the inline edit modal that will be removed
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  disabledButton: { // These modal styles were for the inline edit modal that will be removed
+    opacity: 0.7,
+  },
+  revenuesModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  revenuesModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 25,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  revenuesModalCloseButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
+  },
+  modalRevenuesTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalRevenuesSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalStatCard: {
+    backgroundColor: '#F0F4F8',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderColor: '#0a8fdf',
+  },
+  modalStatLabel: {
+    fontSize: 16,
+    color: '#444',
+    fontWeight: '600',
+    flexShrink: 1,
+    marginRight: 10,
+  },
+  modalStatValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0a8fdf',
+    textAlign: 'right',
+  },
+});
+
+export default PartnerDetails;

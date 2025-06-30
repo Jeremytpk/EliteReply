@@ -1,0 +1,1003 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { db, auth } from '../../firebase'; // Import auth for current user context if needed, and db
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  getDoc // Imported getDoc to fetch user tokens
+} from 'firebase/firestore';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+const Partners = () => {
+  const navigation = useNavigation();
+  const [partners, setPartners] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userLoading, setUserLoading] = useState(false); // Used for modals' loading states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [promoteModalVisible, setPromoteModalVisible] = useState(false);
+  const [currentPartner, setCurrentPartner] = useState(null);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [promotionDuration, setPromotionDuration] = useState(14);
+  const [promotionEndDate, setPromotionEndDate] = null; // Changed initial state to null for consistency
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // --- NEW: Function to send push notification with custom sound ---
+  const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
+    const message = {
+      to: expoPushToken,
+      sound: 'ERNotification', // <--- Using your custom sound "ERNotification.mp3"
+      title,
+      body,
+      data,
+    };
+
+    try {
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+      console.log('Push notification sent successfully from Partners.js!');
+    } catch (error) {
+      console.error('Failed to send push notification from Partners.js:', error);
+    }
+  };
+  // --- END NEW ---
+
+
+  // Function to fetch data (partners and users)
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [partnersQuery, usersQuery] = await Promise.all([
+        getDocs(collection(db, 'partners')),
+        getDocs(collection(db, 'users'))
+      ]);
+
+      // Map document snapshots to array of objects with 'id'
+      setPartners(partnersQuery.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsers(usersQuery.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      Alert.alert("Erreur", "Échec du chargement des données. Veuillez réessayer.");
+      console.error("Erreur lors du chargement des données:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Effect to fetch data on component mount and when fetchData callback changes
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Filter partners based on search query and updated French keys (ceo, manager)
+  const filteredPartners = partners.filter(partner => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      partner.nom?.toLowerCase().includes(searchLower) ||
+      partner.categorie?.toLowerCase().includes(searchLower) ||
+      partner.ceo?.toLowerCase().includes(searchLower) || // Changed from fondateur to ceo
+      partner.manager?.toLowerCase().includes(searchLower) || // Changed from gestionnaire to manager
+      partner.description?.toLowerCase().includes(searchLower) ||
+      partner.email?.toLowerCase().includes(searchLower) ||
+      partner.numeroTelephone?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Filter users for the assignment modal
+  const filteredUsers = users.filter(user => {
+    const searchLower = userSearchQuery.toLowerCase();
+    return (
+      user.name?.toLowerCase().includes(searchLower) ||
+      user.email?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const handleAssignUser = async (userId) => {
+    if (!currentPartner || !currentPartner.id) {
+        Alert.alert("Erreur", "Partenaire non sélectionné pour l'affectation.");
+        return;
+    }
+    try {
+      setUserLoading(true);
+      const selectedUser = users.find(user => user.id === userId);
+
+      // Update partner document with assigned user info
+      const partnerRef = doc(db, 'partners', currentPartner.id);
+      await updateDoc(partnerRef, {
+        assignedUserId: userId,
+        assignedUserName: selectedUser.name,
+        assignedUserEmail: selectedUser.email,
+        assignedUserPhotoURL: selectedUser.photoURL || null,
+        assignedDate: new Date().toISOString()
+      });
+
+      // Update user document with partner info
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        role: "Partner", // Change user's role
+        isPartner: true, // Mark user as partner
+        partnerId: currentPartner.id,
+        partnerName: currentPartner.nom, // Use French key for partner name
+        partners: arrayUnion({
+          id: currentPartner.id,
+          nom: currentPartner.nom,
+          categorie: currentPartner.categorie,
+          assignedDate: new Date().toISOString()
+        })
+      });
+
+      Alert.alert("Succès", `Assigné à ${selectedUser.name} avec succès.`);
+      closeModals(); // Close modal after successful assignment
+      fetchData(); // Refresh all data to reflect changes
+
+      // --- NEW: Send notification to the assigned user ---
+      if (selectedUser.expoPushToken) {
+        sendPushNotification(
+          selectedUser.expoPushToken,
+          "Nouveau rôle de partenaire EliteReply!",
+          `Félicitations ! Vous avez été assigné comme partenaire pour ${currentPartner.nom}.`,
+          { type: 'partner_role_assigned', partnerId: currentPartner.id }
+        );
+      }
+      // --- END NEW ---
+
+    } catch (error) {
+      Alert.alert("Erreur", error.message);
+      console.error("Erreur lors de l'affectation de l'utilisateur:", error);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleUnassignUser = async (partnerId) => {
+    try {
+      const partner = partners.find(p => p.id === partnerId);
+      if (!partner) {
+        console.warn(`Partenaire avec l'ID ${partnerId} non trouvé dans l'état.`);
+        Alert.alert("Erreur", "Partenaire introuvable dans la liste. Impossible de désaffecter.");
+        return;
+      }
+      if (!partner.assignedUserId) {
+          Alert.alert("Info", `${partner.nom} n'est actuellement pas affecté à un utilisateur.`);
+          return;
+      }
+
+      // --- NEW: Get user data BEFORE unassigning for notification ---
+      let unassignedUserToken = null;
+      let unassignedUserName = partner.assignedUserName;
+      const userToUnassignRef = doc(db, 'users', partner.assignedUserId);
+      const userToUnassignSnap = await getDoc(userToUnassignRef);
+      if (userToUnassignSnap.exists()) {
+          unassignedUserToken = userToUnassignSnap.data().expoPushToken;
+          unassignedUserName = userToUnassignSnap.data().name || partner.assignedUserName;
+      }
+      // --- END NEW ---
+
+      // Update partner document to remove assigned user info
+      const partnerRef = doc(db, 'partners', partnerId);
+      await updateDoc(partnerRef, {
+        assignedUserId: null,
+        assignedUserName: null,
+        assignedUserEmail: null,
+        assignedUserPhotoURL: null,
+        assignedDate: null,
+        estPromu: false, // Reset promotion status on unassign (French key)
+        promotionStartDate: null,
+        promotionEndDate: null,
+        promotionDuration: null
+      });
+
+      // Update user document to remove partner role and partner info
+      if (userToUnassignSnap.exists()) { // Use the snapshot fetched earlier
+        const userData = userToUnassignSnap.data();
+        const userPartners = userData.partners || [];
+
+        const itemToRemove = userPartners.find(p => p.id === partner.id);
+
+        if (itemToRemove) {
+          await updateDoc(userToUnassignRef, {
+            role: "User", // Revert user role
+            isPartner: false, // Mark user as not a partner
+            partnerId: null,
+            partnerName: null,
+            partners: arrayRemove(itemToRemove)
+          });
+        } else {
+            console.warn(`Partenaire ID ${partner.id} non trouvé dans le tableau des partenaires de l'utilisateur pour suppression. Effacement des données du partenaire de l'utilisateur.`);
+            await updateDoc(userToUnassignRef, {
+              role: "User",
+              isPartner: false,
+              partnerId: null,
+              partnerName: null,
+            });
+        }
+      } else {
+          console.warn("Document utilisateur non trouvé pour la désaffectation:", partner.assignedUserId);
+      }
+
+      Alert.alert("Succès", "Désaffecté avec succès.");
+      closeModals(); // Close modal after successful unassignment
+      fetchData(); // Refresh all data to reflect changes
+
+      // --- NEW: Send notification to the unassigned user ---
+      if (unassignedUserToken) {
+        sendPushNotification(
+          unassignedUserToken,
+          "Mise à jour du rôle EliteReply",
+          `Votre rôle de partenaire pour ${partner.nom} a été révoqué.`,
+          { type: 'partner_role_unassigned', partnerId: partner.id }
+        );
+      }
+      // --- END NEW ---
+
+    } catch (error) {
+      Alert.alert("Erreur", error.message);
+      console.error("Erreur lors de la désaffectation:", error);
+    }
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setPromotionEndDate(selectedDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize today's date
+      const diffTime = Math.abs(selectedDate.getTime() - today.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setPromotionDuration(diffDays);
+    }
+  };
+
+  const handlePromotePartner = async () => {
+    if (!currentPartner) return;
+
+    try {
+      setUserLoading(true);
+      const partnerRef = doc(db, 'partners', currentPartner.id);
+
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0); // Set to start of day
+
+      const calculatedEndDate = promotionEndDate || new Date(startDate.getTime() + promotionDuration * 24 * 60 * 60 * 1000);
+      calculatedEndDate.setHours(23, 59, 59, 999); // Set to end of day
+
+      await updateDoc(partnerRef, {
+        estPromu: true, // Use French key for 'isPromoted'
+        promotionStartDate: startDate.toISOString(),
+        promotionEndDate: calculatedEndDate.toISOString(),
+        promotionDuration: promotionDuration
+      });
+
+      Alert.alert("Succès", `${currentPartner.nom} a été promu avec succès !`);
+      closeModals();
+      fetchData(); // Refresh all data to reflect changes
+
+      // --- NEW: Send notification to the assigned partner user about promotion ---
+      if (currentPartner.assignedUserId) {
+        const assignedUserDoc = await getDoc(doc(db, 'users', currentPartner.assignedUserId));
+        if (assignedUserDoc.exists() && assignedUserDoc.data().expoPushToken) {
+          sendPushNotification(
+            assignedUserDoc.data().expoPushToken,
+            "Félicitations! Partenaire Promu!",
+            `Le partenaire ${currentPartner.nom} a été promu pour une durée de ${promotionDuration} jours!`,
+            { type: 'partner_promoted', partnerId: currentPartner.id }
+          );
+        }
+      }
+      // --- END NEW ---
+
+    } catch (error) {
+      Alert.alert("Erreur", error.message);
+      console.error("Erreur lors de la promotion du partenaire:", error);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  // Render function for each user item in the assignment modal
+  const renderUserItem = ({ item }) => {
+    const isAssignedToCurrent = currentPartner?.assignedUserId === item.id;
+    const isAssignedElsewhere = item.isPartner && !isAssignedToCurrent;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.userItem,
+          isAssignedToCurrent && styles.assignedUserItem,
+          isAssignedElsewhere && styles.assignedElsewhereItem
+        ]}
+        onPress={() => {
+          if (isAssignedToCurrent) {
+            Alert.alert(
+              "Confirmer la désaffectation",
+              `Êtes-vous sûr de vouloir désaffecter ${item.name} de ${currentPartner.nom}?`,
+              [
+                { text: "Annuler", style: "cancel" },
+                { text: "Désaffecter", onPress: () => handleUnassignUser(currentPartner.id), style: "destructive" }
+              ]
+            );
+          } else if (!item.isPartner) {
+            handleAssignUser(item.id);
+          }
+        }}
+        disabled={userLoading || isAssignedElsewhere}
+      >
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item.name}</Text>
+          <Text style={styles.userEmail}>{item.email}</Text>
+
+          {isAssignedToCurrent && (
+            <Text style={styles.assignedStatus}>Actuellement assigné</Text>
+          )}
+
+          {isAssignedElsewhere && (
+            <Text style={styles.otherAssignmentStatus}>
+              Assigné à: {item.partnerName || 'Un autre partenaire'}
+            </Text>
+          )}
+        </View>
+
+        {userLoading && isAssignedToCurrent ? (
+          <ActivityIndicator size="small" color="#0a8fdf" />
+        ) : (
+          <Ionicons
+            name={isAssignedToCurrent ? "person-remove" : "person-add"}
+            size={20}
+            color={
+              isAssignedToCurrent ? "#FF3B30" :
+              isAssignedElsewhere ? "#ccc" : "#0a8fdf"
+            }
+          />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Helper function to get promotion status text and color
+  const getPromotionStatus = (partner) => {
+    if (!partner.estPromu || !partner.promotionEndDate) { // Use French key
+      return { color: '#666', text: 'Pas de promotion', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
+
+    const endDate = new Date(partner.promotionEndDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize today's date
+
+    if (endDate < today) {
+      return { color: '#FF3B30', text: 'Promotion expirée', iconColor: '#FF3B30', iconName: 'close-circle-outline' };
+    }
+
+    const diffTime = endDate.getTime() - today.getTime(); // Use positive diff for remaining days
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 7) { // Nearing expiration
+      return { color: '#FF9500', text: `Promo: ${diffDays} jours restants`, iconColor: '#FF9500', iconName: 'time-outline' };
+    } else { // Active promotion
+      return { color: '#34C759', text: `Promo: ${diffDays} jours restants`, iconColor: '#34C759', iconName: 'checkmark-circle-outline' };
+    }
+  };
+
+  // Render function for each partner item in the main FlatList
+  const renderItem = ({ item }) => {
+    const promotionStatus = getPromotionStatus(item);
+
+    return (
+      <TouchableOpacity
+        style={styles.partnerItem}
+        onPress={() => navigation.navigate("PartnerDetails", { partnerId: item.id })}
+      >
+        {/* Replaced Image with Ionicons */}
+        <View style={styles.partnerIconContainer}>
+            <Ionicons name="business-outline" size={30} color="#0a8fdf" />
+        </View>
+
+        <View style={styles.partnerInfo}>
+          <Text style={styles.partnerName}>{item.nom}</Text>
+          <Text style={styles.partnerCategory}>{item.categorie}</Text>
+          {item.ceo && ( // Display CEO if exists
+             <Text style={styles.partnerDetailsText}>CEO: {item.ceo}</Text>
+          )}
+          {item.manager && ( // Display Manager if exists
+            <Text style={styles.partnerDetailsText}>Manager: {item.manager}</Text>
+          )}
+          {item.assignedUserName && (
+            <Text style={styles.assignedUser}>Assigné à: {item.assignedUserName}</Text>
+          )}
+          {item.estPromu && (
+            <Text style={[styles.promotionDelayText, { color: promotionStatus.color }]}>
+              <Ionicons name={promotionStatus.iconName} size={12} color={promotionStatus.color} />
+              {' '}
+              {promotionStatus.text}
+            </Text>
+          )}
+        </View>
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: promotionStatus.iconColor }]}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent navigation to PartnerDetails
+              setCurrentPartner(item);
+              setPromotionDuration(item.promotionDuration || 14);
+              setPromotionEndDate(item.promotionEndDate ? new Date(item.promotionEndDate) : null);
+              setPromoteModalVisible(true);
+            }}
+            accessibilityLabel={`Promouvoir ${item.nom}`} // Accessibility label
+          >
+            <Ionicons name="rocket" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, item.assignedUserId ? styles.unassignButton : styles.assignButton]}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent navigation to PartnerDetails
+              item.assignedUserId
+                ? Alert.alert( // Confirmation for unassigning from main list
+                    "Confirmer la désaffectation",
+                    `Êtes-vous sûr de vouloir désaffecter ${item.assignedUserName} de ${item.nom}?`,
+                    [
+                      { text: "Annuler", style: "cancel" },
+                      { text: "Désaffecter", onPress: () => handleUnassignUser(item.id), style: "destructive" }
+                    ]
+                  )
+                : openAssignModal(item);
+            }}
+            accessibilityLabel={item.assignedUserId ? `Désaffecter ${item.assignedUserName} de ${item.nom}` : `Assigner un utilisateur à ${item.nom}`} // Accessibility label
+          >
+            <Ionicons
+              name={item.assignedUserId ? "person-remove" : "person-add"}
+              size={20}
+              color="#fff"
+            />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Helper functions for modal visibility and cleanup
+  const openAssignModal = (partner) => {
+    setCurrentPartner(partner);
+    setAssignModalVisible(true);
+  };
+
+  const closeModals = () => {
+    setAssignModalVisible(false);
+    setPromoteModalVisible(false);
+    setCurrentPartner(null);
+    setUserSearchQuery('');
+    setPromotionDuration(14);
+    setPromotionEndDate(null);
+    setShowDatePicker(false);
+  };
+
+  // Show loading indicator while data is being fetched
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0a8fdf" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          Gestion des Partenaires ({filteredPartners.length})
+        </Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={fetchData}
+            accessibilityLabel="Actualiser la liste des partenaires"
+          >
+            <Ionicons name="refresh" size={24} color="#0a8fdf" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => navigation.navigate("AddPartner")}
+            accessibilityLabel="Ajouter un nouveau partenaire"
+          >
+            <Ionicons name="add" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#999" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher des partenaires..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          accessibilityLabel="Champ de recherche de partenaires"
+        />
+      </View>
+
+      <FlatList
+        data={filteredPartners}
+        renderItem={renderItem}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Aucun partenaire trouvé</Text>
+          </View>
+        }
+      />
+
+      {/* Assign User Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={assignModalVisible}
+        onRequestClose={closeModals}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={closeModals} accessibilityLabel="Retourner à la liste des partenaires">
+              <Ionicons name="arrow-back" size={24} color="#0a8fdf" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {currentPartner?.nom || 'Assigner un Partenaire'}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#999" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher des utilisateurs..."
+              value={userSearchQuery}
+              onChangeText={setUserSearchQuery}
+              autoFocus
+              accessibilityLabel="Champ de recherche d'utilisateurs"
+            />
+          </View>
+
+          <View style={styles.modalSubheader}>
+            <Text style={styles.modalSubtitle}>
+              {currentPartner?.assignedUserName
+                ? `Actuellement assigné à: ${currentPartner.assignedUserName}`
+                : 'Non assigné actuellement'}
+            </Text>
+          </View>
+
+          <FlatList
+            data={filteredUsers}
+            renderItem={renderUserItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>Aucun utilisateur trouvé</Text>
+              </View>
+            }
+          />
+        </View>
+      </Modal>
+
+      {/* Promote Partner Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={promoteModalVisible}
+        onRequestClose={closeModals}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.promotionModal}>
+            <Text style={styles.modalTitle}>Promouvoir le Partenaire</Text>
+            <Text style={styles.modalSubtitle}>{currentPartner?.nom}</Text>
+
+            <View style={styles.durationOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.durationOption,
+                  promotionDuration === 14 && !promotionEndDate && styles.selectedOption
+                ]}
+                onPress={() => {
+                  setPromotionDuration(14);
+                  setPromotionEndDate(null);
+                }}
+                accessibilityLabel="Option de promotion de 2 semaines"
+              >
+                <Text style={styles.optionText}>2 Semaines</Text>
+                <Text style={styles.optionSubtext}>Promotion Standard</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.durationOption,
+                  promotionDuration === 30 && !promotionEndDate && styles.selectedOption
+                ]}
+                onPress={() => {
+                  setPromotionDuration(30);
+                  setPromotionEndDate(null);
+                }}
+                accessibilityLabel="Option de promotion d'1 mois"
+              >
+                <Text style={styles.optionText}>1 Mois</Text>
+                <Text style={styles.optionSubtext}>Promotion Étendue</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.customDateOption,
+                  promotionEndDate && styles.selectedOption
+                ]}
+                onPress={() => setShowDatePicker(true)}
+                accessibilityLabel="Sélectionner une date de promotion personnalisée"
+              >
+                <Text style={styles.optionText}>
+                  {promotionEndDate
+                    ? `Personnalisé: ${promotionDuration} jours (jusqu'au ${promotionEndDate.toLocaleDateString()})`
+                    : 'Sélectionner une date personnalisée'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={promotionEndDate || new Date()}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+              />
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={closeModals}
+                accessibilityLabel="Annuler la promotion"
+              >
+                <Text style={styles.buttonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handlePromotePartner}
+                disabled={userLoading}
+                accessibilityLabel="Confirmer la promotion du partenaire"
+              >
+                {userLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={[styles.buttonText, { color: '#fff' }]}>Confirmer la promotion</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    marginRight: 10,
+    padding: 5,
+  },
+  addButton: {
+    backgroundColor: '#0a8fdf',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  partnerItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  // New style for the icon container
+  partnerIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E6F7FF', // Light blue background for the icon
+    borderWidth: 1,
+    borderColor: '#0a8fdf', // Matching border color
+  },
+  partnerInfo: {
+    flex: 1,
+  },
+  partnerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2D3748',
+  },
+  partnerCategory: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  partnerDetailsText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  assignedUser: {
+    fontSize: 14,
+    color: '#0a8fdf',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  promotionDelayText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  promoteButton: {
+    backgroundColor: '#FF9500',
+  },
+  assignButton: {
+    backgroundColor: '#0a8fdf',
+  },
+  unassignButton: {
+    backgroundColor: '#FF3B30',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 150,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalSubheader: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  userItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  assignedUserItem: {
+    backgroundColor: '#e6f7ff',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0a8fdf',
+  },
+  assignedElsewhereItem: {
+    backgroundColor: '#f9f9f9',
+    opacity: 0.6,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ccc',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2D3748',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+  },
+  assignedStatus: {
+    fontSize: 12,
+    color: '#0a8fdf',
+    marginTop: 4,
+    fontWeight: 'bold',
+  },
+  otherAssignmentStatus: {
+    fontSize: 12,
+    color: '#FF9500',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  promotionModal: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 25,
+    width: '90%',
+    maxWidth: 450,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  durationOptions: {
+    marginVertical: 15,
+  },
+  durationOption: {
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginBottom: 10,
+    backgroundColor: '#fdfdff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  selectedOption: {
+    borderColor: '#0a8fdf',
+    backgroundColor: '#e6f7ff',
+    borderWidth: 2,
+  },
+  customDateOption: {
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fdfdff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  optionSubtext: {
+    fontSize: 13,
+    color: '#777',
+    marginTop: 4,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#E0E0E0',
+    marginRight: 10,
+  },
+  confirmButton: {
+    backgroundColor: '#0a8fdf',
+    marginLeft: 10,
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#444',
+  },
+});
+
+export default Partners;

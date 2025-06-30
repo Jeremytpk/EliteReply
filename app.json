@@ -2,27 +2,85 @@
   "expo": {
     "name": "EliteReply",
     "slug": "EliteReply",
-    "version": "1.0.0",
+    "version": "1.0.0", // REMINDER: INCREMENT THIS FOR EACH NEW BUILD
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png", // Main app icon (often used as default notification icon if not specified)
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "elitereply", // <--- ADDED: Critical for deep linking, matching intentFilter
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set a profile picture.",
+          "cameraPermission": "The app accesses your camera to let you take a profile picture."
+        }
+      ],
+      "expo-notifications" // Correct plugin entry
+    ],
+    // --- CORRECTED LOCATION FOR NOTIFICATION CONFIGURATION ---
+    "notification": {
+      "icon": "./assets/images/notification-icon.png", // Path to your small, transparent notification icon
+      "color": "#0a8fdf", // Your app's primary color for Android notification accent (white might be invisible on light notifications)
+      "androidMode": "default",
+      "androidCollapsedTitle": "#{unread_notifications} nouveaux messages" // Example custom title for collapsed notifications
+    },
+    // --- END CORRECTED LOCATION ---
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/logoVide.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your app needs access to your location to provide personalized services.",
+        "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition."
+      },
+      "bundleIdentifier": "com.yourcompany.elitereply", // iOS bundle ID
+      "buildNumber": "1.0.0" // REMINDER: INCREMENT THIS FOR EACH NEW iOS BUILD (e.g., "1.0.1")
     },
     "android": {
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptiveIcon.png",
         "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourcompany.elitereply", // Android package name
+      "versionCode": 1, // REMINDER: INCREMENT THIS FOR EACH NEW ANDROID BUILD (e.g., 2)
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "elitereply",
+              "host": "app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "notification": {
+        "icon": "./assets/images/notification-icon.png",
+        "color": "#0a8fdf",
+        "sounds": [ // ADDED: Array for custom sound files
+          "./assets/sounds/ERNotification.mp3" 
+        ]
       }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "extra": {
+      "eas": {
+        "projectId": "2ed09575-61d8-47b8-ae78-ee5bfbf930f9"
+      }
     }
   }
 }
