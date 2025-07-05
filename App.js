@@ -82,7 +82,7 @@ const customNotificationSound = new Audio.Sound();
 async function loadCustomSound() {
   try {
     // >>> IMPORTANT: Adjust this path to your actual sound file <<<
-    await customNotificationSound.loadAsync(require('./assets/sounds/ERNotification.mp3')); 
+    await customNotificationSound.loadAsync(require('./assets/sounds/er_notification.mp3')); 
     console.log('ER Notification sound loaded!');
   } catch (error) {
     console.error('Error loading custom notification sound:', error);

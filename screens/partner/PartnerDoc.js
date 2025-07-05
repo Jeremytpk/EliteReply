@@ -76,7 +76,7 @@ const PartnerDoc = ({ navigation, route }) => {
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
-      sound: 'default',
+      sound: 'er_notification',
       title,
       body,
       data,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Image } from 'react-native'; // ADDED: Image
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../../firebase'; // Import auth for current user context if needed, and db
+import { useNavigation } from '@react-navigation/native';
+import { db, auth } from '../../firebase';
 import {
   collection,
   getDocs,
@@ -10,7 +11,7 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  getDoc // Imported getDoc to fetch user tokens
+  getDoc
 } from 'firebase/firestore';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -19,21 +20,21 @@ const Partners = () => {
   const [partners, setPartners] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userLoading, setUserLoading] = useState(false); // Used for modals' loading states
+  const [userLoading, setUserLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [currentPartner, setCurrentPartner] = useState(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [promotionDuration, setPromotionDuration] = useState(14);
-  const [promotionEndDate, setPromotionEndDate] = null; // Changed initial state to null for consistency
+  const [promotionEndDate, setPromotionEndDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // --- NEW: Function to send push notification with custom sound ---
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
-      sound: 'ERNotification', // <--- Using your custom sound "ERNotification.mp3"
+      sound: 'ERNotification',
       title,
       body,
       data,
@@ -55,7 +56,6 @@ const Partners = () => {
     }
   };
   // --- END NEW ---
-
 
   // Function to fetch data (partners and users)
   const fetchData = useCallback(async () => {
@@ -88,8 +88,8 @@ const Partners = () => {
     return (
       partner.nom?.toLowerCase().includes(searchLower) ||
       partner.categorie?.toLowerCase().includes(searchLower) ||
-      partner.ceo?.toLowerCase().includes(searchLower) || // Changed from fondateur to ceo
-      partner.manager?.toLowerCase().includes(searchLower) || // Changed from gestionnaire to manager
+      partner.ceo?.toLowerCase().includes(searchLower) ||
+      partner.manager?.toLowerCase().includes(searchLower) ||
       partner.description?.toLowerCase().includes(searchLower) ||
       partner.email?.toLowerCase().includes(searchLower) ||
       partner.numeroTelephone?.toLowerCase().includes(searchLower)
@@ -120,17 +120,17 @@ const Partners = () => {
         assignedUserId: userId,
         assignedUserName: selectedUser.name,
         assignedUserEmail: selectedUser.email,
-        assignedUserPhotoURL: selectedUser.photoURL || null,
+        assignedUserPhotoURL: selectedUser.photoURL || null, // Ensure photoURL is saved
         assignedDate: new Date().toISOString()
       });
 
       // Update user document with partner info
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
-        role: "Partner", // Change user's role
-        isPartner: true, // Mark user as partner
+        role: "Partner",
+        isPartner: true,
         partnerId: currentPartner.id,
-        partnerName: currentPartner.nom, // Use French key for partner name
+        partnerName: currentPartner.nom,
         partners: arrayUnion({
           id: currentPartner.id,
           nom: currentPartner.nom,
@@ -140,10 +140,9 @@ const Partners = () => {
       });
 
       Alert.alert("Succès", `Assigné à ${selectedUser.name} avec succès.`);
-      closeModals(); // Close modal after successful assignment
-      fetchData(); // Refresh all data to reflect changes
+      closeModals();
+      fetchData();
 
-      // --- NEW: Send notification to the assigned user ---
       if (selectedUser.expoPushToken) {
         sendPushNotification(
           selectedUser.expoPushToken,
@@ -152,7 +151,6 @@ const Partners = () => {
           { type: 'partner_role_assigned', partnerId: currentPartner.id }
         );
       }
-      // --- END NEW ---
 
     } catch (error) {
       Alert.alert("Erreur", error.message);
@@ -175,7 +173,6 @@ const Partners = () => {
           return;
       }
 
-      // --- NEW: Get user data BEFORE unassigning for notification ---
       let unassignedUserToken = null;
       let unassignedUserName = partner.assignedUserName;
       const userToUnassignRef = doc(db, 'users', partner.assignedUserId);
@@ -184,24 +181,21 @@ const Partners = () => {
           unassignedUserToken = userToUnassignSnap.data().expoPushToken;
           unassignedUserName = userToUnassignSnap.data().name || partner.assignedUserName;
       }
-      // --- END NEW ---
 
-      // Update partner document to remove assigned user info
       const partnerRef = doc(db, 'partners', partnerId);
       await updateDoc(partnerRef, {
         assignedUserId: null,
         assignedUserName: null,
         assignedUserEmail: null,
-        assignedUserPhotoURL: null,
+        assignedUserPhotoURL: null, // Clear photoURL on unassign
         assignedDate: null,
-        estPromu: false, // Reset promotion status on unassign (French key)
+        estPromu: false,
         promotionStartDate: null,
         promotionEndDate: null,
         promotionDuration: null
       });
 
-      // Update user document to remove partner role and partner info
-      if (userToUnassignSnap.exists()) { // Use the snapshot fetched earlier
+      if (userToUnassignSnap.exists()) {
         const userData = userToUnassignSnap.data();
         const userPartners = userData.partners || [];
 
@@ -209,8 +203,8 @@ const Partners = () => {
 
         if (itemToRemove) {
           await updateDoc(userToUnassignRef, {
-            role: "User", // Revert user role
-            isPartner: false, // Mark user as not a partner
+            role: "User",
+            isPartner: false,
             partnerId: null,
             partnerName: null,
             partners: arrayRemove(itemToRemove)
@@ -229,10 +223,9 @@ const Partners = () => {
       }
 
       Alert.alert("Succès", "Désaffecté avec succès.");
-      closeModals(); // Close modal after successful unassignment
-      fetchData(); // Refresh all data to reflect changes
+      closeModals();
+      fetchData();
 
-      // --- NEW: Send notification to the unassigned user ---
       if (unassignedUserToken) {
         sendPushNotification(
           unassignedUserToken,
@@ -241,7 +234,6 @@ const Partners = () => {
           { type: 'partner_role_unassigned', partnerId: partner.id }
         );
       }
-      // --- END NEW ---
 
     } catch (error) {
       Alert.alert("Erreur", error.message);
@@ -254,7 +246,7 @@ const Partners = () => {
     if (selectedDate) {
       setPromotionEndDate(selectedDate);
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalize today's date
+      today.setHours(0, 0, 0, 0);
       const diffTime = Math.abs(selectedDate.getTime() - today.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       setPromotionDuration(diffDays);
@@ -269,13 +261,13 @@ const Partners = () => {
       const partnerRef = doc(db, 'partners', currentPartner.id);
 
       const startDate = new Date();
-      startDate.setHours(0, 0, 0, 0); // Set to start of day
+      startDate.setHours(0, 0, 0, 0);
 
       const calculatedEndDate = promotionEndDate || new Date(startDate.getTime() + promotionDuration * 24 * 60 * 60 * 1000);
-      calculatedEndDate.setHours(23, 59, 59, 999); // Set to end of day
+      calculatedEndDate.setHours(23, 59, 59, 999);
 
       await updateDoc(partnerRef, {
-        estPromu: true, // Use French key for 'isPromoted'
+        estPromu: true,
         promotionStartDate: startDate.toISOString(),
         promotionEndDate: calculatedEndDate.toISOString(),
         promotionDuration: promotionDuration
@@ -283,9 +275,8 @@ const Partners = () => {
 
       Alert.alert("Succès", `${currentPartner.nom} a été promu avec succès !`);
       closeModals();
-      fetchData(); // Refresh all data to reflect changes
+      fetchData();
 
-      // --- NEW: Send notification to the assigned partner user about promotion ---
       if (currentPartner.assignedUserId) {
         const assignedUserDoc = await getDoc(doc(db, 'users', currentPartner.assignedUserId));
         if (assignedUserDoc.exists() && assignedUserDoc.data().expoPushToken) {
@@ -297,7 +288,6 @@ const Partners = () => {
           );
         }
       }
-      // --- END NEW ---
 
     } catch (error) {
       Alert.alert("Erreur", error.message);
@@ -307,7 +297,6 @@ const Partners = () => {
     }
   };
 
-  // Render function for each user item in the assignment modal
   const renderUserItem = ({ item }) => {
     const isAssignedToCurrent = currentPartner?.assignedUserId === item.id;
     const isAssignedElsewhere = item.isPartner && !isAssignedToCurrent;
@@ -366,31 +355,29 @@ const Partners = () => {
     );
   };
 
-  // Helper function to get promotion status text and color
   const getPromotionStatus = (partner) => {
-    if (!partner.estPromu || !partner.promotionEndDate) { // Use French key
+    if (!partner.estPromu || !partner.promotionEndDate) {
       return { color: '#666', text: 'Pas de promotion', iconColor: '#666', iconName: 'information-circle-outline' };
     }
 
     const endDate = new Date(partner.promotionEndDate);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0);
 
     if (endDate < today) {
       return { color: '#FF3B30', text: 'Promotion expirée', iconColor: '#FF3B30', iconName: 'close-circle-outline' };
     }
 
-    const diffTime = endDate.getTime() - today.getTime(); // Use positive diff for remaining days
+    const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 7) { // Nearing expiration
+    if (diffDays <= 7) {
       return { color: '#FF9500', text: `Promo: ${diffDays} jours restants`, iconColor: '#FF9500', iconName: 'time-outline' };
-    } else { // Active promotion
+    } else {
       return { color: '#34C759', text: `Promo: ${diffDays} jours restants`, iconColor: '#34C759', iconName: 'checkmark-circle-outline' };
     }
   };
 
-  // Render function for each partner item in the main FlatList
   const renderItem = ({ item }) => {
     const promotionStatus = getPromotionStatus(item);
 
@@ -399,18 +386,21 @@ const Partners = () => {
         style={styles.partnerItem}
         onPress={() => navigation.navigate("PartnerDetails", { partnerId: item.id })}
       >
-        {/* Replaced Image with Ionicons */}
         <View style={styles.partnerIconContainer}>
-            <Ionicons name="business-outline" size={30} color="#0a8fdf" />
+            {item.assignedUserPhotoURL ? ( // Conditional rendering for assigned user photo
+                <Image source={{ uri: item.assignedUserPhotoURL }} style={styles.partnerLogo} />
+            ) : (
+                <Ionicons name="business-outline" size={30} color="#0a8fdf" />
+            )}
         </View>
 
         <View style={styles.partnerInfo}>
           <Text style={styles.partnerName}>{item.nom}</Text>
           <Text style={styles.partnerCategory}>{item.categorie}</Text>
-          {item.ceo && ( // Display CEO if exists
+          {item.ceo && (
              <Text style={styles.partnerDetailsText}>CEO: {item.ceo}</Text>
           )}
-          {item.manager && ( // Display Manager if exists
+          {item.manager && (
             <Text style={styles.partnerDetailsText}>Manager: {item.manager}</Text>
           )}
           {item.assignedUserName && (
@@ -428,22 +418,22 @@ const Partners = () => {
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: promotionStatus.iconColor }]}
             onPress={(e) => {
-              e.stopPropagation(); // Prevent navigation to PartnerDetails
+              e.stopPropagation();
               setCurrentPartner(item);
               setPromotionDuration(item.promotionDuration || 14);
               setPromotionEndDate(item.promotionEndDate ? new Date(item.promotionEndDate) : null);
               setPromoteModalVisible(true);
             }}
-            accessibilityLabel={`Promouvoir ${item.nom}`} // Accessibility label
+            accessibilityLabel={`Promouvoir ${item.nom}`}
           >
             <Ionicons name="rocket" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, item.assignedUserId ? styles.unassignButton : styles.assignButton]}
             onPress={(e) => {
-              e.stopPropagation(); // Prevent navigation to PartnerDetails
+              e.stopPropagation();
               item.assignedUserId
-                ? Alert.alert( // Confirmation for unassigning from main list
+                ? Alert.alert(
                     "Confirmer la désaffectation",
                     `Êtes-vous sûr de vouloir désaffecter ${item.assignedUserName} de ${item.nom}?`,
                     [
@@ -453,7 +443,7 @@ const Partners = () => {
                   )
                 : openAssignModal(item);
             }}
-            accessibilityLabel={item.assignedUserId ? `Désaffecter ${item.assignedUserName} de ${item.nom}` : `Assigner un utilisateur à ${item.nom}`} // Accessibility label
+            accessibilityLabel={item.assignedUserId ? `Désaffecter ${item.assignedUserName} de ${item.nom}` : `Assigner un utilisateur à ${item.nom}`}
           >
             <Ionicons
               name={item.assignedUserId ? "person-remove" : "person-add"}
@@ -466,7 +456,6 @@ const Partners = () => {
     );
   };
 
-  // Helper functions for modal visibility and cleanup
   const openAssignModal = (partner) => {
     setCurrentPartner(partner);
     setAssignModalVisible(true);
@@ -482,7 +471,6 @@ const Partners = () => {
     setShowDatePicker(false);
   };
 
-  // Show loading indicator while data is being fetched
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -756,7 +744,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  // New style for the icon container
   partnerIconContainer: {
     width: 50,
     height: 50,
@@ -764,9 +751,17 @@ const styles = StyleSheet.create({
     marginRight: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E6F7FF', // Light blue background for the icon
+    backgroundColor: '#E6F7FF',
     borderWidth: 1,
-    borderColor: '#0a8fdf', // Matching border color
+    borderColor: '#0a8fdf',
+    overflow: 'hidden', // Crucial to clip the image to the rounded border
+  },
+  // NEW STYLE: For the partner's logo (assigned user's photo)
+  partnerLogo: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover', // Ensures the image covers the container
+    borderRadius: 25, // Apply border radius to the image itself
   },
   partnerInfo: {
     flex: 1,

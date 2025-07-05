@@ -73,7 +73,7 @@ moment.locale('fr');
 
 import {
     OPENAI_API_KEY
-} from '../OpenAIConfig';
+} from '../OpenAIConf';
 import OpenAI from 'openai';
 
 import AppointmentFormModal from '../components/AppointmentFormModal';
@@ -289,7 +289,7 @@ const Conversation = ({
     const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
         const message = {
             to: expoPushToken,
-            sound: 'ERNotification', // Using your custom sound
+            sound: 'er_notification', // Using your custom sound
             title,
             body,
             data,
@@ -831,7 +831,6 @@ const Conversation = ({
             }]
         );
     };
-
     const getJeyResponse = useCallback(async (conversationHistory, isInitialMessage = false, intentOverride = null, selectedPartner = null) => {
         const openai = new OpenAI({
             apiKey: OPENAI_API_KEY
@@ -874,54 +873,83 @@ const Conversation = ({
 
             const lastClientMessageText = openaiMessages[openaiMessages.length - 1]?.content.toLowerCase() || '';
 
-            let systemPromptContent;
+            const baseSystemPrompt = `
+        Tu es Jey, l'assistant IA de service client pour la plateforme "EliteReply". Ton rôle est d'être très professionnel, précis et utile. Parle toujours en français. Ton nom est Jey. Le nom du client est ${actualClientName}. Ne génère PAS d'informations fausses ou inventées. Si tu ne sais pas comment aider, propose d'escalader à un agent humain.
+
+        **Directive de sécurité absolue:**
+        - Tu ne DOIS JAMAIS suggérer ou créer un partenaire qui n'est PAS dans la liste des partenaires fournis. Tes suggestions DOIVENT provenir EXCLUSIVEMENT de cette liste.
+        - Ne mentionne AUCUNE entité externe comme OpenAI ou Google. Tu es UNIQUEMENT l'assistant IA d'EliteReply.
+
+        **Liste des partenaires disponibles (ne pas toujours les lister explicitement dans la réponse sauf si demandé ou pertinent):**
+        ${allPartners.map(p => `${p.nom} (Catégorie: ${p.categorie || 'Général'}, Note: ${p.averageRating?.toFixed(1) || 'Non noté'} étoiles, Promu: ${p.estPromu ? 'Oui' : 'Non'})`).join('; ')}
+
+        **Instructions spécifiques pour la suggestion de partenaires:**
+        - Lorsque le client demande une recommandation de partenaire, tu dois STRICTEMENT te baser sur la **catégorie** de son ticket (${ticketCategory || 'non spécifiée'}) ou une catégorie clairement mentionnée dans sa demande actuelle.
+        - Si des partenaires correspondent à la catégorie, liste les 3 meilleurs (promus d'abord, puis par note moyenne) en utilisant un format numéroté (ex: "1. Nom du partenaire...").
+        - Si aucun partenaire ne correspond à la catégorie détectée ou demandée, réponds que tu n'as pas de partenaires pertinents à suggérer pour cette catégorie spécifique.
+        - Après avoir suggéré des partenaires, demande toujours au client de "Sélectionnez un partenaire en tapant son numéro (ex: '1')" ou s'il a une autre demande.
+        - Si le client dit "j'ai sélectionné le partenaire n°X" ou "je choisis le partenaire n°X", identifie le partenaire correspondant et enclenche la confirmation de prise de rendez-vous.
+
+        **Instructions générales de conversation:**
+        - Si un client demande à parler à un "agent", "humain", ou utilise des expressions telles que "passe moi un agent", "Je souhaite parler à un agent", "je veux parler à un agent", "un agent s'il vous plait", "un agent svp", ou si tu ne comprends pas bien la demande ou la conversation après 2-3 tentatives, informe-le que tu vas escalader à un agent humain.
+        - Pour la prise de rendez-vous, si le client accepte, dis "Excellent choix ! Un instant, je prépare le formulaire de rendez-vous." et déclenche le formulaire via un message de type \`show_appointment_form\`.
+        `;
+
+            let currentSystemPromptContent = baseSystemPrompt;
             let jeyMessageType = 'text';
             let jeyMessageData = {};
 
-            const terminationKeywords = ['merci jey', 'merci beaucoup', 'c\'est tout', 'pas besoin', 'au revoir', 'bye', 'goodbye', 'rien d\'autre'];
+            const terminationKeywords = ['merci jey', 'merci beaucoup', 'c\'est tout', 'pas besoin', 'au revoir', 'bye', 'goodbye', 'rien d\'autre', 'j\'ai tout ce qu\'il me faut'];
             const clientWantsToTerminate = terminationKeywords.some(keyword => lastClientMessageText.includes(keyword));
+            
             const clientAskedForPartnersExplicitly = ['partenaire', 'recommander', 'service', 'agence', 'hotel', 'clinique', 'restaurant', 'voyage', 'sante', 'bien-etre', 'chauffeur', 'taxi'].some(keyword => lastClientMessageText.includes(keyword));
+            
             const appointmentKeywords = ['rendez-vous', 'prendre rendez-vous', 'reservation', 'faire une reservation', 'disponibilité'];
-
-            const clientConfirmedPartnerSelection = lastClientMessageText.includes('j\'ai sélectionné') ||
-                lastClientMessageText.includes('je choisis') ||
-                lastClientMessageText.includes('mon choix est') ||
-                (lastClientMessageText.includes('je voudrais') && lastClientMessageText.includes('avec'));
-
             const clientWantsAppointment = appointmentKeywords.some(keyword => lastClientMessageText.includes(keyword));
 
-            const getSortedPartnersForSuggestion = (userRequestText = '') => {
-                let relevantPartners = [];
-                const userRequestLower = userRequestText.toLowerCase();
-
-                let detectedCategory = '';
-                if (ticketCategory) {
-                    detectedCategory = ticketCategory.toLowerCase();
-                } else {
-                    for (const partner of allPartners) {
-                        if (partner.categorie && userRequestLower.includes(partner.categorie.toLowerCase())) { // Used categorie
-                            detectedCategory = partner.categorie.toLowerCase(); // Used categorie
-                            break;
-                        }
+            const partnerSelectionRegex = /^\s*(?:je (?:choisis|sélectionne)|mon choix est|je voudrais) le partenaire n°?\s*(\d+)\s*$/i;
+            const match = lastClientMessageText.match(partnerSelectionRegex);
+            let selectedPartnerByNumber = null;
+            if (match) {
+                const partnerIndex = parseInt(match[1], 10) - 1; // Adjust for 0-based index
+                const relevantPartners = getSortedPartnersForSuggestion(ticketCategory || '', true); // Get all potential suggestions to match the number
+                if (relevantPartners[partnerIndex]) {
+                    selectedPartnerByNumber = relevantPartners[partnerIndex];
+                }
+            }
+            
+            let identifiedPartnerByName = null;
+            if (clientAskedForPartnersExplicitly || selectedPartnerByNumber) {
+                for (const partner of allPartners) {
+                    if (partner.nom && lastClientMessageText.includes(partner.nom.toLowerCase())) {
+                        identifiedPartnerByName = partner;
+                        break;
                     }
                 }
+            }
 
-                if (detectedCategory) {
-                    relevantPartners = allPartners.filter(p =>
-                        p.categorie?.toLowerCase().includes(detectedCategory) || // Used categorie
-                        p.nom?.toLowerCase().includes(detectedCategory) // Used nom
+            const clientConfirmedPartnerSelection = selectedPartnerByNumber || identifiedPartnerByName;
+
+            const getSortedPartnersForSuggestion = (requestedCategory = '', allCategories = false) => {
+                let relevantPartners = [];
+                const categoryLower = requestedCategory.toLowerCase();
+
+                if (categoryLower && !allCategories) {
+                    relevantPartners = allPartners.filter(p => 
+                        p.categorie?.toLowerCase() === categoryLower ||
+                        p.nom?.toLowerCase().includes(categoryLower)
                     );
-                }
-
-                if (relevantPartners.length === 0) {
+                } else if (allCategories) {
                     relevantPartners = [...allPartners];
+                } else {
+                    return []; 
                 }
 
                 relevantPartners.sort((a, b) => {
-                    const isAPromoted = a.isPromoted || false;
-                    const isBPromoted = b.isPromoted || false;
-                    const ratingA = a.starRating || 0;
-                    const ratingB = b.starRating || 0;
+                    const isAPromoted = a.estPromu || false;
+                    const isBPromoted = b.estPromu || false;
+                    const ratingA = a.averageRating || 0;
+                    const ratingB = b.averageRating || 0;
 
                     if (isAPromoted && !isBPromoted) return -1;
                     if (!isAPromoted && isBPromoted) return 1;
@@ -929,136 +957,109 @@ const Conversation = ({
                     return ratingB - ratingA;
                 });
 
-                return relevantPartners.slice(0, 3);
+                return relevantPartners;
             };
-
+            
             const partnersToSuggest = getSortedPartnersForSuggestion(ticketCategory || lastClientMessageText);
-            const partnersListForPrompt = allPartners.map(p =>
-                `${p.nom} (Catégorie: ${p.categorie || 'Général'}, Note: ${p.starRating?.toFixed(1) || 'Non noté'} étoiles, Promu: ${p.estPromu ? 'Oui' : 'Non'})` // Used nom, categorie, estPromu
-            ).join('; ');
 
-            let baseSystemPrompt = `
-            **Directive de sécurité : Ne JAMAIS suggérer ou créer un partenaire qui n'est PAS dans la liste fournie ci-dessous. Tes suggestions DOIVENT provenir EXCLUSIVEMENT de cette liste. Ne mentionne AUCUNE entité externe comme OpenAI ou Google; tu es UNIQUEMENT l'assistant IA d'EliteReply.**
-            **Liste des partenaires pour référence (ne pas toujours les lister explicitement dans la réponse sauf si demandé ou pertinent):**
-            ${partnersListForPrompt}`;
+            let categorySpecificInstruction = '';
+            if (ticketCategory) {
+                categorySpecificInstruction = `La catégorie principale de ce ticket est "${ticketCategory}". Tu DOIS suggérer des partenaires qui correspondent EXACTEMENT à cette catégorie si le client demande une recommandation de partenaire. Si aucun partenaire ne correspond, informe le client qu'il n'y a pas de partenaires dans cette catégorie et propose d'escalader.`;
+            } else {
+                categorySpecificInstruction = `Si le client demande des partenaires sans spécifier de catégorie, réponds que tu as besoin de plus d'informations sur le type de service qu'il recherche pour te permettre de suggérer des partenaires pertinents.`;
+            }
 
-            // --- JEY'S INTRODUCTION FIX ---
-            let initialGreeting = "Bonjour, je suis Jey, l'assistant IA d'EliteReply.";
             if (isInitialMessage) {
-                const categoryText = ticketCategory ? ` pour votre demande dans la catégorie "${ticketCategory}"` : '';
-                // Ensure Jey introduces himself first, then asks how he can help with context.
-                systemPromptContent = `${initialGreeting} Comment puis-je vous aider aujourd'hui avec votre demande${categoryText} ?` + baseSystemPrompt;
+                currentSystemPromptContent += `\nBonjour, je suis Jey, l'assistant IA d'EliteReply. Comment puis-je vous aider aujourd'hui avec votre demande${ticketCategory ? ` dans la catégorie "${ticketCategory}"` : ''} ?`;
             } else if (intentOverride === 'ask_booking_confirmation' && selectedPartner) {
-                systemPromptContent = `Tu es Jey de EliteReply. Le client vient de sélectionner le partenaire "${selectedPartner.nom}". Pose-lui la question suivante : "Excellent choix ! Souhaitez-vous que je procède à la prise de rendez-vous avec ${selectedPartner.nom} ?" Propose des options claires pour "oui" ou "non".` + baseSystemPrompt; // Used nom
+                currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a sélectionné le partenaire "${selectedPartner.nom}". Demande-lui : "Excellent choix ! Souhaitez-vous que je procède à la prise de rendez-vous avec ${selectedPartner.nom} ?" Propose des options claires pour "oui" ou "non".`;
                 jeyMessageType = 'booking_confirmation_request';
                 jeyMessageData = {
                     partnerId: selectedPartner.id,
-                    partnerName: selectedPartner.nom // Used nom
+                    partnerName: selectedPartner.nom
                 };
             } else if (intentOverride === 'show_booking_form') {
-                systemPromptContent = `Tu es Jey de EliteReply. Le client a confirmé la prise de rendez-vous. Acknowledge this briefly.` + baseSystemPrompt;
+                currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a confirmé la prise de rendez-vous. Réponds "Excellent choix ! Un instant, je prépare le formulaire de rendez-vous."`;
+                jeyMessageType = 'appointment_form_trigger';
             } else if (ticketInfo && ticketInfo.jeyAskedToTerminate) {
                 const clientResponse = lastClientMessageText;
                 const confirmationKeywords = ['oui', 'yes', 'ok', 'accepte', 'terminer', 'mettre fin', 'finir', 'c\'est tout'];
                 const refusalKeywords = ['non', 'pas encore', 'continue', 'encore', 'besoin', 'aide', 'non merci', 'non, merci'];
 
                 if (confirmationKeywords.some(keyword => clientResponse.includes(keyword))) {
-                    systemPromptContent = `Tu es Jey de EliteReply. Le client a confirmé qu'il souhaite terminer la conversation. Réponds en remerciant le client d'avoir utilisé EliteReply, dis-lui au revoir, puis termine la conversation. Ton nom est Jey. Le nom du client est ${actualClientName}.` + baseSystemPrompt;
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a confirmé qu'il souhaite terminer la conversation. Réponds en remerciant le client d'avoir utilisé EliteReply et dis-lui au revoir. Ton nom est Jey. Le nom du client est ${actualClientName}.`;
                 } else if (refusalKeywords.some(keyword => clientResponse.includes(keyword))) {
-                    systemPromptContent = `Tu es Jey de EliteReply. Le client ne souhaite pas terminer la conversation. Réponds-lui poliment et demande-lui comment tu peux l'aider d'autre part. Ton nom est Jey. Le nom du client est ${actualClientName}.` + baseSystemPrompt;
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client ne souhaite pas terminer la conversation. Réponds-lui poliment et demande-lui comment tu peux l'aider d'autre part. Ton nom est Jey. Le nom du client est ${actualClientName}.`;
                     await updateDoc(doc(db, 'tickets', ticketId), {
                         jeyAskedToTerminate: deleteField()
                     });
                 } else {
-                    await updateDoc(doc(db, 'tickets', ticketId), {
-                        jeyAskedToTerminate: deleteField()
-                    });
-                    await getJeyResponse(conversationHistory, false, 'general_response');
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a donné une réponse ambiguë après que tu lui aies demandé s'il voulait terminer la conversation. Redemande-lui clairement s'il souhaite terminer la conversation ou s'il a une autre question.`;
                 }
-            } else if (clientWantsAppointment && ticketInfo && !ticketInfo?.jeyAskedToTerminate) {
-                systemPromptContent = `Tu es Jey de EliteReply. Le client a exprimé le désir de prendre un rendez-vous ou faire une réservation. Demande-lui : "Je comprends que vous souhaitez prendre un rendez-vous. Est-ce exact ?" Propose un bouton "Prendre Rendez-vous" pour le guider.` + baseSystemPrompt;
+            } else if (clientWantsAppointment) {
+                currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a exprimé le désir de prendre un rendez-vous ou faire une réservation. Demande-lui : "Je comprends que vous souhaitez prendre un rendez-vous. Est-ce exact ?" Propose un bouton "Prendre Rendez-vous" pour le guider.`;
                 jeyMessageType = 'appointment_request_prompt';
             } else if (clientWantsToTerminate) {
-                systemPromptContent = `Tu es Jey de EliteReply. Le client a exprimé le désir de terminer la conversation (ex: "merci", "au revoir"). Réponds en demandant poliment au client s'il souhaite que tu mettes fin à la conversation en cours. Propose de terminer la conversation. Ton nom est Jey. Le nom du client est ${actualClientName}.` + baseSystemPrompt;
+                currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a exprimé le désir de terminer la conversation (ex: "merci", "au revoir"). Réponds en demandant poliment au client s'il souhaite que tu mettes fin à la conversation en cours. Propose des options "Oui, terminer" et "Non, continuer". Ton nom est Jey. Le nom du client est ${actualClientName}.`;
+                jeyMessageType = 'termination_confirmation_request';
                 await updateDoc(doc(db, 'tickets', ticketId), {
                     jeyAskedToTerminate: true
                 });
             } else if (clientConfirmedPartnerSelection) {
-                let identifiedPartner = null;
-                for (const partner of allPartners) {
-                    if (partner.nom && lastClientMessageText.includes(partner.nom.toLowerCase())) { // Used nom
-                        identifiedPartner = partner;
-                        break;
-                    }
-                }
-
-                if (identifiedPartner) {
-                    setSelectedPartnerForBooking(identifiedPartner);
-                    systemPromptContent = `Tu es Jey de EliteReply. Le client vient de confirmer la sélection du partenaire "${identifiedPartner.nom}" via un message textuel. Pose-lui la question suivante : "Excellent choix ! Souhaitez-vous que je procède à la prise de rendez-vous avec ${identifiedPartner.nom} ?" Propose des options claires pour "oui" ou "non".` + baseSystemPrompt; // Used nom
+                const partner = selectedPartnerByNumber || identifiedPartnerByName;
+                if (partner) {
+                    setSelectedPartnerForBooking(partner);
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client vient de confirmer la sélection du partenaire "${partner.nom}". Pose-lui la question suivante : "Excellent choix ! Souhaitez-vous que je procède à la prise de rendez-vous avec ${partner.nom} ?" Propose des options claires pour "oui" ou "non".`;
                     jeyMessageType = 'booking_confirmation_request';
                     jeyMessageData = {
-                        partnerId: identifiedPartner.id,
-                        partnerName: identifiedPartner.nom // Used nom
+                        partnerId: partner.id,
+                        partnerName: partner.nom
                     };
                 } else {
-                    systemPromptContent = `Tu es Jey de EliteReply. Le client semble avoir mentionné une sélection. Réponds poliment et demande de confirmer le nom du partenaire ou s'il y a un autre service qu'il recherche.` + baseSystemPrompt;
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a tenté de sélectionner un partenaire mais le numéro/nom n'a pas été reconnu. Demande-lui de reformuler son choix ou si tu dois suggérer des partners à nouveau. Rappelle-lui comment sélectionner un partenaire ("Sélectionnez un partenaire en tapant son numéro (ex: '1')").`;
                 }
-            } else if (clientAskedForPartnersExplicitly || lastClientMessageText.includes('recommander')) {
-                const partnersToSuggest = getSortedPartnersForSuggestion(ticketCategory || lastClientMessageText);
+            } else if (clientAskedForPartnersExplicitly || ticketCategory) {
+                const filteredPartners = getSortedPartnersForSuggestion(ticketCategory || lastClientMessageText);
 
-                let partnersSuggestionText;
-                if (partnersToSuggest.length > 0) {
-                    partnersSuggestionText = `Voici quelques partenaires que je peux vous recommander : ` +
-                        partnersToSuggest.map(p => `${p.nom} (Catégorie: ${p.categorie || 'Général'}, Note: ${p.starRating?.toFixed(1) || 'Non noté'} étoiles)`).join(', ') + // Used nom, categorie
-                        `. Souhaitez-vous en sélectionner un ou avez-vous une autre demande ?`;
+                if (filteredPartners.length > 0) {
+                    let partnersSuggestionText = `J'ai trouvé les partenaires suivants dans la catégorie "${ticketCategory || 'que vous recherchez'}":\n\n`;
+                    const numberedPartners = filteredPartners.slice(0, 3);
+                    numberedPartners.forEach((p, index) => {
+                        partnersSuggestionText += `${index + 1}. **${p.nom}** (Catégorie: ${p.categorie}, Note: ${p.averageRating?.toFixed(1) || 'Non noté'} étoiles)${p.estPromu ? ' ⭐ Promotion' : ''}\n`;
+                    });
+                    partnersSuggestionText += `\nPour sélectionner un partenaire, veuillez taper son numéro (ex: "1").`;
+                    
+                    currentSystemPromptContent += `\nTu es Jey, l'assistant IA d'EliteReply. Le client cherche des partenaires. Utilise la liste de partenaires fournie pour formuler ta réponse STRICTEMENT comme suit: "${partnersSuggestionText}". N'ajoute pas de texte générique supplémentaire autour de cette structure.`;
+                    jeyMessageType = 'numbered_partner_suggestion';
+                    jeyMessageData = {
+                        partners: numberedPartners.map(p => ({
+                            id: p.id,
+                            nom: p.nom,
+                            categorie: p.categorie,
+                            averageRating: p.averageRating,
+                            estPromu: p.estPromu,
+                            logo: p.logo || null,
+                            promotionEndDate: p.promotionEndDate || null,
+                        }))
+                    };
                 } else {
-                    partnersSuggestionText = `Je n'ai pas trouvé de partenaires correspondant à votre demande spécifique. Souhaitez-vous que je vous aide avec autre chose ou que je transfère votre demande à un agent humain ?`;
+                    currentSystemPromptContent += `\nTu es Jey de EliteReply. Le client a demandé des partenaires but aucun ne correspond à la catégorie "${ticketCategory || 'spécifiée'}" ou détectée. Réponds poliment qu'aucun partenaire pertinent n'a été trouvé pour cette catégorie et demande si tu peux l'aider avec autre chose ou si il souhaite être mis en relation avec un agent humain.`;
                 }
-
-                systemPromptContent = `Tu es Jey, l'assistant IA de service client pour la plateforme "EliteReply". Le client cherche des partenaires. Utilise la liste de partenaires suivante pour formuler ta réponse. Ton nom est Jey. Le nom du client est ${actualClientName}. Réponds en proposant des partenaires pertinents comme suit: "${partnersSuggestionText}".` + baseSystemPrompt;
-                jeyMessageType = 'partner_suggestion_list';
-                jeyMessageData = {
-                    partners: partnersToSuggest
-                };
             } else {
-                let categorySpecificInstruction = '';
-                if (ticketCategory) {
-                    categorySpecificInstruction = `La catégorie principale de ce ticket est "${ticketCategory}". Priorise les suggestions de partenaires dans cette catégorie ou des catégories très similaires, sauf si le client indique clairement une nouvelle direction.`;
-                }
-
-                systemPromptContent = `Tu es Jey, l'assistant IA de service client pour la plateforme "EliteReply". Ton objectif est de comprendre les besoins des clients et de leur offrir une assistance complète. Parle toujours en français. Sois amical, concis et utile. Ton nom est Jey. Le nom du client est ${actualClientName}. Évite de t'excuser inutilement. Ne génère pas d'informations fausses ou inventées. Si tu ne sais pas, dis que tu transfères à un agent.
-
-                **Instructions spécifiques:**
-                - Si la demande du client est vague ou si elle correspond à un service que nos partenaires pourraient offrir (même si le client ne demande pas explicitement des partenaires), suggère de manière proactive 2-3 partenaires pertinents de notre liste. Mentionne leur nom, leur catégorie et leur note.
-                - Si la demande du client correspond clairement à une catégorie de services que nos partenaires offrent (ex: "j'ai besoin de réparer ma voiture", "je veux organiser un voyage"), **tes suggestions de partenaires DOIVENT IMPÉRATIVEMENT correspondre à la catégorie mentionnée par le client dans sa demande actuelle.**
-                - Après avoir fait ta suggestion de partenaires (proactive ou demandée), demande toujours au client s'il souhaite en sélectionner un ou si tu dois l'aider à prendre rendez-vous avec un partenaire en particulier.
-                - Si tu détectes une mention claire d'un de nos partenaires suite à une suggestion précédente, confirme la sélection et demande si le client souhaite prendre rendez-vous avec ce partenaire.
-                - Si un client demande à parler à un "agent", "humain", ou utilise des expressions telles que "passe moi un agent", "Je souhaite parler à un agent", "je veux parler à un agent", "un agent s'il vous plait", "un agent svp", ou si tu ne comprends pas bien la demande ou la conversation, informe-le que tu vas escalader à un agent humain.
-
-                ${categorySpecificInstruction}
-                ` + baseSystemPrompt;
+                currentSystemPromptContent += `\n${categorySpecificInstruction}`;
             }
 
             const response = await openai.chat.completions.create({
                 model: "gpt-3.5-turbo",
                 messages: [{
                     "role": "system",
-                    "content": systemPromptContent
+                    "content": currentSystemPromptContent
                 }, ...openaiMessages],
                 max_tokens: 250,
                 temperature: 0.7,
             });
 
             const jeyText = response.choices[0]?.message?.content?.trim();
-
-            const suggestedPartnerNames = allPartners.filter(p => p.nom && jeyText.toLowerCase().includes(p.nom.toLowerCase())); // Used nom
-            if (suggestedPartnerNames.length > 0 && jeyMessageType === 'text') {
-                jeyMessageType = 'partner_suggestion_list';
-                jeyMessageData = {
-                    partners: allPartners.filter(p => suggestedPartnerNames.some(sp => sp.id === p.id))
-                };
-            }
-
 
             if (jeyText && intentOverride !== 'show_booking_form') {
                 const jeyMessageRef = await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
@@ -1087,8 +1088,21 @@ const Conversation = ({
                         await terminateConversationByJey();
                     }, 1500);
                 }
-
+            } else if (jeyMessageType === 'appointment_form_trigger') {
+                setShowAppointmentFormModal(true);
+                await updateDoc(doc(db, 'tickets', ticketId), {
+                    lastMessage: 'Formulaire de rendez-vous ouvert.',
+                    lastUpdated: serverTimestamp(),
+                    lastMessageSender: 'jey-ai'
+                });
+                await updateDoc(doc(db, 'conversations', ticketId), {
+                    lastMessage: 'Formulaire de rendez-vous ouvert.',
+                    lastUpdated: serverTimestamp(),
+                    lastMessageSender: 'jey-ai'
+                });
+                return "Formulaire de rendez-vous ouvert.";
             }
+
 
             const lowerCaseJeyText = jeyText.toLowerCase();
             const shouldEscalateBasedOnKeywords = lowerCaseJeyText.includes('escalader') ||
@@ -1163,62 +1177,79 @@ const Conversation = ({
 
 
     const uploaderImage = useCallback(async (uri) => {
-        try {
-            const optimisticMessageId = `optimistic-image-${currentUser?.uid}-${Date.now()}-${Math.random()}`;
-            const newImageMessage = {
-                id: optimisticMessageId,
-                texte: 'Envoi de l\'image...',
-                expediteurId: currentUser?.uid,
-                nomExpediteur: currentUser?.displayName || (isITSupport ? 'Agent' : 'Client'),
-                createdAt: new Date(),
-                type: 'image',
-                imageURL: null,
-                optimistic: true,
-            };
-            setMessages(prevMessages => [...prevMessages, newImageMessage]);
+    setUploading(true); // Move this here to show loading immediately
+    const optimisticMessageId = `optimistic-image-${currentUser?.uid}-${Date.now()}-${Math.random()}`;
+    const newImageMessage = {
+        id: optimisticMessageId,
+        texte: 'Envoi de l\'image...',
+        expediteurId: currentUser?.uid,
+        nomExpediteur: currentUser?.displayName || (isITSupport ? 'Agent' : 'Client'),
+        createdAt: new Date(),
+        type: 'image',
+        imageURL: null,
+        optimistic: true,
+    };
+    // Optimistically add the message to the UI
+    setMessages(prevMessages => [...prevMessages, newImageMessage]);
 
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            const filename = `pieces_jointes/${ticketId}/${Date.now()}.jpg`;
-            const storageRef = ref(storage, filename);
+    try {
+        // Use FileSystem.readAsStringAsync with encoding for direct blob creation (more reliable)
+        // Or use direct Blob constructor if available and compatible
+        const response = await fetch(uri);
+        const blob = await response.blob(); // This line might be problematic on certain Expo versions/platforms
 
-            await uploadBytes(storageRef, blob);
-            const downloadURL = await getDownloadURL(storageRef);
+        // More robust alternative for creating blob from local URI:
+        // const fileContent = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        // const blob = await (await fetch(`data:image/jpeg;base64,${fileContent}`)).blob();
 
-            await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
-                texte: 'Image partagée',
-                expediteurId: currentUser?.uid,
-                nomExpediteur: currentUser?.displayName || (isITSupport ? 'Agent' : 'Client'),
-                createdAt: serverTimestamp(),
-                type: 'image',
-                imageURL: downloadURL
-            });
+        const filename = `pieces_jointes/${ticketId}/${Date.now()}.jpg`;
+        const storageRef = ref(storage, filename);
 
-            if (ticketInfo?.jeyAskedToTerminate) {
-                await updateDoc(doc(db, 'tickets', ticketId), {
-                    jeyAskedToTerminate: deleteField()
-                });
-            }
+        await uploadBytes(storageRef, blob); // Upload the blob
+        const downloadURL = await getDownloadURL(storageRef);
 
-            await updateDoc(doc(db, 'conversations', ticketId), {
-                lastUpdated: serverTimestamp(),
-                lastMessage: 'Image partagée',
-                lastMessageSender: currentUser?.uid,
-            });
+        // Update the message in Firestore with the actual downloadURL
+        await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
+            texte: 'Image partagée',
+            expediteurId: currentUser?.uid,
+            nomExpediteur: currentUser?.displayName || (isITSupport ? 'Agent' : 'Client'),
+            createdAt: serverTimestamp(), // Use serverTimestamp for actual message
+            type: 'image',
+            imageURL: downloadURL
+        });
+
+        // If you added an optimistic message, you might want to update it
+        // or let the Firestore listener handle replacing it.
+        // For simplicity, the listener handles it as it re-fetches all messages.
+
+        if (ticketInfo?.jeyAskedToTerminate) {
             await updateDoc(doc(db, 'tickets', ticketId), {
-                lastUpdated: serverTimestamp(),
-                lastMessage: 'Image partagée',
-                lastMessageSender: currentUser?.uid,
+                jeyAskedToTerminate: deleteField()
             });
-
-        } catch (error) {
-            Alert.alert("Erreur", "Impossible de sélectionner ou d'envoyer l'image");
-            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== newImageMessage.id));
-            throw error;
-        } finally {
-            setUploading(false);
         }
-    }, [currentUser, isITSupport, ticketId, ticketInfo, setMessages]);
+
+        await updateDoc(doc(db, 'conversations', ticketId), {
+            lastUpdated: serverTimestamp(),
+            lastMessage: 'Image partagée',
+            lastMessageSender: currentUser?.uid,
+        });
+        await updateDoc(doc(db, 'tickets', ticketId), {
+            lastUpdated: serverTimestamp(),
+            lastMessage: 'Image partagée',
+            lastMessageSender: currentUser?.uid,
+        });
+
+        console.log("Image uploaded successfully:", downloadURL);
+
+    } catch (error) {
+        Alert.alert("Erreur d'envoi d'image", `Impossible d'envoyer l'image: ${error.message}`);
+        console.error("ERROR in uploaderImage:", error);
+        // Remove the optimistic message if upload fails
+        setMessages(prevMessages => prevMessages.filter(msg => msg.id !== optimisticMessageId));
+    } finally {
+        setUploading(false);
+    }
+}, [currentUser, isITSupport, ticketId, ticketInfo, setMessages]);
 
     const selectionnerImage = useCallback(async () => {
         if (isTerminated) {
@@ -1284,13 +1315,11 @@ const Conversation = ({
                 messageToSend === '/confirm_booking_yes' ||
                 messageToSend === '/confirm_booking_no'
             ) {
-                // These are internal commands, don't write to DB as regular messages (they trigger Jey's response)
                 return;
             } else if (messageToSend === '/show_appointment_form') {
-                setShowAppointmentFormModal(true); // This also just triggers the modal, no DB message
+                setShowAppointmentFormModal(true);
                 return;
             }
-
 
             await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
                 texte: messageToSend,
@@ -1307,9 +1336,9 @@ const Conversation = ({
                 });
             }
 
-            updateTypingStatus(false); // Stop typing after sending message
+            updateTypingStatus(false);
 
-            await mettreAJourConversation(messageToSend, currentUser?.uid); // Update last message on ticket/conversation
+            await mettreAJourConversation(messageToSend, currentUser?.uid);
 
         } catch (error) {
             Alert.alert("Erreur", "Impossible d'envoyer le message");
@@ -1322,12 +1351,13 @@ const Conversation = ({
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
         }
-        updateTypingStatus(true); // Start typing when text changes
+        updateTypingStatus(true);
         typingTimeoutRef.current = setTimeout(() => {
-            updateTypingStatus(false); // Stop typing after a delay
+            updateTypingStatus(false);
         }, 3000);
-    }, [updateTypingStatus]); // Added updateTypingStatus to useCallback dependencies
+    }, [updateTypingStatus]);
 
+    // Simplified mettreAJourConversation: It no longer adds the system message
     const mettreAJourConversation = async (texte, senderId) => {
         const updates = {
             lastUpdated: serverTimestamp(),
@@ -1335,18 +1365,19 @@ const Conversation = ({
             lastMessageSender: senderId,
         };
 
-        if (isITSupport && ticketInfo && ['nouveau', 'escalated_to_agent', 'jey-handling'].includes(ticketInfo.status) && !ticketInfo.assignedTo) {
-            updates.assignedTo = currentUser?.uid;
-            updates.assignedToName = currentUser?.displayName || 'Agent';
-            updates.status = 'in-progress';
-            updates.agentJoinedNotified = true;
+        // Fetch the latest ticketInfo directly if relying on it for crucial flags
+        // Although the agentJoinedNotified is now handled in ITDashboard, fetching here ensures fresh state for other checks
+        const currentTicketDoc = await getDoc(doc(db, 'tickets', ticketId));
+        const latestTicketInfo = currentTicketDoc.exists() ? currentTicketDoc.data() : null;
 
-            await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
-                texte: `${currentUser?.displayName || 'Un Agent'} a pris en charge votre Requête.`,
-                expediteurId: 'systeme',
-                nomExpediteur: 'Système',
-                createdAt: serverTimestamp()
-            });
+        // Ensure status is 'in-progress' if it's IT support and assigned to this agent,
+        // and not already terminated. This is to ensure the status is correct
+        // if the agent sends a message on an already-taken ticket, without re-adding system message.
+        if (isITSupport && latestTicketInfo &&
+             latestTicketInfo.assignedTo === currentUser?.uid &&
+             latestTicketInfo.status !== 'terminé' &&
+             latestTicketInfo.status !== 'in-progress') {
+            updates.status = 'in-progress';
         }
 
         await updateDoc(doc(db, 'conversations', ticketId), updates);
@@ -1390,7 +1421,6 @@ const Conversation = ({
         console.log("DEBUG: AppointmentFormModal reports success:", newOrUpdatedAppointment);
     }, []);
 
-    // --- NEW: Function to send suggested partners as a message ---
     const sendSuggestedPartnersMessage = async () => {
         if (selectedPartnersForSuggestion.length === 0) {
             Alert.alert("Sélection vide", "Veuillez sélectionner au moins un partenaire à suggérer.");
@@ -1421,8 +1451,8 @@ const Conversation = ({
                 type: 'suggested_partners', // Custom type for rendering
                 partnersData: selectedPartnersForSuggestion.map(p => ({ // Store full data for client-side rendering
                     id: p.id,
-                    nom: p.nom, // Use nom
-                    categorie: p.categorie, // Use categorie
+                    nom: p.nom,
+                    categorie: p.categorie,
                     averageRating: p.starRating,
                     logo: p.logo || null,
                     estPromu: p.estPromu || false,
@@ -1441,7 +1471,6 @@ const Conversation = ({
                 lastMessageSender: currentUser.uid,
             });
 
-            // Send notification to the client that a suggestion was sent
             const clientUserDoc = await getDoc(doc(db, 'users', actualClientUid));
             if (clientUserDoc.exists() && clientUserDoc.data().expoPushToken) {
                 sendPushNotification(
@@ -1453,276 +1482,324 @@ const Conversation = ({
             }
 
             setShowPartnerSelectionModal(false);
-            setSelectedPartnersForSuggestion([]); // Clear selection
-            setPartnerSearchQuery(''); // Clear search
+            setSelectedPartnersForSuggestion([]);
+            setPartnerSearchQuery('');
         } catch (error) {
             console.error("Error sending suggested partners message:", error);
             Alert.alert("Erreur", "Impossible d'envoyer la suggestion de partenaires.");
         }
     };
 
-    const renderMessage = ({
-        item
-    }) => {
-        const estUtilisateurCourant = item.expediteurId === currentUser?.uid;
-        const estSysteme = item.expediteurId === 'systeme';
-        const estJeyAI = item.expediteurId === 'jey-ai';
+    const renderMessage = ({ item }) => {
+    const estUtilisateurCourant = item.expediteurId === currentUser?.uid;
+    const estSysteme = item.expediteurId === 'systeme';
+    const estJeyAI = item.expediteurId === 'jey-ai';
 
-        const isThisClientsMessage = isITSupport && item.expediteurId === ticketInfo?.userId;
+    const isThisClientsMessage = isITSupport && item.expediteurId === ticketInfo?.userId;
 
-        return (
+    return (
+        <View style={[
+            styles.messageRow,
+            estUtilisateurCourant ? styles.messageRowRight : styles.messageRowLeft,
+        ]}>
+            {estJeyAI && (
+                <TouchableOpacity onPress={() => setIsJeyProfileModalVisible(true)}>
+                    <Image source={jeyAiProfile} style={styles.jeyMessagePhoto} />
+                </TouchableOpacity>
+            )}
+            {!estUtilisateurCourant && !estSysteme && !estJeyAI && (
+                <Image
+                    source={clientPhotoUrl ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png')}
+                    style={styles.otherUserMessagePhoto}
+                />
+            )}
+
             <View style={[
-                styles.messageRow,
-                estUtilisateurCourant ? styles.messageRowRight : styles.messageRowLeft,
+                styles.messageContainer,
+                estUtilisateurCourant ? styles.messageUtilisateur : styles.messageAutre,
+                estSysteme && styles.messageSysteme,
+                estJeyAI && styles.messageJeyAI,
+                item.optimistic && styles.optimisticMessage
             ]}>
-                {estJeyAI && ( // Render Jey's photo next to his messages
-                    <TouchableOpacity onPress={() => setIsJeyProfileModalVisible(true)}>
-                        <Image source={jeyAiProfile} style={styles.jeyMessagePhoto} />
-                    </TouchableOpacity>
-                )}
-                {/* Render photo for other human user only if they are not the current user and not system/Jey */}
-                {!estUtilisateurCourant && !estSysteme && !estJeyAI && (
-                    <Image
-                        source={clientPhotoUrl ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png')}
-                        style={styles.otherUserMessagePhoto}
-                    />
+                {!estUtilisateurCourant && !estSysteme && (
+                    <Text style={styles.nomExpediteur}>
+                        {estJeyAI ? 'Jey' : (isThisClientsMessage ? ticketInfo?.userName || 'Client' : item.nomExpediteur)}
+                    </Text>
                 )}
 
-                <View style={[
-                    styles.messageContainer,
-                    estUtilisateurCourant ? styles.messageUtilisateur : styles.messageAutre,
-                    estSysteme && styles.messageSysteme,
-                    estJeyAI && styles.messageJeyAI,
-                    item.optimistic && styles.optimisticMessage
-                ]}>
-                    {!estUtilisateurCourant && !estSysteme && (
-                        <Text style={styles.nomExpediteur}>
-                            {estJeyAI ? 'Jey' : (isThisClientsMessage ? ticketInfo?.userName || 'Client' : item.nomExpediteur)}
-                        </Text>
-                    )}
-
-                    {item.type === 'partner_suggestion_list' && item.partners && (
-                        <View style={styles.partnerSuggestionListContainer}>
-                            <Text style={styles.partnerSuggestionTitle}>{item.texte}</Text>
-                            {item.partners.map(partner => (
-                                <TouchableOpacity
-                                    key={partner.id}
-                                    style={styles.partnerSuggestionItem}
-                                    onPress={() => envoyerMessage(
-                                        `/select_partner_${partner.id}`,
-                                        'text',
-                                        {},
-                                        `J'ai sélectionné ${partner.nom}` // Used nom
-                                    )}
-                                >
-                                    <View style={styles.partnerDetails}>
-                                        <Text style={styles.partnerNameText}>{partner.nom}</Text> {/* Used nom */}
-                                        {partner.categorie && (
-                                            <Text style={styles.partnerCategoryText}>{partner.categorie}</Text> 
-                                        )}
-                                        {typeof partner.starRating === 'number' && (
-                                            <View style={styles.partnerRatingContainer}>
-                                                {renderStarRating(partner.starRating)}
-                                            </View>
-                                        )}
+                {item.type === 'numbered_partner_suggestion' && item.partners && item.partners.length > 0 && (
+                    <View style={styles.numberedPartnerSuggestionContainer}>
+                        <Text style={styles.numberedPartnerSuggestionTitle}>{item.texte.split('\n')[0]}</Text>
+                        {item.partners.map((partner, index) => (
+                            <View key={partner.id} style={styles.numberedPartnerItem}>
+                                <Text style={styles.numberedPartnerIndex}>{index + 1}.</Text>
+                                <View style={styles.numberedPartnerDetails}>
+                                    <Text style={styles.numberedPartnerName}>{partner.nom}</Text>
+                                    <Text style={styles.numberedPartnerCategory}>Catégorie: {partner.categorie}</Text>
+                                    <View style={styles.partnerRatingContainer}>
+                                        {renderStarRating(partner.averageRating)}
+                                        {partner.estPromu && <Text style={styles.partnerPromotionTag}>⭐ Promotion</Text>}
                                     </View>
-                                    <Ionicons name="chevron-forward-outline" size={20} color="#007AFF" />
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* --- NEW: Render suggested_partners message type --- */}
-                    {item.type === 'suggested_partners' && item.partnersData && (
-                        <View style={styles.suggestedPartnersDisplayContainer}>
-                            <Text style={styles.suggestedPartnersTitle}>{item.texte.split('\n')[0]}</Text>
-                            {item.partnersData.map(partner => (
-                                <TouchableOpacity
-                                    key={partner.id}
-                                    style={styles.suggestedPartnerItem}
-                                    onPress={() => navigation.navigate("PartnerDetails", { partnerId: partner.id })}
-                                >
-                                    <View style={styles.partnerDetailsRow}>
-                                        <Text style={styles.suggestedPartnerName}>{partner.nom}</Text>
-                                        {typeof partner.averageRating === 'number' && (
-                                            <View style={styles.partnerRatingContainer}>
-                                                {renderStarRating(partner.averageRating)}
-                                            </View>
-                                        )}
-                                    </View>
-                                    <Text style={styles.suggestedPartnerCategory}>{partner.categorie}</Text>
-                                    {partner.estPromu && (
-                                        <Text style={styles.suggestedPartnerPromoStatus}>
-                                            Promotion: {getPromotionStatusForPartnerItem(partner).text}
-                                        </Text>
-                                    )}
-                                    <Ionicons name="chevron-forward-outline" size={20} color="#007AFF" />
-                                </TouchableOpacity>
-                            ))}
-                            <Text style={styles.suggestedPartnersFooter}>
-                                Cliquez pour plus de détails ou demandez à Jey un rendez-vous.
-                            </Text>
-                        </View>
-                    )}
-                    {/* --- END NEW --- */}
-
-                    {item.type === 'booking_confirmation_request' && item.partnerName && (
-                        <View style={styles.bookingConfirmationContainer}>
-                            <Text style={styles.bookingConfirmationText}>{item.texte}</Text>
-                            <View style={styles.bookingConfirmationButtons}>
-                                <TouchableOpacity
-                                    style={[styles.bookingButton, styles.bookingButtonYes]}
-                                    onPress={() => {
-                                        const partnerObj = allPartners.find(p => p.name === item.partnerName); // Still uses name for finding
-                                        setSelectedPartnerForBooking(partnerObj || null);
-                                        envoyerMessage(
-                                            '/confirm_booking_yes',
-                                            'text',
-                                            {},
-                                            `Oui, je souhaite prendre rendez-vous avec ${item.partnerName} !` // Still uses name
-                                        )
-                                    }}
-                                >
-                                    <Text style={styles.bookingButtonText}>Oui</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.bookingButton, styles.bookingButtonNo]}
-                                    onPress={() => envoyerMessage(
-                                        '/confirm_booking_no',
-                                        'text',
-                                        {},
-                                        `Non, pas pour le moment.`
-                                    )}
-                                >
-                                    <Text style={styles.bookingButtonText}>Non</Text>
-                                </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    )}
+                        ))}
+                        <Text style={styles.numberedPartnerInstructions}>
+                            {item.texte.split('\n').pop()}
+                        </Text>
+                    </View>
+                )}
 
-                    {item.type === 'appointment_request_prompt' && estJeyAI && (
-                        <View style={styles.bookingConfirmationContainer}>
-                            <Text style={styles.bookingConfirmationText}>{item.texte}</Text>
+                {item.type === 'partner_suggestion_list' && item.partners && (
+                    <View style={styles.partnerSuggestionListContainer}>
+                        <Text style={styles.partnerSuggestionTitle}>{item.texte}</Text>
+                        {item.partners.map(partner => (
+                            <TouchableOpacity
+                                key={partner.id}
+                                style={styles.partnerSuggestionItem}
+                                onPress={() => envoyerMessage(
+                                    `/select_partner_${partner.id}`,
+                                    'text',
+                                    {},
+                                    `J'ai sélectionné ${partner.nom}`
+                                )}
+                            >
+                                <View style={styles.partnerDetails}>
+                                    <Text style={styles.partnerNameText}>{partner.nom}</Text>
+                                    {partner.categorie && (
+                                        <Text style={styles.partnerCategoryText}>{partner.categorie}</Text>
+                                    )}
+                                    {typeof partner.starRating === 'number' && (
+                                        <View style={styles.partnerRatingContainer}>
+                                            {renderStarRating(partner.starRating)}
+                                        </View>
+                                    )}
+                                </View>
+                                <Ionicons name="chevron-forward-outline" size={20} color="#007AFF" />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
+                {item.type === 'suggested_partners' && item.partnersData && (
+                    <View style={styles.suggestedPartnersDisplayContainer}>
+                        <Text style={styles.suggestedPartnersTitle}>{item.texte.split('\n')[0]}</Text>
+                        {item.partnersData.map(partner => (
+                            <TouchableOpacity
+                                key={partner.id}
+                                style={styles.suggestedPartnerItem}
+                                onPress={() => navigation.navigate("PartnerDetails", { partnerId: partner.id })}
+                            >
+                                <View style={styles.partnerDetailsRow}>
+                                    <Text style={styles.suggestedPartnerName}>{partner.nom}</Text>
+                                    {typeof partner.averageRating === 'number' && (
+                                        <View style={styles.partnerRatingContainer}>
+                                            {renderStarRating(partner.averageRating)}
+                                        </View>
+                                    )}
+                                </View>
+                                <Text style={styles.suggestedPartnerCategory}>{partner.categorie}</Text>
+                                {partner.estPromu && (
+                                    <Text style={styles.suggestedPartnerPromoStatus}>
+                                        Promotion: {getPromotionStatusForPartnerItem(partner).text}
+                                    </Text>
+                                )}
+                                <Ionicons name="chevron-forward-outline" size={20} color="#007AFF" />
+                            </TouchableOpacity>
+                        ))}
+                        <Text style={styles.suggestedPartnersFooter}>
+                            Cliquez pour plus de détails ou demandez à Jey un rendez-vous.
+                        </Text>
+                    </View>
+                )}
+
+                {item.type === 'booking_confirmation_request' && item.partnerName && (
+                    <View style={styles.bookingConfirmationContainer}>
+                        <Text style={styles.bookingConfirmationText}>{item.texte}</Text>
+                        <View style={styles.bookingConfirmationButtons}>
                             <TouchableOpacity
                                 style={[styles.bookingButton, styles.bookingButtonYes]}
                                 onPress={() => {
-                                    setShowAppointmentFormModal(true);
+                                    const partnerObj = allPartners.find(p => p.nom === item.partnerName);
+                                    setSelectedPartnerForBooking(partnerObj || null);
+                                    envoyerMessage(
+                                        '/confirm_booking_yes',
+                                        'text',
+                                        {},
+                                        `Oui, je souhaite prendre rendez-vous avec ${item.partnerName} !`
+                                    )
                                 }}
                             >
-                                <Text style={styles.bookingButtonText}>Prendre Rendez-vous</Text>
+                                <Text style={styles.bookingButtonText}>Oui</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.bookingButton, styles.bookingButtonNo]}
+                                onPress={() => envoyerMessage(
+                                    '/confirm_booking_no',
+                                    'text',
+                                    {},
+                                    `Non, pas pour le moment.`
+                                )}
+                            >
+                                <Text style={styles.bookingButtonText}>Non</Text>
                             </TouchableOpacity>
                         </View>
-                    )}
+                    </View>
+                )}
 
-                    {item.type === 'image' && item.imageURL ? (
-                        <Image
-                            source={{ uri: item.imageURL }}
-                            style={styles.imageMessage}
-                            resizeMode="contain"
-                        />
-                    ) : item.type === 'image' && item.optimistic ? (
-                        <View style={styles.imageLoadingContainer}>
-                            <ActivityIndicator size="small" color="#6B7280" />
-                            <Text style={styles.imageLoadingText}>{item.texte}</Text>
+                {item.type === 'appointment_request_prompt' && estJeyAI && (
+                    <View style={styles.bookingConfirmationContainer}>
+                        <Text style={styles.bookingConfirmationText}>{item.texte}</Text>
+                        <TouchableOpacity
+                            style={[styles.bookingButton, styles.bookingButtonYes]}
+                            onPress={() => {
+                                envoyerMessage(
+                                    '/show_appointment_form',
+                                    'command',
+                                    {},
+                                    `Oui, je souhaite prendre rendez-vous !`
+                                );
+                            }}
+                        >
+                            <Text style={styles.bookingButtonText}>Prendre Rendez-vous</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {item.type === 'termination_confirmation_request' && estJeyAI && (
+                    <View style={styles.bookingConfirmationContainer}>
+                        <Text style={styles.bookingConfirmationText}>{item.texte}</Text>
+                        <View style={styles.bookingConfirmationButtons}>
+                            <TouchableOpacity
+                                style={[styles.bookingButton, styles.bookingButtonYes]}
+                                onPress={() => envoyerMessage(
+                                    'Oui, je souhaite terminer la conversation.',
+                                    'text'
+                                )}
+                            >
+                                <Text style={styles.bookingButtonText}>Oui, terminer</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.bookingButton, styles.bookingButtonNo]}
+                                onPress={() => envoyerMessage(
+                                    'Non, je souhaite continuer la conversation.',
+                                    'text'
+                                )}
+                            >
+                                <Text style={styles.bookingButtonText}>Non, continuer</Text>
+                            </TouchableOpacity>
                         </View>
-                    ) : item.type === 'coupon_qr' && (item.codeData || item.qrCodeData || item.codeValue) ? (
-                        <View style={styles.generatedCodeMessageContainer}>
-                            <Text style={styles.generatedCodeMessageTitle}>Votre Code QR</Text>
-                            {(() => {
-                                let qrValueToEncode = null;
-                                let displayedCodeValue = null;
+                    </View>
+                )}
 
-                                if (typeof item.codeData === 'object' && item.codeData !== null) {
-                                    if (typeof item.codeData.qrContent === 'string' && item.codeData.qrContent.length > 0) {
-                                        qrValueToEncode = item.codeData.qrContent;
-                                    } else if (typeof item.codeData.value === 'string' && item.codeData.value.length > 0) {
-                                        qrValueToEncode = item.codeData.value;
-                                    }
-                                    if (typeof item.codeData.value === 'string' && item.codeData.value.length > 0) {
-                                        displayedCodeValue = item.codeData.value;
-                                    }
+                {item.type === 'image' && item.imageURL ? (
+                    <Image
+                        source={{ uri: item.imageURL }}
+                        style={styles.imageMessage}
+                        resizeMode="contain"
+                    />
+                ) : item.type === 'image' && item.optimistic ? (
+                    <View style={styles.imageLoadingContainer}>
+                        <ActivityIndicator size="small" color="#6B7280" />
+                        <Text style={styles.imageLoadingText}>{item.texte}</Text>
+                    </View>
+                ) : item.type === 'coupon_qr' && (item.codeData || item.qrCodeData || item.codeValue) ? (
+                    <View style={styles.generatedCodeMessageContainer}>
+                        <Text style={styles.generatedCodeMessageTitle}>Votre Code QR</Text>
+                        {(() => {
+                            let qrValueToEncode = null;
+                            let displayedCodeValue = null;
+
+                            if (typeof item.codeData === 'object' && item.codeData !== null) {
+                                if (typeof item.codeData.qrContent === 'string' && item.codeData.qrContent.length > 0) {
+                                    qrValueToEncode = item.codeData.qrContent;
+                                } else if (typeof item.codeData.value === 'string' && item.codeData.value.length > 0) {
+                                    qrValueToEncode = item.codeData.value;
                                 }
-                                else if (typeof item.qrCodeData === 'string' && item.qrCodeData.length > 0) {
-                                    qrValueToEncode = item.qrCodeData;
-                                    displayedCodeValue = item.qrCodeData;
+                                if (typeof item.codeData.value === 'string' && item.codeData.value.length > 0) {
+                                    displayedCodeValue = item.codeData.value;
                                 }
-                                else if (typeof item.codeValue === 'string' && item.codeValue.length > 0 && item.codeType === 'coupon') {
-                                    displayedCodeValue = item.codeValue;
-                                }
+                            }
+                            else if (typeof item.qrCodeData === 'string' && item.qrCodeData.length > 0) {
+                                qrValueToEncode = item.qrCodeData;
+                                displayedCodeValue = item.qrCodeData;
+                            }
+                            else if (typeof item.codeValue === 'string' && item.codeValue.length > 0 && item.codeType === 'coupon') {
+                                displayedCodeValue = item.codeValue;
+                            }
 
 
-                                if (qrValueToEncode) {
-                                    return (
-                                        <View style={styles.qrDisplayArea}>
-                                            <QRCode
-                                                value={qrValueToEncode}
-                                                size={100}
-                                                color="black"
-                                                backgroundColor="white"
-                                            />
-                                            {displayedCodeValue && (
-                                                <Text style={styles.generatedCodeValue}>{displayedCodeValue}</Text>
-                                            )}
-                                        </View>
-                                    );
-                                } else if (displayedCodeValue && item.codeType === 'coupon') {
-                                    return (
-                                        <Text style={styles.generatedCouponValue}>{displayedCodeValue}</Text>
-                                    );
-                                } else {
-                                    return null;
-                                }
-                            })()}
+                            if (qrValueToEncode) {
+                                return (
+                                    <View style={styles.qrDisplayArea}>
+                                        <QRCode
+                                            value={qrValueToEncode}
+                                            size={100}
+                                            color="black"
+                                            backgroundColor="white"
+                                        />
+                                        {displayedCodeValue && (
+                                            <Text style={styles.generatedCodeValue}>{displayedCodeValue}</Text>
+                                        )}
+                                    </View>
+                                );
+                            } else if (displayedCodeValue && item.codeType === 'coupon') {
+                                return (
+                                    <Text style={styles.generatedCouponValue}>{displayedCodeValue}</Text>
+                                );
+                            } else {
+                                return null;
+                            }
+                        })()}
 
-                            <Text style={styles.generatedCodeMessageDetails}>
-                                Partenaire: {item.partnerName || 'N/A'}
-                            </Text>
-                            {item.appointmentDate && (
-                                <Text style={styles.generatedCodeMessageDetails}>
-                                    Date RDV: {moment(item.appointmentDate).format('DD/MM/YYYY')} à {moment(item.appointmentDate).format('HH:mm')}
-                                </Text>
-                            )}
-                            {item.clientNames && item.clientNames.length > 0 && (
-                                <Text style={styles.generatedCodeMessageDetails}>
-                                    Pour: {item.clientNames.join(', ')}
-                                </Text>
-                            )}
-                            {item.description && (
-                                <Text style={styles.generatedCodeMessageDetails}>
-                                    Description: {item.description}
-                                </Text>
-                            )}
-                            {!isITSupport && item.imageURL && (
-                                <TouchableOpacity
-                                    style={styles.downloadButton}
-                                    onPress={() => downloadImage(item.imageURL)}
-                                >
-                                    <Ionicons name="download" size={20} color="white" />
-                                    <Text style={styles.downloadButtonText}>Télécharger</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ) : (
-                        <Text style={[
-                            styles.texteMessage,
-                            estUtilisateurCourant && styles.texteUtilisateur,
-                            estSysteme && styles.texteSysteme,
-                            estJeyAI && styles.texteJeyAI,
-                        ]}>
-                            {item.texte}
+                        <Text style={styles.generatedCodeMessageDetails}>
+                            Partenaire: {item.partnerName || 'N/A'}
                         </Text>
-                    )}
-
+                        {item.appointmentDate && (
+                            <Text style={styles.generatedCodeMessageDetails}>
+                                Date RDV: {moment(item.appointmentDate).format('DD/MM/YYYY')} à {moment(item.appointmentDate).format('HH:mm')}
+                            </Text>
+                        )}
+                        {item.clientNames && item.clientNames.length > 0 && (
+                            <Text style={styles.generatedCodeMessageDetails}>
+                                Pour: {item.clientNames.join(', ')}
+                            </Text>
+                        )}
+                        {item.description && (
+                            <Text style={styles.generatedCodeMessageDetails}>
+                                Description: {item.description}
+                            </Text>
+                        )}
+                        {!isITSupport && item.imageURL && (
+                            <TouchableOpacity
+                                style={styles.downloadButton}
+                                onPress={() => downloadImage(item.imageURL)}
+                            >
+                                <Ionicons name="download" size={20} color="white" />
+                                <Text style={styles.downloadButtonText}>Télécharger</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ) : (
                     <Text style={[
-                        styles.heureMessage,
-                        estUtilisateurCourant ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6B7280' }
+                        styles.texteMessage,
+                        estUtilisateurCourant && styles.texteUtilisateur,
+                        estSysteme && styles.texteSysteme,
+                        estJeyAI && styles.texteJeyAI,
                     ]}>
-                        {moment(item.createdAt).format('HH:mm')}
+                        {item.texte}
                     </Text>
-                </View>
+                )}
+
+                <Text style={[
+                    styles.heureMessage,
+                    estUtilisateurCourant ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6B7280' }
+                ]}>
+                    {moment(item.createdAt).format('HH:mm')}
+                </Text>
             </View>
-        );
-    };
+        </View>
+    );
+};
 
     const renderHeaderContent = () => {
         let mainHeaderText = "Chargement...";
@@ -1737,7 +1814,7 @@ const Conversation = ({
                     subHeaderText = `Agent Demandé - ${ticketInfo.escalationReason || 'Raison inconnue'}`;
                 } else if (ticketInfo.status === 'in-progress') {
                     mainHeaderText = `${ticketInfo.userName || 'Client'} - ${ticketInfo.category || 'Ticket'} (${ticketInfo.assignedToName || 'Agent'})`;
-                    subHeaderText = 'En cours';
+                    subHeaderText = "En cours"; // Show "En cours" in header if agent has taken it
                 } else if (ticketInfo.status === 'terminé') {
                     mainHeaderText = `${ticketInfo.userName || 'Client'} - ${ticketInfo.category || 'Ticket'} (Terminé)`;
                     subHeaderText = `Terminé le ${moment(ticketInfo.termineLe?.toDate()).format('DD/MM/YYYY HH:mm')}`;
@@ -1800,44 +1877,33 @@ const Conversation = ({
         );
     }
 
-    // Determine which profile photo to display first based on typing status
-    // The previous logic for photo1Source/photo2Source based on typingUserId is now removed
-    // as we have separate isJeyTyping and isOtherHumanTyping states.
-    // The profile photos in the header represent the parties in the conversation, not necessarily who is typing.
-    // We can simplify this to just show current user's photo and the other party's photo.
+    let displayPhotoLeftSource = null;
+    let displayPhotoRightSource = null;
 
-    let displayPhotoLeftSource = null; // Left for Jey or Client (if Agent view) or Agent (if Client view)
-    let displayPhotoRightSource = null; // Right for current user
-
-    // Current User's photo (always on the right)
     displayPhotoRightSource = currentUserPhotoUrl ? { uri: currentUserPhotoUrl } : require('../assets/images/Profile.png');
 
-    // Photo for the "other" party (left side)
-    if (!isITSupport) { // Client's view
+    if (!isITSupport) {
         if (ticketInfo?.status === 'jey-handling') {
-            displayPhotoLeftSource = jeyAiProfile; // Jey is the other party
+            displayPhotoLeftSource = jeyAiProfile;
         } else if (ticketInfo?.assignedTo && ticketInfo.assignedTo !== 'jey-ai') {
-            displayPhotoLeftSource = agentPhotoUrl ? { uri: agentPhotoUrl } : require('../assets/images/Profile.png'); // Agent is the other party
+            displayPhotoLeftSource = agentPhotoUrl ? { uri: agentPhotoUrl } : require('../assets/images/Profile.png');
         } else {
-            displayPhotoLeftSource = require('../assets/images/Profile.png'); // Default for other cases
+            displayPhotoLeftSource = require('../assets/images/Profile.png');
         }
-    } else { // IT Support's view
-        displayPhotoLeftSource = clientPhotoUrl ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png'); // Client is the other party
+    } else {
+        displayPhotoLeftSource = clientPhotoUrl ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png');
     }
 
-    const conversationDate = moment().format('DD/MM/YYYY'); // Get today's date
+    const conversationDate = moment().format('DD/MM/YYYY');
 
-    // --- NEW: Filtered partners for selection modal ---
     const filteredPartnersForSelection = allPartners.filter(p => {
         const queryLower = partnerSearchQuery.toLowerCase();
         return (
-            p.nom?.toLowerCase().includes(queryLower) || // Filter by nom
-            p.categorie?.toLowerCase().includes(queryLower) // Filter by categorie
+            p.nom?.toLowerCase().includes(queryLower) ||
+            p.categorie?.toLowerCase().includes(queryLower)
         );
     });
-    // --- END NEW ---
 
-    // --- NEW: Render item for partner selection modal ---
     const renderPartnerSelectionItem = ({ item }) => {
         const isSelected = selectedPartnersForSuggestion.some(p => p.id === item.id);
         const promotionStatus = getPromotionStatusForPartnerItem(item);
@@ -1857,8 +1923,8 @@ const Conversation = ({
                 }}
             >
                 <View style={styles.partnerSelectionItemInfo}>
-                    <Text style={styles.partnerSelectionItemName}>{item.nom}</Text> {/* Display nom */}
-                    <Text style={styles.partnerSelectionItemCategory}>{item.categorie}</Text> {/* Display categorie */}
+                    <Text style={styles.partnerSelectionItemName}>{item.nom}</Text>
+                    <Text style={styles.partnerSelectionItemCategory}>{item.categorie}</Text>
                     <View style={styles.partnerSelectionItemRatingPromo}>
                         {renderStarRating(item.starRating)}
                         <Text style={styles.partnerSelectionItemPromoText} styles={{ color: promotionStatus.color }}>
@@ -1877,8 +1943,6 @@ const Conversation = ({
             </TouchableOpacity>
         );
     };
-    // --- END NEW ---
-
 
     return (
         <KeyboardAvoidingView
@@ -1912,18 +1976,18 @@ const Conversation = ({
             </View>
 
             {/* Profile Photos Below Header */}
-            {!isITSupport && ( // ADDED CONDITION: Only show if NOT IT Support
+            {!isITSupport && (
                 <View style={styles.profilePhotosContainer}>
                     {displayPhotoLeftSource && (
                         <Image
                             source={displayPhotoLeftSource}
-                            style={styles.profilePhoto} // No typing border here for simplicity
+                            style={styles.profilePhoto}
                         />
                     )}
                     {displayPhotoRightSource && (
                         <Image
                             source={displayPhotoRightSource}
-                            style={styles.profilePhoto} // No typing border here for simplicity
+                            style={styles.profilePhoto}
                         />
                     )}
                     <Text style={styles.conversationDate}>{conversationDate}</Text>
@@ -1945,15 +2009,13 @@ const Conversation = ({
                         <Ionicons name="calendar" size={20} color="white" />
                         <Text style={styles.appointmentButtonText}>Nouveau Rendez-vous</Text>
                     </TouchableOpacity>
-                    {/* --- MOVED: Suggest Partner Button here --- */}
                     <TouchableOpacity
-                        style={styles.suggestPartnerControlPanelButton} // Adjusted style for control panel
+                        style={styles.suggestPartnerControlPanelButton}
                         onPress={() => setShowPartnerSelectionModal(true)}
                     >
                         <Ionicons name="people-circle-outline" size={24} color="#007AFF" />
                         <Text style={styles.suggestPartnerControlPanelButtonText}>Suggérer Partenaire</Text>
                     </TouchableOpacity>
-                    {/* --- END MOVED --- */}
                 </View>
             )}
 
@@ -1974,7 +2036,6 @@ const Conversation = ({
                 }
             />
 
-            {/* --- TYPING INDICATORS DISPLAY (UPDATED) --- */}
             {isJeyTyping && (
                 <Animated.View
                     style={[
@@ -1984,7 +2045,7 @@ const Conversation = ({
                             transform: [{
                                 scale: jeyTypingPulseAnim.interpolate({
                                     inputRange: [0, 1],
-                                    outputRange: [0.95, 1.05] // Small pulse effect
+                                    outputRange: [0.95, 1.05]
                                 })
                             }]
                         }
@@ -2001,16 +2062,16 @@ const Conversation = ({
                     {(isITSupport ? (clientPhotoUrl ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png')) : require('../assets/images/Profile.png')) && (
                         <Image
                             source={(isITSupport && clientPhotoUrl) ? { uri: clientPhotoUrl } : require('../assets/images/Profile.png')}
-                            style={styles.jeyTypingPhoto} // Re-using style for size/border-radius
+                            style={styles.jeyTypingPhoto}
                         />
                     )}
                     <Text style={styles.typingIndicatorText}>{otherHumanTypingName} est en train d'écrire...</Text>
                     <ActivityIndicator size="small" color="#6B7280" style={styles.typingIndicatorSpinner} />
                 </View>
             )}
-            {/* --- END TYPING INDICATORS DISPLAY --- */}
 
             <View style={styles.inputContainer}>
+            {/*
                 <TouchableOpacity
                     style={styles.attachmentButton}
                     onPress={selectionnerImage}
@@ -2022,6 +2083,7 @@ const Conversation = ({
                         color={uploading || isTerminated || showAppointmentFormModal ? "#CCC" : "#34C759"}
                     />
                 </TouchableOpacity>
+            */}
 
                 <TextInput
                     style={[styles.input, isTerminated && styles.disabledInput]}
@@ -2064,7 +2126,6 @@ const Conversation = ({
                 editingAppointment={confirmedAppointmentForTicket}
             />
 
-            {/* Jey Profile Modal */}
             <Modal
                 visible={isJeyProfileModalVisible}
                 transparent={true}
@@ -2079,7 +2140,6 @@ const Conversation = ({
                 </Pressable>
             </Modal>
 
-            {/* --- NEW: Partner Selection Modal --- */}
             <Modal
                 animationType="slide"
                 transparent={false}
@@ -2092,7 +2152,7 @@ const Conversation = ({
                             <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
                         </TouchableOpacity>
                         <Text style={styles.partnerSelectionModalTitle}>Suggérer des partenaires</Text>
-                        <View style={{ width: 30 }} /> {/* Placeholder for alignment */}
+                        <View style={{ width: 30 }} />
                     </View>
 
                     <View style={styles.partnerSelectionSearchBar}>
@@ -2133,7 +2193,6 @@ const Conversation = ({
                     </TouchableOpacity>
                 </View>
             </Modal>
-            {/* --- END NEW: Partner Selection Modal --- */}
         </KeyboardAvoidingView>
     );
 };
@@ -2156,7 +2215,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F8F9FA',
-        //paddingTop: 40
     },
     chargementContainer: {
         flex: 1,
@@ -2168,7 +2226,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 15,
-        paddingTop: 30,
+        //paddingTop: 30,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
         backgroundColor: '#FFF',
@@ -2204,14 +2262,14 @@ const styles = StyleSheet.create({
         padding: 8,
         marginRight: 10,
     },
-    suggestPartnerHeaderButton: { // NEW style for the suggest partner button in header
+    suggestPartnerHeaderButton: {
         padding: 8,
         marginRight: 10,
     },
-    suggestPartnerControlPanelButton: { // NEW: Style for the button moved to control panel
+    suggestPartnerControlPanelButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#E6F7FF', // Light blue background
+        backgroundColor: '#E6F7FF',
         paddingHorizontal: 15,
         paddingVertical: 8,
         borderRadius: 20,
@@ -2223,7 +2281,7 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
         elevation: 3,
     },
-    suggestPartnerControlPanelButtonText: { // NEW: Text style for the button
+    suggestPartnerControlPanelButtonText: {
         color: '#007AFF',
         fontWeight: 'bold',
         fontSize: 14,
@@ -2237,7 +2295,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F0F4F8',
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
-        justifyContent: 'space-between', // Distribute items
+        justifyContent: 'space-between',
     },
     profilePhoto: {
         width: 30,
@@ -2246,16 +2304,15 @@ const styles = StyleSheet.create({
         marginRight: 8,
         borderWidth: 1,
         borderColor: '#CCC',
-        // No background color, allowing image to fill or transparency
     },
-    typingBorder: { // New style for typing indicator border
-        borderColor: '#007AFF', // Blue border for typing
+    typingBorder: {
+        borderColor: '#007AFF',
         borderWidth: 2,
     },
     conversationDate: {
         fontSize: 12,
         color: '#6B7280',
-        marginLeft: 'auto', // Push to the right
+        marginLeft: 'auto',
     },
     messagesContainer: {
         padding: 15,
@@ -2279,7 +2336,7 @@ const styles = StyleSheet.create({
     },
     messageRow: {
         flexDirection: 'row',
-        marginBottom: 12,
+        marginBottom: 15,
         alignItems: 'flex-end',
     },
     messageRowLeft: {
@@ -2327,7 +2384,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 0,
         borderWidth: 1,
         borderColor: '#BBDEFB',
-        marginLeft: 8, // Adjust for Jey's photo
+        marginLeft: 8,
     },
     optimisticMessage: {
         opacity: 0.7,
@@ -2386,7 +2443,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopWidth: 1,
         borderTopColor: '#E5E7EB',
-        bottom: 5
+        bottom: 25,
+        //marginBottom: 15
     },
     attachmentButton: {
         padding: 10,
@@ -2498,21 +2556,21 @@ const styles = StyleSheet.create({
         marginLeft: 5,
     },
 
-    jeyTypingPhotoContainer: { // This seems unused now based on render logic
+    jeyTypingPhotoContainer: {
         alignSelf: 'flex-start',
         marginLeft: 10,
         marginBottom: 5,
         flexDirection: 'row',
         alignItems: 'center',
     },
-    jeyTypingPhoto: { // Used for Jey and now potentially other human typing indicator
+    jeyTypingPhoto: {
         width: 30,
         height: 30,
         borderRadius: 15,
         marginRight: 8,
-        borderWidth: 2, // Retaining border if you want it for typing photo
-        borderColor: '#007AFF', // Example color
-        backgroundColor: '#E3F2FD', // Example background
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        backgroundColor: '#E3F2FD',
     },
     jeyMessagePhoto: {
         width: 30,
@@ -2532,7 +2590,6 @@ const styles = StyleSheet.create({
         marginLeft: 5,
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        // Removed backgroundColor
     },
 
     generatedCodeMessageContainer: {
@@ -2712,7 +2769,6 @@ const styles = StyleSheet.create({
         color: 'white',
         textAlign: 'center'
     },
-    // --- NEW: Partner Selection Modal Styles ---
     partnerSelectionModalContainer: {
         flex: 1,
         paddingTop: Platform.OS === 'android' ? 40 : 20,
@@ -2823,9 +2879,8 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    // Styles for suggested_partners message type
     suggestedPartnersDisplayContainer: {
-        backgroundColor: '#E6EFFF', // Light blue background
+        backgroundColor: '#E6EFFF',
         borderRadius: 10,
         padding: 15,
         marginTop: 5,
@@ -2883,7 +2938,6 @@ const styles = StyleSheet.create({
         marginTop: 10,
         textAlign: 'center',
     },
-    // --- END NEW Partner Selection Modal Styles ---
 });
 
 export default Conversation;

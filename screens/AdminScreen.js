@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   ActivityIndicator,
-  TouchableOpacity, 
-  Image, 
+  TouchableOpacity,
+  Image,
   RefreshControl,
-  Platform, 
-  Alert 
+  Platform,
+  Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  onSnapshot, // Used for real-time listeners for notifications
-  doc, // Needed for getDoc
-  getDoc // Explicitly import getDoc
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  doc,
+  getDoc
 } from 'firebase/firestore';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // To store last notified date
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AdminScreen = () => {
   const navigation = useNavigation();
@@ -35,35 +35,29 @@ const AdminScreen = () => {
     newUsersToday: 0,
     newUsersMonth: 0,
     newUsersYear: 0,
-    tickets: 0, // This count will still be updated, just not notified via push from here
-    conversations: 0, // This will include partner conversations
+    tickets: 0,
+    conversations: 0,
     partners: 0,
     surveys: 0,
     pendingPayments: 0,
-    newsCount: 0, // NEW: State for news count
+    newsCount: 0,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  // Refs to prevent duplicate notifications on re-renders/re-fetches within a session
-  // For new users, we use AsyncStorage for persistence across app sessions
-  const lastNotifiedNewUsersDate = useRef(null); 
-  const notifiedPartnerIds = useRef(new Set()); // Tracks partner IDs already notified for *new partner creation*
-  const notifiedPaymentIds = useRef(new Set()); // Tracks payment IDs already notified for *new pending payment*
-  const notifiedPartnerConvosMsgs = useRef(new Set()); // Tracks partner conversation IDs already notified for *new messages*
+  const lastNotifiedNewUsersDate = useRef(null);
+  // Removed notifiedPartnerIds as it's no longer needed for new partner notifications
+  const notifiedPaymentIds = useRef(new Set());
+  const notifiedPartnerConvosMsgs = useRef(new Set());
 
-  // --- Function to send push notification (placeholder) ---
-  // IMPORTANT: In a production app, this function should call a secure backend endpoint
-  // (e.g., Firebase Cloud Function) that handles sending push notifications,
-  // to avoid exposing your Expo Push API key and for reliability.
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
-      sound: 'default', // You can customize this
+      sound: 'er_notification',
       title,
       body,
-      data, // Arbitrary data to pass along with the notification
+      data,
     };
 
     try {
@@ -81,21 +75,16 @@ const AdminScreen = () => {
       console.error('Failed to send push notification (AdminScreen):', error);
     }
   };
-  // --- END NEW: Function to send push notification ---
 
-
-  // Primary data fetching function - runs on mount, refresh, and when listeners trigger UI updates
   const fetchData = async () => {
-    setLoading(true); // Set loading true at the start of fetch operation
+    setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) {
-        // Handle unauthenticated user gracefully, e.g., redirect to login
         setLoading(false);
         return;
       }
 
-      // Fetch admin profile (needed for photo and name in header, and expoPushToken for notifications)
       const adminQuery = query(collection(db, 'users'), where('uid', '==', user.uid));
       const adminDocSnap = await getDocs(adminQuery);
       let currentAdminData = null;
@@ -104,11 +93,9 @@ const AdminScreen = () => {
         setAdminData(currentAdminData);
       } else {
         console.warn("Admin user document not found for current UID:", user.uid);
-        // Set a default adminData if doc doesn't exist, to prevent errors
         setAdminData({ name: 'Admin', photoURL: null, expoPushToken: null });
       }
 
-      // Load last notified date for new users from AsyncStorage to persist across app sessions
       const storedDate = await AsyncStorage.getItem('lastNotifiedNewUsersDate');
       if (storedDate) {
         lastNotifiedNewUsersDate.current = new Date(storedDate);
@@ -116,13 +103,11 @@ const AdminScreen = () => {
         lastNotifiedNewUsersDate.current = null;
       }
 
-      // Calculate date ranges for user statistics
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
 
-      // Fetch users data for statistics
       const usersQuerySnapshot = await getDocs(collection(db, 'users'));
       let inactiveUsers = 0;
       let onlineUsers = 0;
@@ -133,18 +118,15 @@ const AdminScreen = () => {
       usersQuerySnapshot.forEach(doc => {
         const userData = doc.data();
         const lastActive = userData.lastActive?.toDate();
-        
-        // Check inactive users (not active in last 30 days)
+
         if (lastActive && (now - lastActive) > 30 * 24 * 60 * 60 * 1000) {
           inactiveUsers++;
         }
-        
-        // Check online users (active in last 5 minutes)
+
         if (lastActive && (now - lastActive) < 5 * 60 * 1000) {
           onlineUsers++;
         }
-        
-        // Check new users created within today/month/year
+
         const createdAt = userData.createdAt?.toDate();
         if (createdAt) {
           if (createdAt >= todayStart) newUsersToday++;
@@ -153,9 +135,7 @@ const AdminScreen = () => {
         }
       });
 
-      // --- Push notification for new users (daily check) ---
-      // This will send a notification once per day if new users have joined.
-      const hasNotifiedTodayForNewUsers = lastNotifiedNewUsersDate.current && 
+      const hasNotifiedTodayForNewUsers = lastNotifiedNewUsersDate.current &&
                                new Date(lastNotifiedNewUsersDate.current).toDateString() === new Date().toDateString();
 
       if (newUsersToday > 0 && !hasNotifiedTodayForNewUsers) {
@@ -167,64 +147,52 @@ const AdminScreen = () => {
             `${newUsersToday} nouveau(x) utilisateur(s) a/ont rejoint aujourd'hui.`,
             { type: 'admin_new_users', count: newUsersToday }
           );
-          // Update ref and persist to AsyncStorage to prevent re-notification until next day
-          lastNotifiedNewUsersDate.current = new Date(); 
-          await AsyncStorage.setItem('lastNotifiedNewUsersDate', new Date().toISOString()); 
+          lastNotifiedNewUsersDate.current = new Date();
+          await AsyncStorage.setItem('lastNotifiedNewUsersDate', new Date().toISOString());
         } else {
             console.warn(`[AdminScreen Notifications] Admin user ${user.uid} has no expoPushToken to send new user notification.`);
         }
       }
-      // --- END NEW: Push notification for new users ---
 
-
-      // Fetch other statistics counts
       const ticketsQuerySnapshot = await getDocs(collection(db, 'tickets'));
       const partnersQuerySnapshot = await getDocs(collection(db, 'partners'));
       const surveysQuerySnapshot = await getDocs(collection(db, 'surveys'));
-      // For pending payments, we query specifically for unconfirmed ones
       const paymentsQuerySnapshot = await getDocs(query(collection(db, 'payments'), where('confirmed', '==', false)));
-      
-      // --- UPDATED: Conversations Count (Sum of user-to-support and partner-to-support) ---
-      const userToSupportConversationsSnapshot = await getDocs(collection(db, 'conversations'));
-      const partnerConversationsSnapshot = await getDocs(collection(db, 'partnerConversations'));
-      const totalConversations = userToSupportConversationsSnapshot.size + partnerConversationsSnapshot.size;
-      // --- END UPDATED ---
 
-      // --- NEW: Fetch news count ---
+      const partnerConversationsSnapshot = await getDocs(collection(db, 'partnerConversations'));
+      const totalUnifiedChatConversations = partnerConversationsSnapshot.size;
+
       const newsQuerySnapshot = await getDocs(collection(db, 'news'));
       const totalNews = newsQuerySnapshot.size;
-      // --- END NEW ---
 
-      // Update state with all fetched statistics
-      setStats(prevStats => ({ // Use functional update to ensure latest prevStats
-        ...prevStats, // Keep existing stats not being explicitly set here
+      setStats(prevStats => ({
+        ...prevStats,
         users: usersQuerySnapshot.size,
         inactiveUsers,
         onlineUsers,
         newUsersToday,
         newUsersMonth,
         newUsersYear,
-        tickets: ticketsQuerySnapshot.size, 
-        conversations: totalConversations, // Use the new total
+        tickets: ticketsQuerySnapshot.size,
+        conversations: totalUnifiedChatConversations,
         partners: partnersQuerySnapshot.size,
         surveys: surveysQuerySnapshot.size,
         pendingPayments: paymentsQuerySnapshot.size,
-        newsCount: totalNews, // NEW: Set news count
+        newsCount: totalNews,
       }));
 
-      // Update the "Last Updated" timestamp displayed on the screen
       setLastUpdated(now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (error) {
       console.error("Error fetching admin data:", error);
       Alert.alert("Erreur de chargement", "Impossible de charger les données du tableau de bord.");
     } finally {
-      setLoading(false); // Set loading false after fetch operation completes (success or error)
-      setRefreshing(false); // Stop refresh indicator
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    let unsubscribes = []; // Array to hold all unsubscribe functions for cleanup
+    let unsubscribes = [];
 
     const setupRealtimeListeners = async () => {
       const currentUser = auth.currentUser;
@@ -233,49 +201,24 @@ const AdminScreen = () => {
         return;
       }
 
-      // --- Real-time Listener for New Partners ---
+      // --- Real-time Listener for Partners (removed new partner notification) ---
       const partnersRealtimeQuery = query(collection(db, 'partners'));
       const unsubscribePartners = onSnapshot(partnersRealtimeQuery, async (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
-          if (change.type === 'added') { // When a new partner document is added
-            const newPartnerData = change.doc.data();
-            const newPartnerId = change.doc.id;
-            // Only notify if this specific partner ID hasn't been notified in the current session
-            if (!notifiedPartnerIds.current.has(newPartnerId)) {
-              console.log(`[AdminScreen Notifications] NEW PARTNER DETECTED: ${newPartnerData.nom}`); // Corrected to nom
-              // Fetch the admin's (current user's) document to get their push token
-              const adminUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
-              if (adminUserDoc.exists() && adminUserDoc.data().expoPushToken) {
-                sendPushNotification(
-                  adminUserDoc.data().expoPushToken,
-                  "Nouveau Partenaire!",
-                  `${newPartnerData.nom} (${newPartnerData.categorie || 'Non spécifié'}) a rejoint EliteReply.`, // Corrected to nom and categorie
-                  { type: 'admin_new_partner', partnerId: newPartnerId } // Custom data for deep linking if needed
-                );
-                notifiedPartnerIds.current.add(newPartnerId); // Add to set to prevent duplicate notifications
-              } else {
-                console.warn(`[AdminScreen Notifications] Admin user ${currentUser.uid} has no expoPushToken or doc doesn't exist for new partner notification.`);
-              }
-            }
-          }
-          // Note: 'modified' or 'removed' changes could also trigger re-fetch but won't send 'new partner' notification
-        });
-        // After processing real-time changes, re-fetch all data to update partner count in UI
-        fetchData(); 
+        // No new partner notification logic here as per request
+        // We still call fetchData to update the count if a partner is added/removed/modified
+        fetchData();
       }, (error) => {
         console.error("Error listening to partners (AdminScreen):", error);
       });
-      unsubscribes.push(unsubscribePartners); // Add unsubscribe function to array for cleanup
+      unsubscribes.push(unsubscribePartners);
 
       // --- Real-time Listener for New/Modified Pending Payments ---
       const paymentsRealtimeQuery = query(collection(db, 'payments'), where('confirmed', '==', false));
       const unsubscribePayments = onSnapshot(paymentsRealtimeQuery, async (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
-          // Trigger notification if a new payment is added OR an existing payment becomes 'unconfirmed'
           if (change.type === 'added' || (change.type === 'modified' && change.doc.data().confirmed === false)) {
             const paymentData = change.doc.data();
             const paymentId = change.doc.id;
-            // Only notify if this specific payment ID hasn't been notified in the current session
             if (!notifiedPaymentIds.current.has(paymentId)) {
               console.log(`[AdminScreen Notifications] NEW PENDING PAYMENT DETECTED: ${paymentId}`);
               const adminUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -286,22 +229,20 @@ const AdminScreen = () => {
                   `Un paiement de ${paymentData.paymentAmount}$ pour ${paymentData.partnerName} est en attente de confirmation.`,
                   { type: 'admin_pending_payment', paymentId: paymentId }
                 );
-                notifiedPaymentIds.current.add(paymentId); // Add to set to prevent duplicate notifications
+                notifiedPaymentIds.current.add(paymentId);
               } else {
                 console.warn(`[AdminScreen Notifications] Admin user ${currentUser.uid} has no expoPushToken or doc doesn't exist for new pending payment notification.`);
               }
             }
           } else if (change.type === 'removed' || (change.type === 'modified' && change.doc.data().confirmed === true)) {
-             // If a pending payment is removed or confirmed, remove its ID from the notified set
              notifiedPaymentIds.current.delete(change.doc.id);
           }
         });
-        // After processing real-time changes, re-fetch all data to update pending payments count in UI
-        fetchData(); 
+        fetchData();
       }, (error) => {
         console.error("Error listening to payments (AdminScreen):", error);
       });
-      unsubscribes.push(unsubscribePayments); // Add unsubscribe function to array for cleanup
+      unsubscribes.push(unsubscribePayments);
 
       // --- Real-time Listener for New/Unread Partner Conversations Messages ---
       const partnerConvosRealtimeQuery = query(collection(db, 'partnerConversations'));
@@ -310,15 +251,10 @@ const AdminScreen = () => {
           const convoData = change.doc.data();
           const convoId = change.doc.id;
 
-          // Check for new messages from partner to support/admin side (unreadBySupport flag set to true)
-          // and ensure it's not a message sent by the current user (admin).
-          // 'modified' change type is important here if 'unreadBySupport' flips from false to true.
-          if ((change.type === 'added' || change.type === 'modified') && 
-              convoData.lastMessageSender !== currentUser.uid && 
+          if ((change.type === 'added' || change.type === 'modified') &&
+              convoData.lastMessageSender !== currentUser.uid &&
               convoData.unreadBySupport === true) {
-            
-            // To prevent notifying on every dashboard refresh if it's still unread,
-            // check if it's already in our `notifiedPartnerConvosMsgs` set.
+
             if (!notifiedPartnerConvosMsgs.current.has(convoId)) {
               console.log(`[AdminScreen Notifications] NEW UNREAD PARTNER CONVERSATION MESSAGE DETECTED: ${convoId}`);
               const adminUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -329,52 +265,36 @@ const AdminScreen = () => {
                   `De ${convoData.partnerName || 'un partenaire'}: "${convoData.lastMessage || 'nouveau message'}"`,
                   { type: 'admin_partner_chat', partnerId: convoId }
                 );
-                notifiedPartnerConvosMsgs.current.add(convoId); // Mark as notified in current session
+                notifiedPartnerConvosMsgs.current.add(convoId);
               } else {
                 console.warn(`[AdminScreen Notifications] Admin user ${currentUser.uid} has no expoPushToken or doc doesn't exist for partner convo notification.`);
               }
             }
           } else if (change.type === 'modified' && convoData.unreadBySupport === false) {
-              // If the conversation becomes read, remove it from the notified set.
               notifiedPartnerConvosMsgs.current.delete(convoId);
           } else if (change.type === 'removed') {
-              // If conversation is deleted, remove from notified set.
               notifiedPartnerConvosMsgs.current.delete(convoId);
           }
         });
-        // Re-fetch data to update overall 'conversations' count if needed (it includes partner conversations)
-        // This will be handled by the main fetchData() call which runs periodically and on other notifications.
-        // If faster UI update is desired, uncomment fetchData() here but be mindful of performance.
-        // fetchData(); 
       }, (error) => {
         console.error("Error listening to partner conversations (AdminScreen):", error);
       });
-      unsubscribes.push(unsubscribePartnerConvos); // Add to cleanup
-
-      // --- No Real-time Listener for New Tickets Notification from AdminScreen ---
-      // As per previous discussion, ticket notifications are handled by ITDashboard.
-      // This ensures separation of concerns and avoids redundant notifications for IT agents.
+      unsubscribes.push(unsubscribePartnerConvos);
     };
 
-    // Initial data fetch when the component mounts
-    fetchData(); 
-    // Set up real-time listeners only once after initial fetch
-    setupRealtimeListeners(); 
+    fetchData();
+    setupRealtimeListeners();
 
-    // Cleanup function: unsubscribe from all listeners when the component unmounts
     return () => {
-      unsubscribes.forEach(unsub => unsub()); 
+      unsubscribes.forEach(unsub => unsub());
     };
-  }, []); // Empty dependency array ensures this useEffect runs only once on mount and cleans up on unmount
+  }, []);
 
-
-  // Function to handle manual refresh
   const onRefresh = () => {
-    setRefreshing(true); // Show refresh indicator
-    fetchData(); // Re-fetch all data
+    setRefreshing(true);
+    fetchData();
   };
 
-  // Display loading indicator while data is being fetched for the first time
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -384,9 +304,8 @@ const AdminScreen = () => {
     );
   }
 
-  // Render the Admin Dashboard UI
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -400,9 +319,9 @@ const AdminScreen = () => {
       }
     >
       {/* Header Section */}
-      <TouchableOpacity 
-        style={styles.header} 
-        onPress={() => navigation.navigate('Settings')} // Navigate to Settings on header press
+      <TouchableOpacity
+        style={styles.header}
+        onPress={() => navigation.navigate('Settings')}
       >
         <Image
           source={adminData?.photoURL ? { uri: adminData.photoURL } : require('../assets/images/Profile.png')}
@@ -415,9 +334,9 @@ const AdminScreen = () => {
       </TouchableOpacity>
 
       {/* "See Graphics" Banner */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.graphicsBanner}
-        onPress={() => navigation.navigate('Datas')} // Navigate to data graphics screen
+        onPress={() => navigation.navigate('Datas')}
       >
         <Ionicons name="stats-chart-outline" size={24} color="#fff" />
         <Text style={styles.graphicsBannerText}>Voir les graphiques des données</Text>
@@ -467,7 +386,7 @@ const AdminScreen = () => {
             <MaterialIcons name="chat" size={24} color="#FF9800" />
           </View>
           <Text style={styles.statNumber}>{stats.conversations}</Text>
-          <Text style={styles.statLabel}>Conversations</Text>
+          <Text style={styles.statLabel}>Conversations (Partenaire)</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -482,7 +401,7 @@ const AdminScreen = () => {
       {/* Quick Actions Section */}
       <Text style={styles.sectionTitle}>Actions rapides</Text>
       <View style={styles.actionsContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('Users')}
         >
@@ -492,7 +411,7 @@ const AdminScreen = () => {
           <Text style={styles.actionText}>Gérer les utilisateurs</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('tickets')}
         >
@@ -502,29 +421,27 @@ const AdminScreen = () => {
           <Text style={styles.actionText}>Gérer les tickets</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('PartnerMsg')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#FF9800' }]}>
             <MaterialIcons name="chat" size={28} color="#fff" />
           </View>
-          {/* UPDATED: Conversations count */}
-          <Text style={styles.actionText}>Conversations ({stats.conversations})</Text>
+          <Text style={styles.actionText}>Conversations (Partenaire) ({stats.conversations})</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('Promotions')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#F44336' }]}>
             <FontAwesome name="newspaper-o" size={24} color="#fff" />
           </View>
-          {/* UPDATED: News count */}
           <Text style={styles.actionText}>Actualités ({stats.newsCount})</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('Partners')}
         >
@@ -534,7 +451,7 @@ const AdminScreen = () => {
           <Text style={styles.actionText}>Partenaires</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('Survey')}
         >
@@ -544,7 +461,7 @@ const AdminScreen = () => {
           <Text style={styles.actionText}>Enquêtes ({stats.surveys})</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('Payments')}
         >
@@ -554,7 +471,7 @@ const AdminScreen = () => {
           <Text style={styles.actionText}>Paiements ({stats.pendingPayments})</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionCard}
           onPress={() => navigation.navigate('CreateSurvey')}
         >
@@ -573,7 +490,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
     padding: 15,
-    marginTop: 20
+    //marginTop: 20
   },
   loadingContainer: {
     flex: 1,
@@ -606,8 +523,8 @@ const styles = StyleSheet.create({
   graphicsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // Center the content
-    backgroundColor: '#0a8fdf', // A distinct color for the banner
+    justifyContent: 'center',
+    backgroundColor: '#0a8fdf',
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,

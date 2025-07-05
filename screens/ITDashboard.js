@@ -12,10 +12,11 @@ import {
   Modal,
   Animated,
   Easing,
-  Dimensions
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import Swiper from 'react-native-swiper';
+import Swiper from 'react-native-swiper'; // This still seems unused, consider removing if confirmed not needed.
 import { MaterialCommunityIcons, Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
 import {
   collection,
@@ -31,13 +32,14 @@ import {
   getDocs,
   where,
   addDoc,
-  arrayRemove // Added arrayRemove for potential future use or consistency
+  arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import moment from 'moment';
-import 'moment/locale/fr';
+// REMOVED: import moment from 'moment';
+// REMOVED: import 'moment/moment-timezone';
+// REMOVED: import 'moment/locale/fr';
 
-moment.locale('fr');
+// REMOVED: moment.locale('fr');
 
 const ITDashboard = () => {
   const navigation = useNavigation();
@@ -45,21 +47,22 @@ const ITDashboard = () => {
 
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState(null);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [showClockInOutModal, setShowClockInOutModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [showStats, setShowStats] = useState(true);
   
-  const [allPartnersForDropdown, setAllPartnersForDropdown] = useState([]);
-  const [loadingPartnersForDropdown, setLoadingPartnersForDropdown] = useState(true);
+  const [allPartnersForDropdown, setAllPartnersForDropdown] = useState([]); 
+  const [loadingPartnersForDropdown, setLoadingPartnersForDropdown] = useState(true); 
 
   const [stats, setStats] = useState({
     totalTickets: 0,
     waitingTickets: 0,
     activeConversations: 0,
     completedTickets: 0,
-    rating: 4.5, // This rating is static, consider making it dynamic from agent performance
+    rating: 4.5,
     unreadPartnerMessagesCount: 0,
     agentTerminatedTickets: 0,
     scheduledAppointmentsCount: 0,
@@ -67,12 +70,17 @@ const ITDashboard = () => {
     premiumTicketsCount: 0,
   });
 
+  const [inAppNotification, setInAppNotification] = useState(null);
+
   const currentUser = auth.currentUser;
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  // Ref to keep track of tickets for which a notification has been sent
   const notifiedTicketsRef = useRef(new Set()); 
+  const lastKnownTicketsRef = useRef([]);
 
+  const unsubscribesRef = useRef([]);
+
+  // --- Animation for Premium Icon ---
   useEffect(() => {
     const startPulse = () => {
       Animated.loop(
@@ -96,9 +104,12 @@ const ITDashboard = () => {
     startPulse();
   }, [pulseAnim]);
 
+  // --- Helper to calculate waiting time (using native Date and Intl.RelativeTimeFormat) ---
   const calculateWaitingTime = (createdAt) => {
     if (!createdAt?.toDate) return 'Maintenant';
-    const diffInSeconds = Math.floor((new Date() - createdAt.toDate()) / 1000);
+    const date = createdAt.toDate();
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
     if (diffInSeconds < 60) return `${diffInSeconds} sec`;
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min`;
@@ -106,33 +117,36 @@ const ITDashboard = () => {
     return `${Math.floor(diffInSeconds / 86400)} jours`;
   };
 
+  // --- Helper to check if ticket is overdue (new status, older than 10 minutes) ---
   const isTicketOverdue = (createdAt, status) => {
     if (status !== 'nouveau') return false;
     if (!createdAt?.toDate) return false;
 
     const now = new Date();
     const createdTime = createdAt.toDate();
-    const diffInMinutes = (now - createdTime) / (1000 * 60);
+    const diffInMinutes = (now.getTime() - createdTime.getTime()) / (1000 * 60);
 
     return diffInMinutes > 10;
   };
 
+  // --- Updates dashboard statistics based on fetched tickets ---
   const updateTicketStats = (ticketsData) => {
     setStats(prevStats => ({
       ...prevStats,
       totalTickets: ticketsData.length,
       waitingTickets: ticketsData.filter(t =>
-        (t.status === 'nouveau' && !t.assignedTo) || // New and unassigned
-        (t.status === 'jey-handling' && t.isAgentRequested && !t.assignedTo) || // Jey asked for agent, unassigned
-        (t.status === 'escalated_to_agent' && !t.assignedTo) // Escalated, unassigned
+        (t.status === 'nouveau' && !t.assignedTo) ||
+        (t.status === 'jey-handling' && t.isAgentRequested && !t.assignedTo) ||
+        (t.status === 'escalated_to_agent' && !t.assignedTo)
       ).length,
       activeConversations: ticketsData.filter(t => t.status === 'in-progress' && t.assignedTo === currentUser?.uid).length,
-      completedTickets: ticketsData.filter(t => t.status === 'terminé').length,
+      completedTickets: ticketsData.filter(t => t.status === 'terminé').length, 
       jeyHandlingTicketsCount: ticketsData.filter(t => t.status === 'jey-handling' && !t.isAgentRequested).length,
       premiumTicketsCount: ticketsData.filter(t => t.userIsPremium).length,
     }));
   };
 
+  // This fetches partners for the dropdown, not directly related to the current issue
   useEffect(() => {
     const partnersCollectionRef = collection(db, 'partners');
     const q = query(partnersCollectionRef, orderBy('name', 'asc'));
@@ -154,6 +168,7 @@ const ITDashboard = () => {
     return () => unsubscribePartners();
   }, []);
 
+  // --- Handles agent clock-in/clock-out ---
   const handleClockInOut = async () => {
     if (!currentUser) {
       Alert.alert("Erreur", "Veuillez vous connecter pour enregistrer votre présence.");
@@ -178,11 +193,11 @@ const ITDashboard = () => {
                   lastActivity: serverTimestamp(),
                 });
                 setIsClockedIn(true);
-                setModalMessage(`Bonjour ${userData?.name || 'Agent'}! Bonne journée de travail.`);
+                setModalMessage(`Bonjour ${userData?.name || currentUser?.displayName || 'Agent'}! Bonne journée de travail.`);
                 setShowClockInOutModal(true);
               } catch (error) {
-                console.error("Error clocking in:", error);
-                Alert.alert("Erreur", "Impossible de vous enregistrer.");
+                  console.error("Error clocking in:", error);
+                  Alert.alert("Erreur", "Impossible de vous enregistrer.");
               }
             }
           }
@@ -193,8 +208,7 @@ const ITDashboard = () => {
         "Confirmation",
         "Voulez-vous vraiment clôturer votre journée ?",
         [
-          { text: "Annuler",
-            style: "cancel" },
+          { text: "Annuler", style: "cancel" },
           {
             text: "Confirmer",
             onPress: async () => {
@@ -208,8 +222,8 @@ const ITDashboard = () => {
                 setModalMessage("Au revoir et à bientôt !");
                 setShowClockInOutModal(true);
               } catch (error) {
-                console.error("Error clocking out:", error);
-                Alert.alert("Erreur", "Impossible de vous désenregistrer.");
+                  console.error("Error clocking out:", error);
+                  Alert.alert("Erreur", "Impossible de vous désenregistrer.");
               }
             }
           }
@@ -218,20 +232,18 @@ const ITDashboard = () => {
     }
   };
 
-  // --- NEW: Function to send push notification (placeholder) ---
-  // In a real app, this would be a call to your backend/Cloud Function
+  // --- Function to send push notifications (used for IT agent notifications) ---
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
-    // console.log("Sending push notification to token:", expoPushToken, "Title:", title, "Body:", body, "Data:", data);
     const message = {
       to: expoPushToken,
-      sound: 'default',
+      sound: 'er_notification', // Custom sound
       title,
       body,
       data,
     };
 
     try {
-      await fetch('https://exp.host/--/api/v2/push/send', { // Expo's Push Notification API
+      await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -245,212 +257,252 @@ const ITDashboard = () => {
       console.error('Failed to send push notification:', error);
     }
   };
-  // --- END NEW: Function to send push notification ---
 
-  useEffect(() => {
-    let unsubscribes = [];
+  // --- Sets up all Firestore listeners for the dashboard ---
+  const setupListeners = useCallback(async () => {
+    unsubscribesRef.current.forEach(unsub => unsub());
+    unsubscribesRef.current = [];
 
-    const setupListeners = async () => {
-      if (!currentUser) {
-        setLoading(false);
-        return;
-      }
+    if (!currentUser) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-      try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          setUserData(data);
-          setIsClockedIn(data.isClockedIn || false);
-          setStats(prevStats => ({
-              ...prevStats,
-              agentTerminatedTickets: data.terminatedTicketsCount || 0
-          }));
-        } else {
-          setUserData({ name: 'Agent', terminatedTicketsCount: 0 });
-          setStats(prevStats => ({ ...prevStats, agentTerminatedTickets: 0 }));
-        }
-      } catch (error) {
-        console.error("Error fetching initial user data:", error);
+    setLoading(true);
+    setRefreshing(true);
+
+    try {
+      // 1. Fetch current agent's user data
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
+        setUserData(data);
+        setIsClockedIn(data.isClockedIn || false);
+        setStats(prevStats => ({
+            ...prevStats,
+            agentTerminatedTickets: data.terminatedTicketsCount || 0
+        }));
+      } else {
         setUserData({ name: 'Agent', terminatedTicketsCount: 0 });
         setStats(prevStats => ({ ...prevStats, agentTerminatedTickets: 0 }));
       }
+    } catch (error) {
+      console.error("Error fetching initial user data:", error);
+      setUserData({ name: 'Agent', terminatedTicketsCount: 0 });
+      setStats(prevStats => ({ ...prevStats, agentTerminatedTickets: 0 }));
+    }
 
-      try {
-        const ticketsQuery = query(
-          collection(db, 'tickets'),
-          where('status', '!=', 'terminé'),
-          orderBy('createdAt', 'asc')
-        );
+    try {
+      // 2. Listener for Tickets (real-time updates) - NOW FETCHES ALL TICKETS
+      const ticketsQuery = query(
+        collection(db, 'tickets'),
+        orderBy('createdAt', 'desc')
+      );
 
-        const unsubscribeTickets = onSnapshot(ticketsQuery, async (snapshot) => {
-          const newTicketsData = snapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-              waitingTime: moment(doc.data().createdAt?.toDate()).fromNow(),
-              isOverdue: isTicketOverdue(doc.data().createdAt, doc.data().status),
-              userIsPremium: doc.data().userIsPremium || false,
-            }))
-            .filter(ticket =>
-              ticket.status === 'nouveau' ||
-              ticket.status === 'escalated_to_agent' ||
-              (ticket.status === 'jey-handling' && (ticket.isAgentRequested || !ticket.assignedTo)) ||
-              (ticket.status === 'in-progress' && ticket.assignedTo === currentUser.uid) ||
-              (ticket.status === 'in-progress' && ticket.assignedTo !== currentUser.uid)
-            )
-            .sort((a, b) => {
-              const aIsMineInProgress = a.status === 'in-progress' && a.assignedTo === currentUser.uid;
-              const bIsMineInProgress = b.status === 'in-progress' && b.assignedTo === currentUser.uid;
+      const unsubscribeTickets = onSnapshot(ticketsQuery, async (snapshot) => {
+        const newTicketsData = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            // Using native Date for waitingTime calculation
+            waitingTime: calculateWaitingTime(doc.data().createdAt),
+            isOverdue: isTicketOverdue(doc.data().createdAt, doc.data().status),
+            userIsPremium: doc.data().userIsPremium || false,
+          }));
 
-              // Rule 1: 'in-progress' and assigned to current user always on top
-              if (aIsMineInProgress && !bIsMineInProgress) return -1;
-              if (!aIsMineInProgress && bIsMineInProgress) return 1;
+        // --- Push Notification and In-App Notification Logic for IT Agents ---
+        if (currentUser?.uid && isClockedIn) {
+          const currentTicketIds = new Set(newTicketsData.map(t => t.id));
+          const previouslyKnownTicketIds = new Set(lastKnownTicketsRef.current.map(t => t.id));
 
-              const aIsJeyHandling = a.status === 'jey-handling';
-              const bIsJeyHandling = b.status === 'jey-handling';
+          for (const newTicket of newTicketsData) {
+              const oldTicketState = lastKnownTicketsRef.current.find(t => t.id === newTicket.id);
+              const isNewTicketAdded = !previouslyKnownTicketIds.has(newTicket.id);
 
-              // Rule 4: Jey-handling tickets always last
-              if (aIsJeyHandling && !bIsJeyHandling) return 1;
-              if (!aIsJeyHandling && bIsJeyHandling) return -1;
+              let shouldNotifyInApp = false;
+              let shouldSendPush = false;
+              let notificationTitle = "Nouveau Ticket!";
+              let notificationBody = "";
 
-              // Rule 2: Premium tickets (among non-my-in-progress and non-jey-handling)
-              if (a.userIsPremium && !b.userIsPremium) return -1;
-              if (!a.userIsPremium && b.userIsPremium) return 1;
-
-              // Rule 3: All others (non-my-in-progress, non-jey-handling, non-premium) by waiting time (createdAt ascending)
-              return a.createdAt?.toDate() - b.createdAt?.toDate();
-            });
-
-          // --- NEW: Push notification logic for new tickets ---
-          if (currentUser?.uid && isClockedIn) { // Only notify if agent is clocked in
-            newTicketsData.forEach(async (newTicket) => {
-              const isRelevantNewTicket =
-                (!newTicket.assignedTo || newTicket.assignedTo === 'jey-ai') && // Unassigned or Jey handling
-                (newTicket.status === 'nouveau' ||
-                 newTicket.status === 'escalated_to_agent' ||
-                 (newTicket.status === 'jey-handling' && newTicket.isAgentRequested));
-
-              if (isRelevantNewTicket && !notifiedTicketsRef.current.has(newTicket.id)) {
-                console.log(`NEW TICKET DETECTED: ${newTicket.id} - Status: ${newTicket.status}, isAgentRequested: ${newTicket.isAgentRequested}`);
-                // Get all IT Support agents' tokens
-                const itAgentsQuery = query(
-                  collection(db, 'users'),
-                  where('role', '==', 'IT'),
-                  where('isClockedIn', '==', true), // Only notify clocked-in agents
-                  where('expoPushToken', '!=', null) // Ensure they have a token
-                );
-                const itAgentsSnap = await getDocs(itAgentsQuery);
-                
-                const currentAgentRole = userData?.role; // Assuming userData has role
-                const isCurrentAgentIT = currentAgentRole === 'IT';
-
-                if (itAgentsSnap.empty) {
-                  console.log("No IT agents found or no clocked-in IT agents with push tokens to notify.");
-                }
-
-                itAgentsSnap.forEach(agentDoc => {
-                  if (agentDoc.id !== currentUser.uid && isCurrentAgentIT) { // Don't notify the current user if they are an IT agent already viewing
-                    const agentData = agentDoc.data();
-                    if (agentData.expoPushToken) {
-                      sendPushNotification(
-                        agentData.expoPushToken,
-                        "Nouveau Ticket Urgent!",
-                        `Un nouveau ticket de type "${newTicket.category}" de ${newTicket.userName} est en attente.`,
-                        { type: 'ticket', ticketId: newTicket.id }
-                      );
-                      notifiedTicketsRef.current.add(newTicket.id); // Mark as notified
-                    }
-                  } else if (agentDoc.id === currentUser.uid && !isCurrentAgentIT) {
-                    // This block could be used to notify the current user if they are NOT an IT agent
-                    // but the ticket is relevant to them in some other way, though less common for ITDashboard.
-                  }
-                });
+              // Case 1: Brand new ticket
+              if (isNewTicketAdded) {
+                  notificationBody = `Un nouveau ticket de type "${newTicket.category}" de ${newTicket.userName} est en attente.`;
+                  shouldNotifyInApp = true;
+                  shouldSendPush = true;
+                  console.log(`[NOTIFY] NEW TICKET ADDED: ${newTicket.id}`);
               }
-            });
+              // Case 2: Jey handling ticket where agent was requested (status change from Jey-handling to agent-requested)
+              else if (oldTicketState?.status === 'jey-handling' && oldTicketState?.isAgentRequested === false && newTicket.isAgentRequested === true) {
+                  notificationTitle = "Jey a demandé un Agent!";
+                  notificationBody = `Le client a demandé un agent pour le ticket "${newTicket.category}" de ${newTicket.userName}.`;
+                  shouldNotifyInApp = true;
+                  shouldSendPush = true;
+                  console.log(`[NOTIFY] JEY REQUESTED AGENT: ${newTicket.id}`);
+              }
+              // Case 3: Ticket escalated by Jey (status change)
+              else if (oldTicketState?.status === 'jey-handling' && newTicket.status === 'escalated_to_agent' && oldTicketState?.isAgentRequested !== true) {
+                  notificationTitle = "Ticket Escaladé par Jey!";
+                  notificationBody = `Jey a escaladé le ticket "${newTicket.category}" de ${newTicket.userName}.`;
+                  shouldNotifyInApp = true;
+                  shouldSendPush = true;
+                  console.log(`[NOTIFY] JEY ESCALATED: ${newTicket.id}`);
+              }
+              // Case 4: A new ticket that starts directly in Jey-handling without explicit agent request (optional notification)
+              else if (isNewTicketAdded && newTicket.status === 'jey-handling' && !newTicket.isAgentRequested) {
+                  notificationTitle = "Ticket Géré par Jey (Nouveau)!";
+                  notificationBody = `Un nouveau ticket de type "${newTicket.category}" est géré par Jey.`;
+                  shouldNotifyInApp = true;
+                  shouldSendPush = true;
+                  console.log(`[NOTIFY] NEW JEY-HANDLING: ${newTicket.id}`);
+              }
+
+              if (shouldNotifyInApp && !notifiedTicketsRef.current.has(newTicket.id + '_inapp') && isFocused) {
+                setInAppNotification({
+                  title: notificationTitle,
+                  body: notificationBody,
+                  ticketId: newTicket.id,
+                });
+                notifiedTicketsRef.current.add(newTicket.id + '_inapp');
+                console.log(`[IN-APP NOTIFY] Ticket ${newTicket.id}: ${notificationTitle}`);
+              }
+
+              if (shouldSendPush && !notifiedTicketsRef.current.has(newTicket.id + '_push')) {
+                  const itAgentsQuery = query(
+                      collection(db, 'users'),
+                      where('role', '==', 'IT'),
+                      where('isClockedIn', '==', true),
+                      where('expoPushToken', '!=', null)
+                  );
+                  const itAgentsSnap = await getDocs(itAgentsQuery);
+                  
+                  itAgentsSnap.forEach(agentDoc => {
+                      const agentData = agentDoc.data();
+                      if (agentData.expoPushToken && agentDoc.id !== currentUser.uid) {
+                          sendPushNotification(
+                              agentData.expoPushToken,
+                              notificationTitle,
+                              notificationBody,
+                              { type: 'ticket', ticketId: newTicket.id, screen: 'TicketInfo' }
+                          );
+                      }
+                  });
+                  notifiedTicketsRef.current.add(newTicket.id + '_push');
+                  console.log(`[PUSH NOTIFY] Ticket ${newTicket.id}: ${notificationTitle}`);
+              }
           }
-          // --- END NEW: Push notification logic ---
 
-          setTickets(newTicketsData);
-          updateTicketStats(newTicketsData);
-        }, (error) => {
-          console.error("Error fetching tickets:", error);
-        });
-        unsubscribes.push(unsubscribeTickets);
-
-        const partnerConvosQuery = query(
-          collection(db, 'partnerConversations'),
-          where('participants', 'array-contains', currentUser.uid)
-        );
-
-        const unsubscribePartnerConvos = onSnapshot(partnerConvosQuery, async (snapshot) => {
-          let totalUnreadCount = 0;
-          const unreadChecks = snapshot.docs.map(async (docSnapshot) => {
-            const conversationId = docSnapshot.id;
-            const userConvoStateRef = doc(db, 'users', currentUser.uid, 'partnerConversationStates', conversationId);
-            const userConvoStateSnap = await getDoc(userConvoStateRef);
-            const lastReadTimestamp = userConvoStateSnap.exists()
-              ? userConvoStateSnap.data().lastRead
-              : null;
-
-            let messagesQuery = query(
-              collection(db, 'partnerConversations', conversationId, 'messages'),
-              orderBy('createdAt', 'asc')
-            );
-            if (lastReadTimestamp) {
-              messagesQuery = query(messagesQuery, where('createdAt', '>', lastReadTimestamp));
-            }
-            const messagesSnap = await getDocs(messagesQuery);
-            return messagesSnap.docs.filter(msgDoc => msgDoc.data().senderId !== currentUser.uid).length;
+          notifiedTicketsRef.current.forEach(notifiedId => {
+              const ticketId = notifiedId.split('_')[0];
+              if (!currentTicketIds.has(ticketId)) {
+                  notifiedTicketsRef.current.delete(notifiedId);
+              }
           });
+        }
 
-          const counts = await Promise.all(unreadChecks);
-          totalUnreadCount = counts.reduce((sum, count) => sum + count, 0);
+        newTicketsData.sort((a, b) => {
+            const getPriority = (ticket) => {
+                if (ticket.status === 'in-progress' && ticket.assignedTo === currentUser?.uid) {
+                    return 0;
+                }
+                if (ticket.status === 'jey-handling' && ticket.isAgentRequested === true) {
+                    return 1;
+                }
+                if (ticket.status === 'escalated_to_agent') {
+                    return 2;
+                }
+                if (ticket.status === 'nouveau' && !ticket.assignedTo) {
+                    return 3;
+                }
+                if (ticket.status === 'jey-handling' && (ticket.assignedTo === null || ticket.assignedTo === undefined || ticket.assignedTo === '')) {
+                    return 4;
+                }
+                if (ticket.status === 'in-progress' && ticket.assignedTo && ticket.assignedTo !== currentUser?.uid) {
+                    return 5;
+                }
+                if (ticket.status === 'terminé') {
+                    return 6;
+                }
+                return 99;
+            };
 
-          setStats(prev => ({
-            ...prev,
-            unreadPartnerMessagesCount: totalUnreadCount
-          }));
-        }, (error) => {
-          console.error("Error fetching partner conversations for unread count:", error);
+            const priorityA = getPriority(a);
+            const priorityB = getPriority(b);
+
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+
+            if (a.userIsPremium && !b.userIsPremium) return -1;
+            if (!a.userIsPremium && b.userIsPremium) return 1;
+
+            return a.createdAt?.toDate() - b.createdAt?.toDate();
         });
-        unsubscribes.push(unsubscribePartnerConvos);
 
-        const agentRdvQuery = query(
-          collection(db, 'rdv'),
-          where('bookedByAgentId', '==', currentUser.uid),
-          where('status', 'in', ['scheduled', 'rescheduled'])
-        );
-        const unsubscribeAgentRdv = onSnapshot(agentRdvQuery, (snapshot) => {
-          setStats(prevStats => ({
-            ...prevStats,
-            scheduledAppointmentsCount: snapshot.docs.length
-          }));
-        }, (error) => {
-          console.error("Error fetching agent's scheduled appointments:", error);
-        });
-        unsubscribes.push(unsubscribeAgentRdv);
 
-        setLoading(false);
+        setTickets(newTicketsData);
+        lastKnownTicketsRef.current = newTicketsData;
+        updateTicketStats(newTicketsData);
+      }, (error) => {
+        console.error("Error fetching tickets:", error);
+      });
+      unsubscribesRef.current.push(unsubscribeTickets);
 
-      } catch (error) {
-        console.error("Error setting up listeners:", error);
-        setLoading(false);
-      }
-    };
+      // 3. Listener for Agent's Scheduled Appointments
+      const agentAppointmentsQuery = query(
+        collection(db, 'appointments'),
+        where('bookedByAgentId', '==', currentUser.uid),
+        where('status', 'in', ['scheduled', 'rescheduled'])
+      );
+      const unsubscribeAgentAppointments = onSnapshot(agentAppointmentsQuery, (snapshot) => {
+        setStats(prevStats => ({
+          ...prevStats,
+          scheduledAppointmentsCount: snapshot.docs.length
+        }));
+      }, (error) => {
+        console.error("Error fetching agent's scheduled appointments:", error);
+      });
+      unsubscribesRef.current.push(unsubscribeAgentAppointments);
 
+    } catch (error) {
+      console.error("Error setting up listeners:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [currentUser?.uid, isFocused, isClockedIn, userData?.name]);
+
+  useEffect(() => {
     setupListeners();
 
     return () => {
-      unsubscribes.forEach(unsub => unsub());
+      unsubscribesRef.current.forEach(unsub => unsub());
+      unsubscribesRef.current = [];
     };
-  }, [currentUser?.uid, isFocused, isClockedIn, userData]); // Added isClockedIn and userData to dependencies
+  }, [setupListeners]);
 
-  const handleRefresh = useCallback(() => {
-    setLoading(true);
-  }, [currentUser]);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    
+    unsubscribesRef.current.forEach(unsub => unsub());
+    unsubscribesRef.current = [];
 
+    setTickets([]);
+    setInAppNotification(null);
+    notifiedTicketsRef.current.clear();
+    lastKnownTicketsRef.current = [];
+    
+    try {
+        await setupListeners();
+    } catch (error) {
+        console.error("Error during manual refresh:", error);
+    } finally {
+        setRefreshing(false);
+    }
+
+    console.log('ITDashboard manually refreshed!');
+  }, [setupListeners]);
 
   const handleTakeTicket = async (ticket) => {
     if (!currentUser) {
@@ -472,9 +524,10 @@ const ITDashboard = () => {
       batch.update(doc(db, 'tickets', ticket.id), {
         status: 'in-progress',
         assignedTo: currentUser.uid,
-        assignedToName: userData?.name || 'Agent',
+        assignedToName: userData?.name || currentUser.displayName || 'Agent',
         updatedAt: serverTimestamp(),
         isAgentRequested: false,
+        agentJoinedNotified: true,
       });
 
       const conversationRef = doc(db, 'conversations', ticket.id);
@@ -484,10 +537,10 @@ const ITDashboard = () => {
         batch.update(conversationRef, {
           status: 'in-progress',
           assignedTo: currentUser.uid,
-          assignedToName: userData?.name || 'Agent',
+          assignedToName: userData?.name || currentUser.displayName || 'Agent',
           lastUpdated: serverTimestamp(),
           participants: arrayUnion(currentUser.uid),
-          participantNames: arrayUnion(userData?.name || 'Agent'),
+          participantNames: arrayUnion(userData?.name || currentUser.displayName || 'Agent'),
           isAgentRequested: false,
         });
       } else {
@@ -495,11 +548,11 @@ const ITDashboard = () => {
           ticketId: ticket.id,
           status: 'in-progress',
           assignedTo: currentUser.uid,
-          assignedToName: userData?.name || 'Agent',
+          assignedToName: userData?.name || currentUser.displayName || 'Agent',
           createdAt: serverTimestamp(),
           lastUpdated: serverTimestamp(),
           participants: [currentUser.uid, ticket.userId],
-          participantNames: [userData?.name || 'Agent', ticket.userName],
+          participantNames: [userData?.name || currentUser.displayName || 'Agent', ticket.userName],
           lastMessage: "Conversation initiée par Agent",
           lastMessageTimestamp: serverTimestamp(),
           unreadByUser: true,
@@ -511,19 +564,24 @@ const ITDashboard = () => {
       await batch.commit();
 
       await addDoc(collection(db, 'tickets', ticket.id, 'messages'), {
-        texte: `${userData?.name || 'Un agent'} a pris le relais de cette conversation.`,
+        texte: `${userData?.name || currentUser.displayName || 'Un agent'} a pris le relais de cette conversation.`,
         expediteurId: 'systeme',
         nomExpediteur: 'Système',
         createdAt: serverTimestamp(),
-        type: 'text'
+        type: 'system_message'
       });
+
+      if (inAppNotification && inAppNotification.ticketId === ticket.id) {
+          setInAppNotification(null);
+      }
 
       navigation.navigate('Conversation', {
         ticketId: ticket.id,
         isITSupport: true,
         userId: ticket.userId,
         userName: ticket.userName,
-        userPhone: ticket.userPhone
+        userPhone: ticket.userPhone,
+        ticketCategory: ticket.category,
       });
     } catch (error) {
       console.error("Error taking ticket:", error);
@@ -539,7 +597,18 @@ const ITDashboard = () => {
     navigation.navigate('Settings');
   };
 
-  if (loading || loadingPartnersForDropdown) {
+  const handleDismissNotification = () => {
+    setInAppNotification(null);
+  };
+
+  const handleTapNotification = () => {
+    if (inAppNotification?.ticketId) {
+      navigation.navigate('TicketInfo', { ticketId: inAppNotification.ticketId });
+      setInAppNotification(null);
+    }
+  };
+
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#34C759" />
@@ -551,8 +620,8 @@ const ITDashboard = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <TouchableOpacity style={styles.header} onPress={navigateToSettings}>
-        <View style={styles.profileContainer}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.profileContainer} onPress={navigateToSettings}>
           <Image
             source={userData?.photoURL ? { uri: userData.photoURL } : require('../assets/images/Profile.png')}
             style={styles.profileImage}
@@ -561,14 +630,20 @@ const ITDashboard = () => {
             <Text style={styles.userName}>{userData?.name || 'Agent'}</Text>
             <Text style={styles.userRole}>Agent</Text>
           </View>
+        </TouchableOpacity>
+        <View style={styles.headerRightSection}>
+            <TouchableOpacity onPress={handleRefresh} style={styles.refreshIconContainer}>
+                <MaterialIcons name="refresh" size={24} color="#6B7280" />
+            </TouchableOpacity>
+            <Image style={styles.logo} source={require('../assets/images/logoVide.png')} />
         </View>
-        <Image style={{ height: 40, width: 60, resizeMode: 'contain' }} source={require('../assets/images/logoVide.png')} />
-      </TouchableOpacity>
+      </View>
 
       {/* Stats Cards Section */}
       <TouchableOpacity
         onPress={() => setShowStats(!showStats)}
         style={styles.toggleStatsButton}
+        activeOpacity={0.8}
       >
         <Text style={styles.sectionTitle}>Statistiques de performance</Text>
         <Ionicons
@@ -589,6 +664,7 @@ const ITDashboard = () => {
                 styles.clockButtonPadding
               ]}
               onPress={handleClockInOut}
+              activeOpacity={0.8}
             >
               <View style={[
                   styles.statIcon,
@@ -618,7 +694,7 @@ const ITDashboard = () => {
 
           <View style={styles.statsRow}>
             <StatCard
-              icon={<MaterialIcons name="calendar-today" size={24} color="#FF9500" />} 
+              icon={<MaterialIcons name="calendar-today" size={24} color="#FF9500" />}
               value={stats.scheduledAppointmentsCount}
               label="Rendez-vous"
               onPress={() => navigation.navigate('Appointments')}
@@ -634,12 +710,10 @@ const ITDashboard = () => {
               label="Actives"
             />
           </View>
-          <View style={styles.statsRow}>
-            <View style={{ width: '30%' }} />
-          </View>
         </>
       )}
 
+      {/* Tickets Section Header */}
       <View style={styles.ticketSectionHeader}>
         <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text>
         {stats.jeyHandlingTicketsCount > 0 && (
@@ -653,16 +727,19 @@ const ITDashboard = () => {
         )}
       </View>
 
+      {/* Ticket List */}
       <FlatList
         data={tickets}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={[
             styles.ticketCard,
-            item.userIsPremium && styles.premiumTicketCard
+            item.userIsPremium && styles.premiumTicketCard,
+            item.status === 'terminé' && styles.terminatedTicketCard
           ]}>
             <View style={styles.ticketHeader}>
               <View style={styles.ticketStatusContainer}>
+                {/* Status Dots */}
                 {item.status === 'in-progress' && item.assignedTo === currentUser?.uid && (
                   <View style={[styles.statusDot, styles.greenDot]} />
                 )}
@@ -683,6 +760,9 @@ const ITDashboard = () => {
                 )}
                 {item.status === 'jey-handling' && item.isAgentRequested && (
                     <View style={[styles.statusDot, styles.purpleDot]} />
+                )}
+                {item.status === 'terminé' && (
+                    <View style={[styles.statusDot, styles.grayDot]} />
                 )}
 
                 <Text style={styles.ticketCategory}>{item.category}</Text>
@@ -737,41 +817,73 @@ const ITDashboard = () => {
              {item.status === 'escalated_to_agent' && (
                 <Text style={styles.assignedText}>Agent demandé par Jey.</Text>
             )}
+            {item.status === 'terminé' && (
+                <Text style={styles.assignedText}>Statut: Terminée</Text>
+            )}
 
 
             <View style={styles.ticketActions}>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  (item.status === 'jey-handling' && !item.isAgentRequested) ? styles.disabledButton :
-                  (item.status === 'in-progress' && item.assignedTo !== currentUser?.uid) ? styles.disabledButton :
-                  (item.status === 'in-progress' && item.assignedTo === currentUser?.uid) ? styles.inProgressButton :
-                  styles.takeButton
-                ]}
-                onPress={() => handleTakeTicket(item)}
-                disabled={
-                  (item.status === 'jey-handling' && !item.isAgentRequested) ||
-                  (item.status === 'in-progress' && item.assignedTo !== currentUser?.uid)
-                }
-              >
-                <Text style={styles.buttonText}>
-                  {item.status === 'jey-handling' && !item.isAgentRequested ? 'Géré par Jey' :
-                   item.status === 'in-progress' ?
-                    (item.assignedTo === currentUser?.uid ? 'En cours...' : 'Pris par un autre Agent') :
-                    'Prendre'}
-                </Text>
-              </TouchableOpacity>
+              {item.status === 'terminé' ? (
+                <TouchableOpacity style={[styles.actionButton, styles.disabledButton]} disabled={true}>
+                  <Text style={styles.buttonText}>Terminé</Text>
+                </TouchableOpacity>
+              ) : item.assignedTo === currentUser?.uid ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.inProgressButton]}
+                  onPress={() => navigation.navigate('Conversation', {
+                    ticketId: item.id,
+                    isITSupport: true,
+                    userId: item.userId,
+                    userName: item.userName,
+                    userPhone: item.userPhone,
+                    ticketCategory: item.category,
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.buttonText}>En cours...</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    (item.status === 'jey-handling' && !item.isAgentRequested) || (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid)
+                      ? styles.disabledButton
+                      : styles.takeButton
+                  ]}
+                  onPress={() => handleTakeTicket(item)}
+                  disabled={
+                    (item.status === 'jey-handling' && !item.isAgentRequested) ||
+                    (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid)
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.buttonText}>
+                    {item.status === 'jey-handling' && !item.isAgentRequested ? 'Géré par Jey' :
+                     (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid) ? 'Pris par un autre Agent' :
+                     'Prendre'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle" size={60} color="#34C759" />
-            <Text style={styles.emptyText}>Aucun ticket en attente</Text>
+            <Text style={styles.emptyText}>Aucun ticket trouvé.</Text>
           </View>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#34C759']}
+            tintColor={'#34C759'}
+          />
         }
       />
 
+      {/* Clock In/Out Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -789,12 +901,43 @@ const ITDashboard = () => {
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setShowClockInOutModal(false)}
+              activeOpacity={0.8}
             >
               <Text style={styles.modalButtonText}>Fermer</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* In-App Notification Modal (top banner) */}
+      {inAppNotification && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={!!inAppNotification}
+          onRequestClose={handleDismissNotification}
+        >
+          <TouchableOpacity
+            style={styles.notificationOverlay}
+            activeOpacity={1}
+            onPress={handleTapNotification}
+          >
+            <View style={styles.notificationContainer}>
+              <View style={styles.notificationHeader}>
+                <MaterialIcons name="notifications" size={24} color="#FFF" />
+                <Text style={styles.notificationTitle}>{inAppNotification.title}</Text>
+                <TouchableOpacity onPress={handleDismissNotification} style={styles.closeNotificationButton}>
+                  <Ionicons name="close-circle" size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.notificationBody}>{inAppNotification.body}</Text>
+              <TouchableOpacity style={styles.notificationActionButton} onPress={handleTapNotification} activeOpacity={0.8}>
+                <Text style={styles.notificationActionButtonText}>Voir le ticket</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -830,7 +973,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
-    //marginTop: 20,
     padding: 12,
     backgroundColor: 'white',
     borderRadius: 12,
@@ -859,6 +1001,14 @@ const styles = StyleSheet.create({
   userRole: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  headerRightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshIconContainer: {
+    padding: 8,
+    marginRight: 8,
   },
   logo: {
     height: 40,
@@ -907,7 +1057,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     marginLeft: 4,
-    flexWrap: 'wrap', // Allow labels to wrap if too long
+    flexWrap: 'wrap',
   },
   sectionTitle: {
     fontSize: 18,
@@ -951,11 +1101,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  // NEW IMPROVED PREMIUM TICKET CARD COLOR
   premiumTicketCard: {
-    backgroundColor: '#FFE082', // A more visible light amber/gold
-    borderColor: '#FFD700', // Gold border
+    backgroundColor: '#FFE082',
+    borderColor: '#FFD700',
     borderWidth: 1,
+  },
+  terminatedTicketCard: {
+    opacity: 0.7,
+    borderColor: '#B0B9C2',
   },
   ticketHeader: {
     flexDirection: 'row',
@@ -989,6 +1142,9 @@ const styles = StyleSheet.create({
   },
   purpleDot: {
     backgroundColor: '#AF52DE',
+  },
+  grayDot: {
+    backgroundColor: '#6B7280',
   },
   ticketHeaderRight: {
     flexDirection: 'row',
@@ -1048,7 +1204,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#6B7280',
   },
   disabledButton: {
-    opacity: 0.5,
+    backgroundColor: '#D1D5DB',
   },
   buttonText: {
     color: 'white',
@@ -1088,15 +1244,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 12,
     fontWeight: '500',
-  },
-  statIcon: {
-    backgroundColor: '#F3F4F6',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
   },
   clockInIconBackground: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -1163,6 +1310,56 @@ const styles = StyleSheet.create({
   premiumIconContainer: {
     marginLeft: 10,
     marginRight: 5,
+  },
+  notificationOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingTop: Platform.OS === 'android' ? 50 : 30,
+  },
+  notificationContainer: {
+    width: '90%',
+    backgroundColor: '#0a8fdf',
+    borderRadius: 10,
+    padding: 15,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  notificationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginLeft: 10,
+    flex: 1,
+  },
+  notificationBody: {
+    fontSize: 14,
+    color: 'white',
+    marginBottom: 10,
+  },
+  notificationActionButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  notificationActionButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  closeNotificationButton: {
+    marginLeft: 10,
+    padding: 5,
   },
 });
 

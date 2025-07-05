@@ -10,12 +10,14 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
-  FlatList,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { collection, addDoc, setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { APP_CATEGORIES } from '../constants/APP_CATEGORIES'; // NEW: Import categories from shared file
 
 const UserRequest = ({ navigation }) => {
   const [user, setUser] = useState(null);
@@ -31,19 +33,18 @@ const UserRequest = ({ navigation }) => {
     message: false
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const phoneInputRef = useRef(null);
   const messageInputRef = useRef(null);
 
-  const categories = [
-    { id: 'voyage', name: 'Voyage', icon: 'flight' },
-    { id: 'transport', name: 'Transport', icon: 'directions-bus' },
-    { id: 'stores', name: 'Shopping', icon: 'shopping-cart' },
-    { id: 'restaurants', name: 'Restaurants', icon: 'restaurant' },
-    { id: 'sante', name: 'Santé', icon: 'local-hospital' },
-    { id: 'airBnB', name: 'AirBnB', icon: 'night-shelter' },
-    { id: 'events', name: 'Events', icon: 'event' },
-    { id: 'autre', name: 'Autres', icon: 'help' },
-  ];
+  // Categories are now imported from APP_CATEGORIES.js, no longer defined here
+  // const categories = [ ... ].sort(...);
+
+  // Helper to find category name/icon by ID
+  const getCategoryInfo = (categoryId) => {
+    // Use APP_CATEGORIES from the imported constant
+    return APP_CATEGORIES.find(cat => cat.id === categoryId) || { name: 'Sélectionnez une catégorie', icon: 'category' };
+  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (authUser) => {
@@ -59,14 +60,13 @@ const UserRequest = ({ navigation }) => {
               phoneNumber: data.phoneNumber || '',
             }));
           } else {
-            // If user document doesn't exist, create it with default values
             await setDoc(doc(db, "users", authUser.uid), {
               email: authUser.email,
               name: authUser.displayName || 'Utilisateur',
-              isPremium: false, // Default to false
+              isPremium: false,
               createdAt: serverTimestamp(),
               phoneNumber: '',
-            }, { merge: true }); // Use merge: true to avoid overwriting if doc might partially exist
+            }, { merge: true });
             setUserData({ isPremium: false, name: authUser.displayName || 'Utilisateur', phoneNumber: '' });
           }
         } catch (error) {
@@ -109,7 +109,6 @@ const UserRequest = ({ navigation }) => {
     try {
       const ticketId = doc(collection(db, "tickets")).id;
 
-      // Use user's current phone number from form, or previously saved, or none
       const userPhoneNumber = formData.phoneNumber.trim() !== '' ? formData.phoneNumber.trim() : (userData?.phoneNumber || user?.phoneNumber || '');
 
       const ticketData = {
@@ -127,9 +126,7 @@ const UserRequest = ({ navigation }) => {
         lastMessage: `${formData.message.substring(0, 50)}${formData.message.length > 50 ? '...' : ''}`,
         isAgentRequested: false,
         initialJeyMessageSent: false,
-        // --- START OF NEW: Add userIsPremium status ---
         userIsPremium: userData?.isPremium || false,
-        // --- END OF NEW ---
       };
 
       await setDoc(doc(db, "tickets", ticketId), ticketData);
@@ -146,9 +143,7 @@ const UserRequest = ({ navigation }) => {
         userId: user.uid,
         lastMessage: `${formData.message.substring(0, 50)}${formData.message.length > 50 ? '...' : ''}`,
         isAgentRequested: false,
-        // --- START OF NEW: Add userIsPremium status ---
         userIsPremium: userData?.isPremium || false,
-        // --- END OF NEW ---
       };
 
       await setDoc(doc(db, "conversations", ticketId), conversationData);
@@ -168,11 +163,11 @@ const UserRequest = ({ navigation }) => {
           {
             text: 'OK',
             onPress: () => {
-              setFormData({
+              setFormData(prev => ({
+                ...prev,
                 category: '',
-                phoneNumber: '',
                 message: ''
-              });
+              }));
               navigation.navigate('Conversation', {
                 ticketId: ticketId,
                 userId: user.uid,
@@ -232,6 +227,8 @@ const UserRequest = ({ navigation }) => {
     );
   }
 
+  const selectedCategoryInfo = getCategoryInfo(formData.category);
+
   return (
     <View style={styles.fullScreenContainer}>
       <KeyboardAvoidingView
@@ -271,40 +268,22 @@ const UserRequest = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Détails de la Requête</Text>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Catégorie *</Text>
-              <FlatList
-                data={categories}
-                numColumns={2}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                contentContainerStyle={styles.categoriesGrid}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.categoryCard,
-                      formData.category === item.id && styles.categoryCardSelected,
-                    ]}
-                    onPress={() => handleChange('category', item.id)}
-                  >
-                    <MaterialIcons
-                      name={item.icon}
-                      size={24}
-                      color={formData.category === item.id ? '#FFF' : '#34C759'}
-                    />
-                    <Text style={[
-                      styles.categoryText,
-                      formData.category === item.id && styles.categoryTextSelected
-                    ]}>
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
+              <Text style={styles.label}>Catégorie <Text style={styles.required}>*</Text></Text>
+              <TouchableOpacity
+                style={[styles.input, styles.categorySelectButton, errors.category && styles.inputError]}
+                onPress={() => setModalVisible(true)}
+              >
+                <MaterialIcons name={selectedCategoryInfo.icon} size={20} color="#4B5563" style={styles.categorySelectIcon} />
+                <Text style={[styles.categorySelectText, !formData.category && styles.categorySelectPlaceholder]}>
+                  {selectedCategoryInfo.name}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+              </TouchableOpacity>
               {errors.category && <Text style={styles.errorText}>Veuillez sélectionner une catégorie</Text>}
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Description de la Requête *</Text>
+              <Text style={styles.label}>Description de la Requête <Text style={styles.required}>*</Text></Text>
               <TextInput
                 ref={messageInputRef}
                 style={[styles.messageInput, errors.message && styles.inputError]}
@@ -331,6 +310,44 @@ const UserRequest = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sélectionnez une Catégorie</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <MaterialIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={APP_CATEGORIES} // Using APP_CATEGORIES from imported constant
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalCategoryItem}
+                  onPress={() => {
+                    handleChange('category', item.id);
+                    setModalVisible(false);
+                  }}
+                >
+                  <MaterialIcons name={item.icon} size={24} color="#34C759" style={styles.modalCategoryIcon} />
+                  <Text style={styles.modalCategoryText}>{item.name}</Text>
+                  {formData.category === item.id && (
+                    <MaterialIcons name="check-circle" size={20} color="#34C759" style={styles.modalCheckIcon} />
+                  )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -419,33 +436,77 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  categoriesGrid: {
-    justifyContent: 'space-between',
-  },
-  categoryCard: {
-    width: '48%',
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  // Re-used styles for custom category select button
+  categorySelectButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 50,
+  },
+  categorySelectIcon: {
+    marginRight: 10,
+  },
+  categorySelectText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#2C2C2C',
+  },
+  categorySelectPlaceholder: {
+    color: '#9CA3AF',
+  },
+  modalOverlay: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  categoryCardSelected: {
-    backgroundColor: '#34C759',
-    borderColor: '#34C759',
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  categoryText: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4B5563',
-    textAlign: 'center',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  categoryTextSelected: {
-    color: '#FFF',
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2C2C2C',
+  },
+  modalCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  modalCategoryIcon: {
+    marginRight: 12,
+  },
+  modalCategoryText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#2C2C2C',
+  },
+  modalCheckIcon: {
+    marginLeft: 'auto',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 16,
   },
   messageInput: {
     backgroundColor: '#F9FAFB',

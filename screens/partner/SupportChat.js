@@ -11,7 +11,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  Linking,
+  Linking, // Import Linking for opening URLs
 } from 'react-native';
 import {
   collection,
@@ -25,7 +25,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -62,12 +62,10 @@ const UnifiedChat = ({ route }) => {
   const navigation = useNavigation();
   const storage = getStorage();
 
-  // --- UPDATED: Function to send push notification with custom sound ---
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
-      // >>> HERE IS THE CHANGE: Using your custom sound filename <<<
-      sound: 'ERNotification', // Assuming 'ERNotification.mp3' is bundled and accessible
+      sound: 'er_notification',
       title,
       body,
       data,
@@ -88,7 +86,6 @@ const UnifiedChat = ({ route }) => {
       console.error('Failed to send push notification:', error);
     }
   };
-  // --- END UPDATED ---
 
   useEffect(() => {
     if (!partnerId || partnerId === 'defaultTestPartnerId') {
@@ -359,13 +356,21 @@ const UnifiedChat = ({ route }) => {
         ]}
       >
         {item.type === 'image' ? (
-          <Image source={{ uri: item.content }} style={styles.chatImage} />
+          <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={styles.mediaContainer}>
+            <Image source={{ uri: item.content }} style={styles.chatImage} />
+            {/* Download icon overlay for images */}
+            <View style={styles.downloadIconOverlay}>
+                <MaterialIcons name="cloud-download" size={24} color="white" />
+            </View>
+          </TouchableOpacity>
         ) : item.type === 'file' ? (
           <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={styles.fileMessage}>
             <Ionicons name="document-text" size={24} color={isMyMessage ? '#FFF' : '#1E293B'} />
             <Text style={isMyMessage ? styles.myMessageText : styles.theirMessageText}>
               {item.fileName || 'Fichier'}
             </Text>
+            {/* Download icon for files */}
+            <MaterialIcons name="cloud-download" size={20} color={isMyMessage ? '#FFF' : '#1E293B'} style={styles.fileDownloadIcon} />
           </TouchableOpacity>
         ) : (
           <Text
@@ -523,16 +528,31 @@ const styles = StyleSheet.create({
     color: '#64748B',
     alignSelf: 'flex-start',
   },
+  // Styles for chat images/files
+  mediaContainer: {
+    position: 'relative',
+  },
   chatImage: {
     width: 200,
     height: 150,
     borderRadius: 8,
     marginBottom: 5,
   },
+  downloadIconOverlay: {
+      position: 'absolute',
+      top: 5,
+      right: 5,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: 15,
+      padding: 5,
+  },
   fileMessage: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  fileDownloadIcon: {
+      marginLeft: 'auto', // Push to the right
   },
   inputArea: {
     flexDirection: 'row',

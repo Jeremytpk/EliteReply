@@ -4,10 +4,10 @@
     "slug": "EliteReply",
     "version": "1.0.0", // REMINDER: INCREMENT THIS FOR EACH NEW BUILD
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png", // Main app icon (often used as default notification icon if not specified)
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "elitereply", // <--- ADDED: Critical for deep linking, matching intentFilter
+    "scheme": "elitereply",
     "plugins": [
       [
         "expo-image-picker",
@@ -16,16 +16,35 @@
           "cameraPermission": "The app accesses your camera to let you take a profile picture."
         }
       ],
-      "expo-notifications" // Correct plugin entry
+      [
+        "expo-notifications", // This is the correct way to configure expo-notifications plugin
+        {
+          "icon": "./assets/images/notification-icon.png", // Android specific (optional, falls back to main app icon)
+          "color": "#0a8fdf", // Android specific accent color for notifications
+          "androidMode": "default",
+          "androidCollapsedTitle": "#{unread_notifications} nouveaux messages",
+          "sounds": [
+            // Android: This array directly under the plugin handles sounds for Android
+            "./assets/sounds/er_notification.mp3"
+          ],
+          "android": {
+            // Any additional Android specific notification configurations for the plugin go here.
+          },
+          "ios": {
+            "allowForeground": true, // Allows notifications to show when app is in foreground
+            "supportsTablet": true,
+            "sounds": [
+              {
+                "name": "er_notification", // This is the name used in your Cloud Function payload
+                "path": "./assets/sounds/er_notification.wav", // Path to your .wav file for iOS
+                "type": "wav" // Type must be 'wav' for .wav files
+              }
+            ]
+          }
+        }
+      ]
+      // Any other plugins you have
     ],
-    // --- CORRECTED LOCATION FOR NOTIFICATION CONFIGURATION ---
-    "notification": {
-      "icon": "./assets/images/notification-icon.png", // Path to your small, transparent notification icon
-      "color": "#0a8fdf", // Your app's primary color for Android notification accent (white might be invisible on light notifications)
-      "androidMode": "default",
-      "androidCollapsedTitle": "#{unread_notifications} nouveaux messages" // Example custom title for collapsed notifications
-    },
-    // --- END CORRECTED LOCATION ---
     "splash": {
       "image": "./assets/images/logoVide.png",
       "resizeMode": "contain",
@@ -37,8 +56,8 @@
         "NSLocationWhenInUseUsageDescription": "Your app needs access to your location to provide personalized services.",
         "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition."
       },
-      "bundleIdentifier": "com.yourcompany.elitereply", // iOS bundle ID
-      "buildNumber": "1.0.0" // REMINDER: INCREMENT THIS FOR EACH NEW iOS BUILD (e.g., "1.0.1")
+      "bundleIdentifier": "com.yourcompany.elitereply",
+      "buildNumber": "1.0.0" // REMINDER: INCREMENT THIS FOR EACH NEW iOS BUILD
     },
     "android": {
       "permissions": [
@@ -51,8 +70,8 @@
         "foregroundImage": "./assets/images/adaptiveIcon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.elitereply", // Android package name
-      "versionCode": 1, // REMINDER: INCREMENT THIS FOR EACH NEW ANDROID BUILD (e.g., 2)
+      "package": "com.yourcompany.elitereply",
+      "versionCode": 1, // REMINDER: INCREMENT THIS FOR EACH NEW ANDROID BUILD
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
@@ -68,18 +87,25 @@
             "DEFAULT"
           ]
         }
-      ],
-      "notification": {
-        "icon": "./assets/images/notification-icon.png",
-        "color": "#0a8fdf",
-        "sounds": [ // ADDED: Array for custom sound files
-          "./assets/sounds/ERNotification.mp3" 
-        ]
-      }
+      ]
     },
     "extra": {
       "eas": {
         "projectId": "2ed09575-61d8-47b8-ae78-ee5bfbf930f9"
+      }
+    },
+    "doctor": { // <--- ADDED: Configuration for expo-doctor checks
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "firebase",
+          "moment",
+          "moment-timezone",
+          "openai",
+          "react-native-chart-kit",       
+          "react-native-element-dropdown", 
+          "react-native-swiper"            
+        ],
+        "listUnknownPackages": false // Optional: set to true if you want warnings for *all* unknown packages
       }
     }
   }

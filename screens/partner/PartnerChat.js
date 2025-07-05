@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,8 @@ import {
   Platform,
   Image,
   ActivityIndicator,
-  TouchableWithoutFeedback, // Still useful for dismissing keyboard if needed
-  Keyboard,
-  Alert // Added Alert for delete confirmation
+  Alert,
+  Linking, // NEW: Import Linking for opening URLs
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { db, auth } from '../../firebase';
@@ -26,11 +25,10 @@ import {
   query,
   addDoc,
   getDoc,
-  deleteDoc, 
-  getDocs // Imported getDocs for subcollection deletion
+  deleteDoc,
+  getDocs,
 } from 'firebase/firestore';
 
-// Import the Dropdown component
 import { Dropdown } from 'react-native-element-dropdown';
 
 const PartnerChat = ({ route, navigation }) => {
@@ -41,12 +39,11 @@ const PartnerChat = ({ route, navigation }) => {
 
   const [selectedPartnerId, setSelectedPartnerId] = useState(initialPartnerId);
   const [selectedPartnerName, setSelectedPartnerName] = useState(initialPartnerName);
-  const [selectedPartnerData, setSelectedPartnerData] = useState(null); // Data for the selected partner (e.g., photoURL)
+  const [selectedPartnerData, setSelectedPartnerData] = useState(null);
 
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
 
-  // States for the Partner Dropdown
   const [allPartnersForDropdown, setAllPartnersForDropdown] = useState([]);
   const [loadingPartnersForDropdown, setLoadingPartnersForDropdown] = useState(true);
 
@@ -55,15 +52,14 @@ const PartnerChat = ({ route, navigation }) => {
   // --- Effect for fetching all partners for the dropdown ---
   useEffect(() => {
     const partnersCollectionRef = collection(db, 'partners');
-    // Order by name for initial display in dropdown, or any other preferred order
     const q = query(partnersCollectionRef, orderBy('name', 'asc'));
 
     const unsubscribePartners = onSnapshot(q, (snapshot) => {
       const fetchedPartners = snapshot.docs.map(doc => ({
         id: doc.id,
-        label: doc.data().name, // Label for the dropdown display
-        value: doc.id,         // Value for the dropdown selection (partner ID)
-        ...doc.data(),         // Include all other data for custom search filtering
+        label: doc.data().name,
+        value: doc.id,
+        ...doc.data(),
       }));
       setAllPartnersForDropdown(fetchedPartners);
       setLoadingPartnersForDropdown(false);
@@ -79,10 +75,9 @@ const PartnerChat = ({ route, navigation }) => {
   useEffect(() => {
     let unsubscribeChat;
 
-    if (selectedPartnerId && currentUser) { // Ensure currentUser is available
+    if (selectedPartnerId && currentUser) {
       navigation.setOptions({ title: selectedPartnerName });
 
-      // Fetch selected partner's data (e.g., photoURL from 'partners' collection)
       const fetchSelectedPartnerData = async () => {
         try {
           const partnerDoc = await getDoc(doc(db, 'partners', selectedPartnerId));
@@ -119,27 +114,25 @@ const PartnerChat = ({ route, navigation }) => {
             createdAt: serverTimestamp(),
             lastUpdated: serverTimestamp(),
             lastMessage: '',
-            unreadBySupport: false, // Initial state assuming support creates it
-            unreadByPartner: false, // Initial state
+            unreadBySupport: false,
+            unreadByPartner: false,
           });
         }
       };
       createConversation();
     } else {
-      // If no partner is selected or no current user, reset navigation title and messages
       navigation.setOptions({ title: 'Sélectionner un Partenaire' });
       setMessages([]);
       setSelectedPartnerData(null);
     }
 
     return () => unsubscribeChat && unsubscribeChat();
-  }, [selectedPartnerId, selectedPartnerName, currentUser, navigation]); // Added currentUser to dependencies
+  }, [selectedPartnerId, selectedPartnerName, currentUser, navigation]);
 
   // --- NEW EFFECT: Update lastRead timestamp when chat is opened/viewed ---
   useEffect(() => {
     if (currentUser && selectedPartnerId) {
       const conversationId = [currentUser.uid, selectedPartnerId].sort().join('_');
-      // Path to store the current user's last read timestamp for this specific partner conversation
       const userConvoStateRef = doc(db, 'users', currentUser.uid, 'partnerConversationStates', conversationId);
 
       const updateLastReadTimestamp = async () => {
@@ -151,20 +144,18 @@ const PartnerChat = ({ route, navigation }) => {
         }
       };
 
-      // Call this function when the component mounts or selectedPartnerId changes
       updateLastReadTimestamp();
     }
   }, [currentUser?.uid, selectedPartnerId]);
 
 
-  const handlePartnerSelect = (item) => { // item is the selected dropdown object
-    setSelectedPartnerId(item.value); // item.value is the partner.id
-    setSelectedPartnerName(item.label); // item.label is the partner.name
-    // Keyboard.dismiss(); // Can dismiss keyboard here if desired after selection
+  const handlePartnerSelect = (item) => {
+    setSelectedPartnerId(item.value);
+    setSelectedPartnerName(item.label);
   };
 
   const sendMessage = async () => {
-    if (message.trim() === '' || !selectedPartnerId || !currentUser) return; // Ensure currentUser exists
+    if (message.trim() === '' || !selectedPartnerId || !currentUser) return;
 
     try {
       const conversationId = [currentUser.uid, selectedPartnerId].sort().join('_');
@@ -174,19 +165,18 @@ const PartnerChat = ({ route, navigation }) => {
         text: message,
         senderId: currentUser.uid,
         senderName: currentUser.displayName || 'Current User',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        type: 'text', // Explicitly set type for text messages
       });
 
       const convoRef = doc(db, 'partnerConversations', conversationId);
       await setDoc(convoRef, {
         lastMessage: message,
         lastUpdated: serverTimestamp(),
-        // When current user (Support) sends message, mark unread for partner
         unreadByPartner: true,
-        unreadBySupport: false, // Support user just sent, so it's read by them
+        unreadBySupport: false,
       }, { merge: true });
 
-      // Also update the last read timestamp for the current user when THEY send a message
       const userConvoStateRef = doc(db, 'users', currentUser.uid, 'partnerConversationStates', conversationId);
       await setDoc(userConvoStateRef, { lastRead: serverTimestamp() }, { merge: true });
 
@@ -212,7 +202,6 @@ const PartnerChat = ({ route, navigation }) => {
               const convoRef = doc(db, 'partnerConversations', conversationId);
               const messagesCollectionRef = collection(convoRef, 'messages');
 
-              // Delete all messages in the subcollection
               const messagesSnapshot = await getDocs(messagesCollectionRef);
               const deleteMessagePromises = messagesSnapshot.docs.map(messageDoc =>
                 deleteDoc(doc(messagesCollectionRef, messageDoc.id))
@@ -220,16 +209,14 @@ const PartnerChat = ({ route, navigation }) => {
               await Promise.all(deleteMessagePromises);
               console.log(`All messages for conversation ${conversationId} deleted.`);
 
-              // Delete the conversation document itself
               await deleteDoc(convoRef);
               console.log(`Conversation document ${conversationId} deleted.`);
 
-              // Optionally, delete the user-specific conversation state
               const userConvoStateRef = doc(db, 'users', currentUser.uid, 'partnerConversationStates', conversationId);
               await deleteDoc(userConvoStateRef);
               console.log(`User conversation state for ${conversationId} deleted.`);
 
-              setSelectedPartnerId(null); // Clear selected partner to go back to prompt
+              setSelectedPartnerId(null);
               setSelectedPartnerName(null);
               setMessages([]);
               Alert.alert("Succès", "Conversation supprimée avec succès.");
@@ -245,19 +232,19 @@ const PartnerChat = ({ route, navigation }) => {
 
 
   const renderMessage = ({ item }) => {
-    const isMe = item.senderId === currentUser?.uid; // Use optional chaining
+    const isMe = item.senderId === currentUser?.uid;
 
     return (
       <View style={[
         styles.messageContainer,
         isMe ? styles.myMessage : styles.theirMessage
       ]}>
-        {!isMe && selectedPartnerData?.profileImage ? ( // Assuming partner photoURL is profileImage
+        {!isMe && selectedPartnerData?.logo ? ( // Use selectedPartnerData.logo for image
           <Image
-            source={{ uri: selectedPartnerData.profileImage }}
+            source={{ uri: selectedPartnerData.logo }}
             style={styles.avatar}
           />
-        ) : !isMe && ( // Fallback avatar for their messages
+        ) : !isMe && (
           <Image
             source={require('../../assets/images/Profile.png')}
             style={styles.avatar}
@@ -270,12 +257,28 @@ const PartnerChat = ({ route, navigation }) => {
           {!isMe && (
             <Text style={styles.senderName}>{item.senderName}</Text>
           )}
-          <Text style={[styles.messageText, isMe ? styles.myMessageText : {}]}>{item.text}</Text>
+
+          {/* NEW: Handle different message types for display and download */}
+          {item.type === 'image' ? (
+            <TouchableOpacity onPress={() => Linking.openURL(item.content)}>
+              <Image source={{ uri: item.content }} style={styles.chatImage} />
+            </TouchableOpacity>
+          ) : item.type === 'file' ? (
+            <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={styles.fileMessage}>
+              <MaterialIcons name="insert-drive-file" size={24} color={isMe ? '#FFF' : '#111827'} />
+              <Text style={[styles.messageText, isMe ? styles.myMessageText : {}]}>
+                {item.fileName || 'Fichier'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={[styles.messageText, isMe ? styles.myMessageText : {}]}>{item.text}</Text>
+          )}
+
           <Text style={styles.messageTime}>
             {item.createdAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
-        {isMe && ( // Avatar for my messages
+        {isMe && (
           <Image
             source={currentUser?.photoURL ? { uri: currentUser.photoURL } : require('../../assets/images/Profile.png')}
             style={styles.avatar}
@@ -285,15 +288,13 @@ const PartnerChat = ({ route, navigation }) => {
     );
   };
 
-  // Custom filter function for the dropdown search
   const customSearchFilter = useCallback((item, keyword) => {
     const searchLower = keyword.toLowerCase();
-    // Search across partner name, manager, CEO, and phone
     return (
       (item.name && item.name.toLowerCase().includes(searchLower)) ||
       (item.manager && item.manager.toLowerCase().includes(searchLower)) ||
-      (item.ceo && item.ceo.toLowerCase().includes(searchLower)) || // Changed from CEO to ceo (French key)
-      (item.numeroTelephone && String(item.numeroTelephone).toLowerCase().includes(searchLower)) // Changed from phone to numeroTelephone (French key)
+      (item.ceo && item.ceo.toLowerCase().includes(searchLower)) ||
+      (item.numeroTelephone && String(item.numeroTelephone).toLowerCase().includes(searchLower))
     );
   }, []);
 
@@ -314,24 +315,21 @@ const PartnerChat = ({ route, navigation }) => {
             selectedTextStyle={styles.selectedTextStyle}
             inputSearchStyle={styles.inputSearchStyle}
             iconStyle={styles.iconStyle}
-            data={allPartnersForDropdown} // All fetched partners
-            search // Enable search functionality
-            maxHeight={300} // Max height of the dropdown list
-            labelField="label" // Field to display in the dropdown list (partner.name)
-            valueField="value" // Field to use as the unique value for selection (partner.id)
-            placeholder={!selectedPartnerId ? 'Sélectionner un partenaire...' : selectedPartnerName} // Dynamic placeholder
+            data={allPartnersForDropdown}
+            search
+            maxHeight={300}
+            labelField="label"
+            valueField="value"
+            placeholder={!selectedPartnerId ? 'Sélectionner un partenaire...' : selectedPartnerName}
             searchPlaceholder="Rechercher..."
-            value={selectedPartnerId} // Current selected value (partner ID)
-            onChange={handlePartnerSelect} // Handler for selection
+            value={selectedPartnerId}
+            onChange={handlePartnerSelect}
             renderLeftIcon={() => (
               <MaterialIcons style={styles.icon} name="people" size={20} color="#666" />
             )}
-            // Custom search query for multiple fields
             searchQuery={customSearchFilter}
             onFocus={() => {
-                // If a partner is currently selected, clear it when focusing on the dropdown
-                // This allows the user to easily pick a *new* partner if one was pre-selected
-                if (selectedPartnerId && !initialPartnerId) { // Only clear if not initially passed
+                if (selectedPartnerId && !initialPartnerId) {
                     setSelectedPartnerId(null);
                     setSelectedPartnerName(null);
                     setSelectedPartnerData(null);
@@ -341,7 +339,7 @@ const PartnerChat = ({ route, navigation }) => {
         )}
       </View>
 
-      {selectedPartnerId ? ( // Only show chat interface if a partner is selected
+      {selectedPartnerId ? (
         <>
           <FlatList
             ref={flatListRef}
@@ -349,7 +347,7 @@ const PartnerChat = ({ route, navigation }) => {
             renderItem={renderMessage}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.messagesList}
-            inverted // Show latest messages at the bottom
+            inverted
           />
 
           <View style={styles.inputContainer}>
@@ -369,7 +367,7 @@ const PartnerChat = ({ route, navigation }) => {
             <Text style={styles.deleteConversationButtonText}>Supprimer cette conversation</Text>
           </TouchableOpacity>
         </>
-      ) : ( // If no partner is selected, show a prompt
+      ) : (
         <View style={styles.selectPartnerPrompt}>
           <MaterialIcons name="chat" size={50} color="#C0C0C0" />
           <Text style={styles.selectPartnerText}>
@@ -386,11 +384,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  // Styles for the Dropdown component
   dropdownContainer: {
     backgroundColor: 'white',
     borderRadius: 25,
-    marginHorizontal: 16, // Consistent with other components if needed
+    marginHorizontal: 16,
     marginVertical: 10,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -402,11 +399,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 3,
     justifyContent: 'center',
-    minHeight: 50, // Ensure minimum height even when loading
+    minHeight: 50,
   },
   dropdown: {
     height: 40,
-    borderColor: 'gray', // Not explicitly visible if container has border
+    borderColor: 'gray',
     borderWidth: 0,
     borderRadius: 8,
     paddingHorizontal: 8,
@@ -430,9 +427,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
   },
-  // End of Dropdown styles
-
-  // Prompt when no partner is selected
   selectPartnerPrompt: {
     flex: 1,
     justifyContent: 'center',
@@ -445,7 +439,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 15,
   },
-
   messagesList: {
     padding: 16,
   },
@@ -517,8 +510,8 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
   },
-  loadingContainer: { // For the dropdown loading indicator
-    flex: 1, // Or just for the dropdown container itself if not full screen
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -534,6 +527,18 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  // NEW Styles for chat images/files
+  chatImage: {
+    width: 200, // Or dynamic width
+    height: 150, // Or dynamic height
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+  fileMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8, // Spacing between icon and text
   },
 });
 

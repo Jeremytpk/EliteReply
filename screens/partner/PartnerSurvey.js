@@ -21,7 +21,7 @@ const PartnerSurvey = () => {
         // console.log("Sending push notification to token:", expoPushToken, "Title:", title, "Body:", body, "Data:", data);
         const message = {
             to: expoPushToken,
-            sound: 'ERNotification',
+            sound: 'er_notification',
             title,
             body,
             data,

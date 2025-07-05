@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#f4f4f4',
     padding: 20,
-    marginTop: 26,
+    //marginTop: 26,
   },
   loadingContainer: {
     flex: 1,
@@ -1033,6 +1033,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  /*
   swiperDot: {
     backgroundColor: 'rgba(255,255,255,0.3)',
     width: 8,
@@ -1047,6 +1048,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     margin: 3,
   },
+  */
   catchySurveyCardContainer: {
     borderRadius: 15,
     marginBottom: 24,

@@ -11,28 +11,37 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal, // NEW: Import Modal
+  FlatList, // NEW: Import FlatList for modal content
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // NEW: Import MaterialIcons for category icons
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { db, storage } from '../../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { APP_CATEGORIES } from '../../constants/APP_CATEGORIES'; // NEW: Import categories
 
 const AddPartner = () => {
   const navigation = useNavigation();
 
   const [businessName, setBusinessName] = useState('');
   const [address, setAddress] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(''); // This will now hold the category ID
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [ceo, setCeo] = useState(''); // Changed from founder
-  const [manager, setManager] = useState(''); // Remains manager, but context changed from 'gestionnaire'
+  const [ceo, setCeo] = useState('');
+  const [manager, setManager] = useState('');
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
   const [logoURL, setLogoURL] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false); // NEW: State for modal visibility
+
+  // Helper to find category name/icon by ID
+  const getCategoryInfo = (categoryId) => {
+    return APP_CATEGORIES.find(cat => cat.id === categoryId) || { name: 'Sélectionnez une catégorie', icon: 'category' };
+  };
 
   useEffect(() => {
     (async () => {
@@ -80,6 +89,7 @@ const AddPartner = () => {
   };
 
   const handleSubmit = async () => {
+    // Validate that category is selected (not an empty string)
     if (!businessName || !category || !email || !phoneNumber || !description) {
       Alert.alert('Champs Manquants', 'Veuillez remplir tous les champs obligatoires (Nom, Catégorie, Email, Téléphone, Description).');
       return;
@@ -98,11 +108,11 @@ const AddPartner = () => {
       const newPartnerData = {
         nom: businessName,
         adresse: address,
-        categorie: category,
+        categorie: category, // Storing the category ID
         email: email,
         numeroTelephone: phoneNumber,
-        ceo: ceo, // Changed from fondateur to ceo
-        manager: manager, // Changed from gestionnaire to manager
+        ceo: ceo,
+        manager: manager,
         siteWeb: website,
         description: description,
         logo: uploadedLogoURL,
@@ -129,6 +139,8 @@ const AddPartner = () => {
       setLoading(false);
     }
   };
+
+  const selectedCategoryInfo = getCategoryInfo(category); // Get info for display
 
   return (
     <KeyboardAvoidingView
@@ -185,15 +197,19 @@ const AddPartner = () => {
             />
           </View>
 
+          {/* NEW: Custom Category Select Button */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Catégorie <Text style={styles.required}>*</Text></Text>
-            <TextInput
-              style={styles.input}
-              value={category}
-              onChangeText={setCategory}
-              placeholder="Ex: Restaurant, Salon de beauté, Garage..."
-              autoCapitalize="words"
-            />
+            <TouchableOpacity
+              style={[styles.input, styles.categorySelectButton]}
+              onPress={() => setModalVisible(true)}
+            >
+              <MaterialIcons name={selectedCategoryInfo.icon} size={20} color="#4A5568" style={styles.categorySelectIcon} />
+              <Text style={[styles.categorySelectText, !category && styles.categorySelectPlaceholder]}>
+                {selectedCategoryInfo.name}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.inputGroup}>
@@ -220,21 +236,21 @@ const AddPartner = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>PDG / CEO</Text> {/* Label change */}
+            <Text style={styles.inputLabel}>PDG / CEO</Text>
             <TextInput
               style={styles.input}
-              value={ceo} // State change
-              onChangeText={setCeo} // Setter change
+              value={ceo}
+              onChangeText={setCeo}
               placeholder="Nom du PDG ou CEO"
               autoCapitalize="words"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Manager</Text> {/* Label change */}
+            <Text style={styles.inputLabel}>Manager</Text>
             <TextInput
               style={styles.input}
-              value={manager} // State remains manager, but it's now explicitly 'Manager'
+              value={manager}
               onChangeText={setManager}
               placeholder="Nom du manager principal"
               autoCapitalize="words"
@@ -279,6 +295,45 @@ const AddPartner = () => {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* NEW: Category Selection Modal for AddPartner */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sélectionnez une Catégorie</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <MaterialIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={APP_CATEGORIES}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalCategoryItem}
+                  onPress={() => {
+                    setCategory(item.id); // Update category state with ID
+                    setModalVisible(false);
+                  }}
+                >
+                  <MaterialIcons name={item.icon} size={24} color="#0a8fdf" style={styles.modalCategoryIcon} />
+                  <Text style={styles.modalCategoryText}>{item.name}</Text>
+                  {category === item.id && (
+                    <MaterialIcons name="check-circle" size={20} color="#0a8fdf" style={styles.modalCheckIcon} />
+                  )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -419,6 +474,86 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  // NEW STYLES FOR CUSTOM CATEGORY SELECT AND MODAL (Adjusted for AddPartner's blue theme)
+  categorySelectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    backgroundColor: '#F7FAFC', // Consistent with other inputs
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#CBD5E0',
+    borderRadius: 10,
+    minHeight: 50, // Ensure consistent height with other inputs
+  },
+  categorySelectIcon: {
+    marginRight: 10,
+    color: '#4A5568', // Icon color for the button
+  },
+  categorySelectText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#2D3748',
+  },
+  categorySelectPlaceholder: {
+    color: '#9CA3AF',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  modalCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  modalCategoryIcon: {
+    marginRight: 12,
+    color: '#0a8fdf', // Icon color in modal list
+  },
+  modalCategoryText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#2D3748',
+  },
+  modalCheckIcon: {
+    marginLeft: 'auto',
+    color: '#0a8fdf', // Checkmark color
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 16,
+  },
+  // END NEW STYLES
 });
 
 export default AddPartner;
