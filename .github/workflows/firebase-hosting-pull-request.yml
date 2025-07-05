@@ -13,6 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # --- START OF ADDITIONS ---
+
+      - name: Set up Node.js
+        # Use a stable Node.js version compatible with your project, e.g., 18 or 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Or '18', check your local environment or package.json engines field
+
+      - name: Install dependencies
+        # 'npm ci' is preferred over 'npm install' in CI environments for faster and more reliable installs
+        run: npm ci
+
+      # --- END OF ADDITIONS ---
+
       - run: npx expo export --platform web
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
