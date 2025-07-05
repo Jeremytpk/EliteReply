@@ -17,10 +17,10 @@
         }
       ],
       [
-        "expo-notifications", // This is the correct way to configure expo-notifications plugin
+        "expo-notifications", 
         {
-          "icon": "./assets/images/notification-icon.png", // Android specific (optional, falls back to main app icon)
-          "color": "#0a8fdf", // Android specific accent color for notifications
+          "icon": "./assets/images/notification-icon.png", 
+          "color": "#0a8fdf", 
           "androidMode": "default",
           "androidCollapsedTitle": "#{unread_notifications} nouveaux messages",
           "sounds": [
@@ -107,6 +107,17 @@
         ],
         "listUnknownPackages": false // Optional: set to true if you want warnings for *all* unknown packages
       }
-    }
+    },
+    // *** START OF ADDITIONS ***
+    "web": {
+      "favicon": "./assets/images/favicon.png", // Ensure you have a favicon at this path
+      "bundler": "metro" // Explicitly tell Expo to use Metro for web
+    },
+    "platforms": [ // This array was missing
+      "ios",
+      "android",
+      "web"
+    ]
+    // *** END OF ADDITIONS ***
   }
 }
