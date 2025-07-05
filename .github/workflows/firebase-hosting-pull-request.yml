@@ -2,7 +2,7 @@
 # https://github.com/firebase/firebase-tools
 
 name: Deploy to Firebase Hosting on PR
-on: pull_request
+on: pull_request # This is the key: it triggers on PRs
 permissions:
   checks: write
   contents: read
@@ -14,20 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # --- Node.js Setup and Dependency Install (from previous fixes) ---
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Or '18'
+          node-version: '20' # Or '18', consistent with your project
 
       - name: Install dependencies
         run: npm ci
+      # --- End of Node.js Setup ---
 
-      - run: npx expo export --platform web
+      - run: npx expo export --platform web # Your build script
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ELITEREPLY_BD74D }}
           projectId: elitereply-bd74d
-          # --- THIS IS THE CRITICAL ADDITION FOR PR PREVIEWS ---
+          # --- CRITICAL ADDITION FOR PR PREVIEWS ---
           channelId: ${{ github.event.pull_request.number }}
-          # --- END OF ADDITION ---
+          # --- END OF CRITICAL ADDITION ---
