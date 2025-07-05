@@ -21,12 +21,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - run: npm ci && npx expo export --platform web # Your build script
+      - name: Build web app # Added a name for clarity
+        run: npx expo export --platform web
+        env: # <--- ADDED ENVIRONMENT VARIABLES HERE
+          NODE_ENV: production
+          EXPO_WEB_BUILD_ENVIRONMENT: production # Ensures a production web build context
+          EXPO_ROUTER_STATIC_RENDER_ROUTES: 0    # CRITICAL: Disables expo-router static route analysis
+
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ELITEREPLY_BD74D }}
           projectId: elitereply-bd74d
-          # --- CRITICAL ADDITION FOR LIVE DEPLOYMENT ---
           channelId: live # Explicitly deploy to the live channel
-          # --- END OF CRITICAL ADDITION ---
