@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NavigationContainer, StackActions } from '@react-navigation/native'; // Added StackActions for robust navigation
+import { NavigationContainer, StackActions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,7 +7,9 @@ import { Platform, Linking, Alert, PermissionsAndroid } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Audio } from 'expo-av'; // ADDED: Import Audio from expo-av
+import { Audio } from 'expo-av';
+import Constants from 'expo-constants'; // Import Constants to access app.json config
+
 import { db, auth } from './firebase';
 
 // Import your screens
@@ -63,6 +65,9 @@ import PartnerRdvDetail from './screens/partner/PartnerRdvDetail';
 import PartnerDoc from './screens/partner/PartnerDoc';
 import RdvConfirm from './screens/partner/RdvConfirm';
 import PartnerEdit from './screens/partner/PartnerEdit';
+import AppointmentFormModal from './components/AppointmentFormModal';
+import AppointmentListScreen from './screens/AppointmentListScreen';
+import NewsDetail from './screens/NewsDetail';
 
 
 const Stack = createNativeStackNavigator();
@@ -72,32 +77,80 @@ const Tab = createBottomTabNavigator();
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true, // You might want to control badge count from backend or locally
+    shouldPlaySound: true, // Crucial for playing sound
+    shouldSetBadge: true,
   }),
 });
 
-// ADDED: Load your custom notification sound
+// Define Android Channel ID consistently
+// It's good practice to get this from Constants if you define it in app.json
+const ANDROID_NOTIFICATION_CHANNEL_ID = Constants.expoConfig?.notification?.android?.channel?.id || "er_notification_channel";
+const CUSTOM_SOUND_NAME = "er_notification"; // Matches the Cloud Function
+
+// Global sound object for the custom notification
 const customNotificationSound = new Audio.Sound();
+
+// Flags to ensure the sound is loaded only once and manage its loading state
+let isSoundLoaded = false;
+let isSoundLoading = false;
+
+
+// Function to load the custom sound, with checks to prevent re-loading
 async function loadCustomSound() {
+  if (isSoundLoaded || isSoundLoading) {
+    console.log('Sound already loaded or loading, skipping load attempt.');
+    return;
+  }
+  isSoundLoading = true; // Set loading flag
   try {
-    // >>> IMPORTANT: Adjust this path to your actual sound file <<<
-    await customNotificationSound.loadAsync(require('./assets/sounds/er_notification.mp3')); 
+    // IMPORTANT: Adjust this path to your actual sound file.
+    // Ensure the file 'er_notification.wav' exists in this path.
+    await customNotificationSound.loadAsync(require('./assets/sounds/er_notification.mp3'));
     console.log('ER Notification sound loaded!');
+    isSoundLoaded = true; // Mark as loaded on success
   } catch (error) {
     console.error('Error loading custom notification sound:', error);
+    isSoundLoaded = false; // Reset if loading failed
+  } finally {
+    isSoundLoading = false; // Always reset loading flag
   }
 }
 
-// Call this function once when the app starts
-loadCustomSound();
-
-// Optional: Function to play the custom sound explicitly (e.g., for in-app alerts)
+// Function to play the custom sound explicitly (e.g., for in-app alerts)
 async function playCustomSound() {
   try {
-    await customNotificationSound.replayAsync();
+    if (customNotificationSound._loaded) { // Check if sound is loaded before playing
+      await customNotificationSound.replayAsync();
+    } else {
+      console.warn("Custom sound not loaded, cannot play.");
+    }
   } catch (error) {
     console.error('Error playing custom notification sound:', error);
+  }
+}
+
+// Function to create Android Notification Channel
+async function createAndroidNotificationChannel() {
+  if (Platform.OS === 'android') {
+    try {
+      const existingChannels = await Notifications.getNotificationChannelsAsync();
+      const channelExists = existingChannels.some(channel => channel.id === ANDROID_NOTIFICATION_CHANNEL_ID);
+
+      if (!channelExists) {
+        await Notifications.setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
+          name: 'EliteReply Notifications',
+          importance: Notifications.AndroidImportance.MAX, // High importance ensures sound plays
+          sound: CUSTOM_SOUND_NAME, // This refers to the sound asset name (without extension)
+          vibrationPattern: [0, 250, 250, 250], // Optional: Custom vibration
+          lightColor: '#FF231F7C', // Optional: Custom light
+        });
+        console.log('Android notification channel created:', ANDROID_NOTIFICATION_CHANNEL_ID);
+      } else {
+        console.log('Android notification channel already exists:', ANDROID_NOTIFICATION_CHANNEL_ID);
+      }
+    } catch (error) {
+      console.error('Error creating Android notification channel:', error);
+    }
   }
 }
 // --- END CUSTOM NOTIFICATION SOUND SETUP ---
@@ -128,6 +181,7 @@ async function registerForPushNotificationsAsync(userId) {
         } else {
           console.log('Android 13+: POST_NOTIFICATIONS permission denied.');
           // Optionally, alert user that notifications might not work
+          // You might want to update UI or state based on this denial
         }
       } catch (err) {
         console.warn('Android 13+: Error requesting POST_NOTIFICATIONS permission:', err);
@@ -136,13 +190,13 @@ async function registerForPushNotificationsAsync(userId) {
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-    console.log('Existing notification permission status:', existingStatus);
+    console.log('Existing general notification permission status:', existingStatus);
 
     if (existingStatus !== 'granted') {
       console.log('Requesting general notification permission...');
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
-      console.log('Final notification permission status after request:', finalStatus);
+      console.log('Final general notification permission status after request:', finalStatus);
     }
 
     if (finalStatus !== 'granted') {
@@ -157,7 +211,10 @@ async function registerForPushNotificationsAsync(userId) {
     }
 
     try {
-      token = (await Notifications.getExpoPushTokenAsync()).data;
+      // Corrected Constants.expoConfig.extra.eas.projectId to Constants.expoConfig.projectId
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: Constants.expoConfig.projectId // Ensure this matches your project ID from app.json
+      })).data;
       console.log('Expo Push Token obtained:', token);
 
       // Save token to Firestore for the current user
@@ -165,8 +222,6 @@ async function registerForPushNotificationsAsync(userId) {
         console.log('Saving token to Firestore for user:', userId);
         await updateDoc(doc(db, 'users', userId), {
           expoPushToken: token,
-          // You could also store multiple tokens if a user logs in from multiple devices
-          // expoPushTokens: arrayUnion(token)
         });
         console.log('Expo Push Token successfully saved in Firestore.');
       } else {
@@ -188,7 +243,6 @@ async function registerForPushNotificationsAsync(userId) {
   console.log('--- Register Push Notification: End ---');
   return token;
 }
-// --- END EXPO NOTIFICATIONS CONFIGURATION ---
 
 
 // Main App Tabs Navigator - This will be for regular users, IT Support, and Admin
@@ -198,6 +252,7 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
+          let iconComponent = Ionicons; // Default to Ionicons
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
@@ -207,10 +262,8 @@ function MainTabs() {
             iconName = focused ? 'shield' : 'shield-outline';
           } else if (route.name === 'PartnerDashboard') {
             iconName = focused ? 'handshake' : 'handshake-outline';
-            // This 'return' here means only PartnerDashboard gets handshake icon, others get Ionicons.
-            // If PartnerDashboard is also a tab, this is fine. Otherwise, consider if this is intended.
-            // If PartnerDashboard is not a main tab, remove this 'return'.
-            return <Ionicons name={iconName} size={size} color={color} />;
+            // Assuming PartnerDashboard is a Tab.Screen, if not, this section might be redundant.
+            // If PartnerDashboard is meant to be a direct screen, not a tab, remove this whole block.
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -227,6 +280,8 @@ function MainTabs() {
       <Tab.Screen name="Dashboard" component={Dashboard} />
       <Tab.Screen name="ITDashboard" component={ITDashboard} />
       <Tab.Screen name="AdminScreen" component={AdminScreen} />
+      {/* Assuming PartnerDashboard is a tab. If not, remove this line. */}
+      {/* <Tab.Screen name="PartnerDashboard" component={PartnerDashboard} /> */}
     </Tab.Navigator>
   );
 }
@@ -238,6 +293,16 @@ export default function App() {
   const navigationRef = useRef(); // Global navigation ref
 
   useEffect(() => {
+    // 1. Load custom sound and create Android channel
+    // Only attempt to load sound if it hasn't been loaded yet.
+    // createAndroidNotificationChannel() is idempotent, so it's safe to call.
+    if (!isSoundLoaded && !isSoundLoading) {
+      loadCustomSound();
+    }
+    createAndroidNotificationChannel();
+
+
+    // 2. Auth state observer
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
       if (user) {
         setCurrentUserId(user.uid);
@@ -248,18 +313,19 @@ export default function App() {
       }
     });
 
+    // 3. Notification received listener (app in foreground)
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('Notification received (foreground):', notification);
-      // At this point, your Dashboard's NotificationBanner might pick it up if it's visible.
-      // You can add additional in-app logic here if needed.
-      // OPTIONAL: Play custom sound for foreground notifications if `shouldPlaySound` in handler is false for some reason
-      // playCustomSound(); 
+      // Since Notifications.setNotificationHandler already sets shouldPlaySound: true,
+      // the system should handle playing the custom sound if the channel is set correctly.
+      // Explicitly playing here might cause double sound or interference.
     });
 
+    // 4. Notification response listener (user taps notification)
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification tapped/interacted with:', response.notification.request.content.data);
 
-      const { link, type, ticketId, surveyId } = response.notification.request.content.data;
+      const { link, type, ticketId, surveyId, appointmentId } = response.notification.request.content.data;
 
       // Update lastSeenMessages immediately upon tapping a message notification
       if (type === 'message' && currentUserId) {
@@ -276,29 +342,66 @@ export default function App() {
             console.error('Failed to open deep link:', link, err);
             Alert.alert('Erreur', 'Impossible d\'ouvrir le lien. Veuillez réessayer.');
             // Fallback to in-app navigation if deep linking fails
-            handleInAppNavigation(type, ticketId, surveyId);
+            handleInAppNavigation(type, ticketId, surveyId, appointmentId);
           });
       } else {
         console.warn('Notification received without a deep link. Attempting in-app navigation.');
-        handleInAppNavigation(type, ticketId, surveyId);
+        handleInAppNavigation(type, ticketId, surveyId, appointmentId);
       }
     });
 
     return () => {
+      // Clean up subscriptions and unload sound on unmount
       unsubscribeAuth();
-      Notifications.removeNotificationSubscription(notificationListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+      // Only unload if it was successfully loaded.
+      if (customNotificationSound._loaded) {
+        customNotificationSound.unloadAsync();
+        console.log('ER Notification sound unloaded.');
+        isSoundLoaded = false; // Reset the flag for potential future mounts/reloads
+      }
     };
   }, [currentUserId]); // currentUserId as dependency for the useEffect
 
   // Helper function for in-app navigation
-  const handleInAppNavigation = (type, ticketId, surveyId) => {
+  const handleInAppNavigation = (type, ticketId, surveyId, appointmentId) => {
     if (navigationRef.current) {
       if (type === 'message' && ticketId) {
         // Use StackActions.replace to clear previous screens if you want a clean stack
         navigationRef.current.dispatch(StackActions.replace('Conversation', { ticketId }));
       } else if (type === 'survey' && surveyId) {
+        // Assuming SurveyResponses is the correct screen to navigate to for a survey notification
         navigationRef.current.dispatch(StackActions.replace('SurveyResponses', { surveyId }));
+      } else if (type === 'appointment_client_confirmed' || type === 'appointment_partner_new') {
+        // Refined navigation for appointments:
+        // Navigate to a specific detail screen or a relevant list screen.
+        // Assuming PartnerRdvDetail or UserRdv could benefit from appointmentId.
+        if (appointmentId) {
+            if (type === 'appointment_client_confirmed') {
+                // If you have a UserRdvDetail screen that takes appointmentId, use that
+                navigationRef.current.dispatch(StackActions.replace('UserRdv', { appointmentId }));
+            } else if (type === 'appointment_partner_new') {
+                // If you have a PartnerRdvDetail screen that takes appointmentId, use that
+                navigationRef.current.dispatch(StackActions.replace('PartnerRdvDetail', { appointmentId }));
+            }
+        } else {
+            // Fallback to general list if no specific ID or detail screen exists
+            if (type === 'appointment_client_confirmed') {
+                navigationRef.current.dispatch(StackActions.replace('UserRdv'));
+            } else if (type === 'appointment_partner_new') {
+                navigationRef.current.dispatch(StackActions.replace('Rdv'));
+            }
+        }
+      } else if (type === 'new_ticket_agent_alert' || type === 'ticket_escalated_by_jey') {
+          // Navigate agents directly to the TicketInfo screen (or Conversation if that's preferred)
+          if (ticketId) {
+            navigationRef.current.dispatch(StackActions.replace('TicketInfo', { ticketId }));
+          }
       }
       // Add more navigation logic for other types if needed
     } else {
@@ -323,6 +426,29 @@ export default function App() {
             surveyId: (surveyId) => surveyId,
           },
         },
+        // Added deep linking for ticket details for agents
+        TicketInfo: {
+          path: 'ticket/:ticketId',
+          parse: {
+            ticketId: (ticketId) => ticketId,
+          },
+        },
+        // Add deep linking for appointments if needed, e.g.:
+        UserRdv: 'appointments/user', // Generic link to user's appointments list
+        Rdv: 'appointments/partner', // Generic link to partner's appointments list
+        PartnerRdvDetail: {
+          path: 'appointment/partner/:appointmentId',
+          parse: {
+            appointmentId: (appointmentId) => appointmentId,
+          },
+        },
+        // If you have a UserRdvDetail, add it here:
+        // UserRdvDetail: {
+        //   path: 'appointment/user/:appointmentId',
+        //   parse: {
+        //     appointmentId: (appointmentId) => appointmentId,
+        //   },
+        // },
         Dashboard: 'dashboard',
         ConversationList: 'conversations',
         PartnerChat: 'partnerChat/:partnerId',
@@ -331,29 +457,6 @@ export default function App() {
       },
     },
     // Optional: getInitialURL and subscribe for custom handling outside of default behavior
-    // getInitialURL: async () => {
-    //   const url = await Linking.getInitialURL();
-    //   if (url != null) {
-    //     return url;
-    //   }
-    //   const response = await Notifications.getLastNotificationResponseAsync();
-    //   return response?.notification.request.content.data.link;
-    // },
-    // subscribe: (listener) => {
-    //   const onReceiveURL = ({ url }) => listener(url);
-    //   Linking.addEventListener('url', onReceiveURL);
-    //   const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-    //     const url = response.notification.request.content.data.link;
-    //     if (url) {
-    //       listener(url);
-    //     }
-    //   });
-    //
-    //   return () => {
-    //     Linking.removeEventListener('url', onReceiveURL);
-    //     Notifications.removeNotificationSubscription(subscription);
-    //   };
-    // },
   };
 
   return (
@@ -459,12 +562,17 @@ export default function App() {
         <Stack.Screen
           name="FAQ"
           component={FAQ}
-          options={{ headerShown: true, title: 'FAQ' ,headerTitleAlign: 'center', }}
+          options={{ headerShown: true, title: '' ,headerTitleAlign: 'center', }}
         />
         <Stack.Screen
           name="News"
           component={News}
-          options={{ headerShown: true, title: 'A la Une' ,headerTitleAlign: 'center', }}
+          options={{ headerShown: true, title: 'Promos du Moment' ,headerTitleAlign: 'center', }}
+        />
+        <Stack.Screen
+          name="NewsDetail"
+          component={NewsDetail}
+          options={{ headerShown: true, title: '' ,headerTitleAlign: 'center', }}
         />
         <Stack.Screen
           name="About"
@@ -499,6 +607,11 @@ export default function App() {
         <Stack.Screen
           name="Appointments"
           component={Appointments}
+          options={{ headerShown: false, title: 'Rendez-vous Partenaire', headerTitleAlign: 'center' }}
+        />
+        <Stack.Screen
+          name="AppointmentListScreen"
+          component={AppointmentListScreen}
           options={{ headerShown: false, title: 'Rendez-vous Partenaire', headerTitleAlign: 'center' }}
         />
 

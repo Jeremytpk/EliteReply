@@ -15,7 +15,7 @@ import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location'; // Import expo-location
+import * as Location from 'expo-location';
 
 const Signup = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -24,6 +24,9 @@ const Signup = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // New state to toggle password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // New state for location data
   const [locationData, setLocationData] = useState(null);
@@ -66,12 +69,6 @@ const Signup = ({ navigation }) => {
       console.log('User Location:', currentLocation);
 
       // 3. Reverse Geocode (replace with your chosen API)
-      // This is a placeholder. You need to replace this with a call to a reverse geocoding API.
-      // Example using a hypothetical API:
-      // const response = await fetch(`YOUR_REVERSE_GEOCODING_API_ENDPOINT?lat=${currentLocation.coords.latitude}&lon=${currentLocation.coords.longitude}&apiKey=YOUR_API_KEY`);
-      // const geoData = await response.json();
-      //
-      // For this example, let's simulate some data or use Expo's built-in reverse geocoding (less detailed)
       let geocodedAddress = await Location.reverseGeocodeAsync({
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
@@ -79,14 +76,11 @@ const Signup = ({ navigation }) => {
 
       let userCountry = '';
       let userCity = '';
-      let userContinent = ''; // Most reverse geocoding APIs don't directly return continent, you might need a lookup table or another API.
+      let userContinent = 'Unknown'; // Placeholder
 
       if (geocodedAddress && geocodedAddress.length > 0) {
         userCountry = geocodedAddress[0].country || '';
-        userCity = geocodedAddress[0].city || geocodedAddress[0].subregion || ''; // Fallback for city
-        // For continent, you would typically need a separate service or a mapping.
-        // For demonstration, let's just leave it empty or add a placeholder.
-        userContinent = 'Unknown'; // Placeholder
+        userCity = geocodedAddress[0].city || geocodedAddress[0].subregion || '';
       }
 
       setLocationData({
@@ -108,7 +102,7 @@ const Signup = ({ navigation }) => {
         lastLogin: serverTimestamp(),
         role: email.endsWith('@elitereply.com') ? 'support' : 'user',
         profileCompleted: false,
-        location: { // Add location data here
+        location: {
           latitude: currentLocation.coords.latitude,
           longitude: currentLocation.coords.longitude,
           country: userCountry,
@@ -194,23 +188,49 @@ const Signup = ({ navigation }) => {
           editable={!loading}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe (6+ caractères)"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-        />
+        {/* Password Input with Show/Hide Icon */}
+        <View style={styles.passwordInputContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Mot de passe (6+ caractères)"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword} // Toggle based on state
+            editable={!loading}
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPassword(!showPassword)} // Toggle showPassword state
+          >
+            <Ionicons
+              name={showPassword ? 'eye-off' : 'eye'} // Change icon based on state
+              size={24}
+              color="#6B7280"
+            />
+          </TouchableOpacity>
+        </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Confirmer le mot de passe"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          editable={!loading}
-        />
+        {/* Confirm Password Input with Show/Hide Icon */}
+        <View style={styles.passwordInputContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Confirmer le mot de passe"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={!showConfirmPassword} // Toggle based on state
+            editable={!loading}
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)} // Toggle showConfirmPassword state
+          >
+            <Ionicons
+              name={showConfirmPassword ? 'eye-off' : 'eye'} // Change icon based on state
+              size={24}
+              color="#6B7280"
+            />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -268,9 +288,29 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 8,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 16, // This will still apply to other inputs
     fontSize: 16,
   },
+  // New styles for password input with icon
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    marginBottom: 16,
+    paddingRight: 10, // Add padding for the icon
+  },
+  passwordInput: {
+    flex: 1, // Take up available space
+    padding: 16,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 5,
+  },
+  // End new password styles
   button: {
     backgroundColor: '#2a8fd7',
     padding: 16,

@@ -23,10 +23,20 @@
           "color": "#0a8fdf",
           "androidMode": "default",
           "androidCollapsedTitle": "#{unread_notifications} nouveaux messages",
-          "sounds": [
-            "./assets/sounds/er_notification.mp3"
-          ],
-          "android": {},
+          // Removed the top-level "sounds" array for Android, as it's better defined per channel
+          "android": {
+            "channels": [
+              {
+                "id": "er_notification_channel", // This MUST match the channelId in your Cloud Function
+                "name": "EliteReply Notifications", // User-visible name for the channel
+                "description": "Notifications importantes d'EliteReply", // User-visible description
+                "importance": "high", // "default", "high", or "max"
+                "sound": "./assets/sounds/er_notification.mp3", // Path to the sound file for this channel
+                "vibrationPattern": [0, 250, 250, 250], // Optional: Custom vibration for this channel
+                "lightColor": "#FF231F7C" // Optional: Custom light for this channel
+              }
+            ]
+          },
           "ios": {
             "allowForeground": true,
             "supportsTablet": true,
@@ -107,19 +117,12 @@
     "web": {
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro",
-      "output": "single", // <--- CRITICAL CHANGE: from "static" to "single"
+      "output": "single",
       "build": {
         "babel": {
           "include": ["node_modules/@expo/vector-icons"]
         }
-      },
-      "webpack": {
-        "enableSmoothFonts": true
       }
-      // REMOVE THE "router" BLOCK ENTIRELY if it's there
-      // "router": {
-      //   "exclude": ["**/*"]
-      // }
     },
     "platforms": [
       "ios",

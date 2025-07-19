@@ -21,32 +21,41 @@ import { app } from '../firebase';
 const Promotions = () => {
   const [promotions, setPromotions] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // UPDATED: Changed 'poster' back to 'image'
   const [newPromotion, setNewPromotion] = useState({
     title: '',
     description: '',
-    image: null
+    moreInformation: '', 
+    image: null,        // Changed from 'poster' to 'image' for local URI
   });
+
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const db = getFirestore(app);
   const storage = getStorage(app);
-  const promotionsCollectionRef = collection(db, 'news');
+  // Using 'news' collection as per your previous implementation for Promotions (if promotions are stored there)
+  const promotionsCollectionRef = collection(db, 'news'); 
 
   useEffect(() => {
     const unsubscribe = onSnapshot(promotionsCollectionRef, (snapshot) => {
       const promotionsList = [];
       snapshot.forEach(doc => {
-        promotionsList.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        // Ensure createdAt is a Date object for sorting
+        const createdAt = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date();
+        promotionsList.push({ id: doc.id, ...data, createdAt });
       });
       // Sort by newest first
-      promotionsList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      promotionsList.sort((a, b) => b.createdAt - a.createdAt); 
       setPromotions(promotionsList);
     });
 
     return () => unsubscribe();
   }, []);
 
+  // UPDATED: Function name changed back to pickImage
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -57,21 +66,24 @@ const Promotions = () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [4, 3], 
       quality: 0.8,
     });
 
     if (!result.canceled) {
+      // UPDATED: Storing URI in 'image' field
       setNewPromotion({...newPromotion, image: result.assets[0].uri});
     }
   };
 
+  // UPDATED: Renamed back to uploadImage
   const uploadImage = async (uri) => {
     setUploading(true);
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      const storageRef = ref(storage, `promotions/${Date.now()}`);
+      // UPDATED: Changed storage path to 'promotions_images' for clarity
+      const storageRef = ref(storage, `promotions_images/${Date.now()}`); 
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
@@ -84,14 +96,15 @@ const Promotions = () => {
   };
 
   const handleAddPromotion = async () => {
-    if (!newPromotion.title.trim() || !newPromotion.description.trim()) {
-      Alert.alert('Required fields', 'Please fill in both title and description');
+    if (!newPromotion.title.trim() || !newPromotion.description.trim() || !newPromotion.moreInformation.trim()) {
+      Alert.alert('Required fields', 'Please fill in Title, Description, and More Information.');
       return;
     }
 
     setLoading(true);
     try {
-      let imageUrl = '';
+      let imageUrl = ''; // UPDATED: Changed from posterUrl to imageUrl
+      // UPDATED: Uploading 'image' if it exists
       if (newPromotion.image) {
         imageUrl = await uploadImage(newPromotion.image);
       }
@@ -99,16 +112,19 @@ const Promotions = () => {
       await addDoc(promotionsCollectionRef, {
         title: newPromotion.title,
         description: newPromotion.description,
-        imageUrl: imageUrl,
-        createdAt: new Date().toISOString(),
+        moreInformation: newPromotion.moreInformation, 
+        imageUrl: imageUrl, // UPDATED: Changed from posterUrl to imageUrl
+        createdAt: new Date(), 
         type: 'promotion'
       });
 
       setModalVisible(false);
+      // UPDATED: Resetting newPromotion state with new fields
       setNewPromotion({
         title: '',
         description: '',
-        image: null
+        moreInformation: '',
+        image: null // UPDATED: Changed from poster to image
       });
     } catch (error) {
       console.error('Error adding promotion:', error);
@@ -129,7 +145,8 @@ const Promotions = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, 'news', id));
+              // Ensure you are deleting from the correct collection (e.g., 'news' or 'promotions')
+              await deleteDoc(doc(db, 'news', id)); 
             } catch (error) {
               console.error('Error deleting promotion:', error);
               Alert.alert('Error', 'Failed to delete promotion');
@@ -142,6 +159,7 @@ const Promotions = () => {
 
   const renderPromotionItem = ({ item }) => (
     <View style={styles.promotionCard}>
+      {/* UPDATED: Using 'imageUrl' for image source */}
       {item.imageUrl && (
         <Image 
           source={{ uri: item.imageUrl }} 
@@ -153,10 +171,17 @@ const Promotions = () => {
       <View style={styles.promotionContent}>
         <Text style={styles.promotionTitle}>{item.title}</Text>
         <Text style={styles.promotionDescription}>{item.description}</Text>
+        {item.moreInformation && (
+          <Text style={styles.promotionMoreInformation}>
+            {item.moreInformation.length > 120 
+              ? `${item.moreInformation.substring(0, 117)}...`
+              : item.moreInformation}
+          </Text>
+        )}
         
         <View style={styles.promotionFooter}>
           <Text style={styles.promotionDate}>
-            {new Date(item.createdAt).toLocaleDateString()}
+            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
           </Text>
           
           <TouchableOpacity 
@@ -187,7 +212,15 @@ const Promotions = () => {
 
       <TouchableOpacity 
         style={styles.addButton}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setNewPromotion({ // Reset state when opening modal
+            title: '',
+            description: '',
+            moreInformation: '',
+            image: null, // UPDATED: Changed from poster to image
+          });
+          setModalVisible(true);
+        }}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
@@ -220,21 +253,33 @@ const Promotions = () => {
             <Text style={styles.label}>Description</Text>
             <TextInput
               style={[styles.input, styles.descriptionInput]}
-              placeholder="Enter promotion details"
+              placeholder="Enter brief promotion details"
               multiline
-              numberOfLines={4}
+              numberOfLines={3} 
               value={newPromotion.description}
               onChangeText={(text) => setNewPromotion({...newPromotion, description: text})}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Poster Image</Text>
+            <Text style={styles.label}>More Information</Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]} 
+              placeholder="Provide detailed information about the promotion"
+              multiline
+              numberOfLines={6} 
+              value={newPromotion.moreInformation}
+              onChangeText={(text) => setNewPromotion({...newPromotion, moreInformation: text})}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Image</Text> {/* UPDATED: Label changed */}
             <TouchableOpacity 
               style={styles.imagePickerButton}
-              onPress={pickImage}
+              onPress={pickImage} 
             >
-              {newPromotion.image ? (
+              {newPromotion.image ? ( /* UPDATED: uses newPromotion.image */
                 <Image 
                   source={{ uri: newPromotion.image }} 
                   style={styles.imagePreview}
@@ -242,7 +287,7 @@ const Promotions = () => {
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Feather name="image" size={32} color="#666" />
-                  <Text style={styles.imagePlaceholderText}>Select an image</Text>
+                  <Text style={styles.imagePlaceholderText}>Select an image</Text> {/* UPDATED: Text changed */}
                 </View>
               )}
             </TouchableOpacity>
@@ -309,8 +354,15 @@ const styles = StyleSheet.create({
   promotionDescription: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 8, 
     lineHeight: 20,
+  },
+  promotionMoreInformation: {
+    fontSize: 13, 
+    color: '#777',
+    marginBottom: 12, 
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
   promotionFooter: {
     flexDirection: 'row',
@@ -354,6 +406,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
     padding: 20,
+    paddingTop: 40,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -410,6 +463,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 20,
+    marginBottom: 40,
   },
   button: {
     flex: 1,

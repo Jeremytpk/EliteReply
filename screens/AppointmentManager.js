@@ -1,4 +1,3 @@
-// AppointmentManager.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -9,10 +8,9 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import {
   collection,
   doc,
@@ -20,21 +18,16 @@ import {
   serverTimestamp,
   onSnapshot,
   query,
-  orderBy,
+  where, // Still needed if you want to filter tickets by clientEmail if applicable in other parts
   updateDoc,
   getDoc,
-  deleteField,
-  // Removed arrayUnion, arrayRemove as they won't be strictly necessary for deletion
-  writeBatch, // Will use writeBatch for atomic deletions across collections
-  runTransaction,
-  increment,
+  writeBatch,
   getDocs,
-  where,
-  deleteDoc, // Import deleteDoc
 } from 'firebase/firestore';
-import { auth, db, storage } from '../firebase';
+import { auth, db } from '../firebase';
 
 import AppointmentFormModal from '../components/AppointmentFormModal';
+// import AppointmentListModal from '../components/AppointmentListModal'; // REMOVED: No longer needed
 
 import moment from 'moment';
 import 'moment/locale/fr';
@@ -47,30 +40,121 @@ const AppointmentManager = ({ route, navigation }) => {
     initialUserId,
     initialUserName,
     userPhone,
-    isITSupport,
-    currentTicketAppointments: initialCurrentTicketAppointments,
+    initialUserEmail,
   } = route.params;
 
   const currentUser = auth.currentUser;
-  const actualClientName = initialUserName || 'Client';
+
+  const [loggedInAgentData, setLoggedInAgentData] = useState(null);
+  const [loadingAgentData, setLoadingAgentData] = useState(true);
+
+  // The client's email to filter appointments by (if this manager specifically for one client's ticket)
+  // Note: The AppointmentListScreen will now fetch ALL appointments regardless of this.
+  const clientEmailToFilter = initialUserEmail;
 
   const [partners, setPartners] = useState([]);
   const [loadingPartners, setLoadingPartners] = useState(true);
-
-  const [appointments, setAppointments] = useState(initialCurrentTicketAppointments || []);
+  const [appointments, setAppointments] = useState([]); // This state will still hold specific client's appointments if needed elsewhere, but not for the "All Appointments" list view.
 
   const [showAppointmentFormModal, setShowAppointmentFormModal] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState(null);
 
+  // Helper function for date/time formatting
+  const formatDateTime = useCallback((dateISOString) => {
+    if (!dateISOString) return 'N/A';
+    const date = new Date(dateISOString);
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date string provided to formatDateTime:", dateISOString);
+      return 'Date invalide';
+    }
+    return moment(date).format('DD/MM/YYYY [à] HH:mm');
+  }, []);
+
+  // Send system message to ticket
+  const sendSystemMessageToTicket = useCallback(async (messageText) => {
+    if (!ticketId) {
+        console.warn("WARN: Not sending system message, no ticketId provided in AppointmentManager.");
+        return;
+    }
+    try {
+      const batch = writeBatch(db);
+
+      const ticketRef = doc(db, 'tickets', ticketId);
+      const conversationRef = doc(db, 'conversations', ticketId);
+      const messagesCollectionRef = collection(db, 'tickets', ticketId, 'messages');
+
+      batch.set(doc(messagesCollectionRef), {
+        texte: messageText,
+        expediteurId: 'systeme',
+        nomExpediteur: 'Système Rendez-vous',
+        createdAt: serverTimestamp(),
+        type: 'text',
+      });
+
+      const updateData = {
+        lastMessage: messageText.substring(0, 100),
+        lastUpdated: serverTimestamp(),
+        lastMessageSender: 'systeme',
+      };
+      batch.update(ticketRef, updateData);
+      batch.update(conversationRef, updateData);
+
+      await batch.commit();
+
+    } catch (error) {
+      console.error("ERROR: Failed to send system message from AppointmentManager:", error);
+      Alert.alert("Erreur", "Impossible d'envoyer le message système au ticket.");
+    }
+  }, [ticketId]);
+
+  // Agent Details Fetching
+  useEffect(() => {
+    const fetchAgentDetails = async () => {
+      if (!currentUser || !currentUser.uid) {
+        setLoadingAgentData(false);
+        console.warn("WARN: No current user authenticated to fetch agent data.");
+        return;
+      }
+      setLoadingAgentData(true);
+      try {
+        const agentDocRef = doc(db, 'users', currentUser.uid);
+        const agentDocSnap = await getDoc(agentDocRef);
+        if (agentDocSnap.exists()) {
+          setLoggedInAgentData({ id: agentDocSnap.id, ...agentDocSnap.data() });
+        } else {
+          console.warn(`WARN: Agent profile not found for UID: ${currentUser.uid}`);
+        }
+      } catch (error) {
+        console.error("ERROR: Failed to fetch logged-in agent details:", error);
+        Alert.alert("Erreur", "Impossible de charger les informations de l'agent.");
+      } finally {
+        setLoadingAgentData(false);
+      }
+    };
+    fetchAgentDetails();
+  }, [currentUser]);
+
+  // Partner Fetching and Prioritization
   useEffect(() => {
     const fetchPartners = async () => {
       setLoadingPartners(true);
       try {
         const partnersCollectionRef = collection(db, 'partners');
-        const q = query(partnersCollectionRef, orderBy('name'));
+        const q = query(partnersCollectionRef);
         const querySnapshot = await getDocs(q);
         const fetchedPartners = querySnapshot.docs.map(doc => {
-          return { id: doc.id, label: doc.data().name, value: doc.id, ...doc.data() };
+          return {
+            id: doc.id,
+            nom: doc.data().nom,
+            categorie: doc.data().categorie,
+            isPromoted: doc.data().isPromoted || false,
+            rating: doc.data().rating || 0,
+            ...doc.data()
+          };
+        }).sort((a, b) => {
+          if (a.isPromoted && !b.isPromoted) return -1;
+          if (!a.isPromoted && b.isPromoted) return 1;
+          return b.rating - a.rating;
         });
         setPartners(fetchedPartners);
       } catch (error) {
@@ -83,154 +167,118 @@ const AppointmentManager = ({ route, navigation }) => {
     fetchPartners();
   }, []);
 
+  // --- NEW LOGIC FOR HANDLING NAVIGATION PARAMS FROM AppointmentListScreen ---
   useEffect(() => {
+    // Handle direct navigation to edit an appointment from AppointmentListScreen
     if (route.params?.editingAppointment) {
       setAppointmentToEdit(route.params.editingAppointment);
       setShowAppointmentFormModal(true);
+      // Clear the param after use to prevent re-opening modal on subsequent renders
+      navigation.setParams({ editingAppointment: undefined });
     }
-  }, [route.params?.editingAppointment]);
 
+    // Handle deletion request from AppointmentListScreen
+    const { appointmentToDelete, partnerIdToDelete, appointmentDetailsForMessage } = route.params || {};
+    if (appointmentToDelete && partnerIdToDelete) {
+      handleDeleteAppointmentConfirmed(appointmentToDelete, partnerIdToDelete, appointmentDetailsForMessage);
+      // Clear the params after use
+      navigation.setParams({ appointmentToDelete: undefined, partnerIdToDelete: undefined, appointmentDetailsForMessage: undefined });
+    }
+  }, [route.params, navigation]);
 
+  // Appointment Fetching (Real-time for THIS client's ticket - Optional)
+  // This useEffect can remain if you still need a local list of appointments
+  // specific to the client of the current ticket, for other purposes in this manager.
+  // If this manager is solely for routing to "all appointments" or creating new ones,
+  // this specific client-filtered fetching might be removed to simplify.
+  // Keeping it for now as it doesn't conflict with the new AppointmentListScreen.
   useEffect(() => {
-    if (!ticketId) return;
+    if (!clientEmailToFilter) {
+      // console.warn("WARN: No client email provided, cannot fetch client-specific appointments.");
+      setAppointments([]);
+      return;
+    }
 
-    const ticketDocRef = doc(db, 'tickets', ticketId);
-    const unsubscribe = onSnapshot(ticketDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const sortedAppointments = (data.appointments || []).sort((a, b) => {
-          const dateA = a.appointmentDateTime ? new Date(a.appointmentDateTime).getTime() : 0;
-          const dateB = b.appointmentDateTime ? new Date(b.appointmentDateTime).getTime() : 0;
-          return dateB - dateA;
-        });
-        setAppointments(sortedAppointments);
-      }
+    const appointmentsCollectionRef = collection(db, 'appointments');
+    const q = query(
+      appointmentsCollectionRef,
+      where('clientEmail', '==', clientEmailToFilter)
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedAppointments = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).sort((a, b) => {
+        const dateA = a.appointmentDateTime ? new Date(a.appointmentDateTime).getTime() : 0;
+        const dateB = b.appointmentDateTime ? new Date(b.appointmentDateTime).getTime() : 0;
+        return dateB - dateA;
+      });
+      setAppointments(fetchedAppointments);
     }, (error) => {
-      console.error("ERROR: Error fetching live ticket appointments:", error);
+      console.error("ERROR: Error fetching live appointments for client email:", error);
+      Alert.alert("Erreur de synchronisation", "Impossible de charger les rendez-vous spécifiques au client.");
     });
 
     return () => unsubscribe();
-  }, [ticketId]);
+  }, [clientEmailToFilter]);
 
 
-  const sendSystemMessageToTicket = useCallback(async (messageText) => {
-    if (!ticketId) {
-        console.warn("WARN: Not sending system message, no ticketId provided in AppointmentManager.");
+  // handleBookingSuccessFromModal: Callback after an appointment is successfully booked or updated.
+  const handleBookingSuccessFromModal = useCallback(async (newOrUpdatedAppointment) => {
+    setAppointmentToEdit(null); // Clear edit state
+
+    const action = newOrUpdatedAppointment.id ? 'mis à jour' : 'créé';
+    let message = `Le rendez-vous avec ${newOrUpdatedAppointment.partnerNom} pour ${newOrUpdatedAppointment.clientNames ? newOrUpdatedAppointment.clientNames.join(', ') : newOrUpdatedAppointment.clientName || 'un client'} du ${formatDateTime(newOrUpdatedAppointment.appointmentDateTime)} a été ${action} par l'agent ${loggedInAgentData?.name || 'inconnu'}.`;
+    if (newOrUpdatedAppointment.description) {
+      message += ` Description: ${newOrUpdatedAppointment.description}.`;
+    }
+    await sendSystemMessageToTicket(message);
+  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime]);
+
+  // New function to handle the actual deletion (called by useEffect from route.params)
+  const handleDeleteAppointmentConfirmed = useCallback(async (appointmentId, partnerId, apptDetailsForMessage) => {
+    if (!appointmentId || !partnerId) {
+        console.error("ERROR: Missing critical appointment data for confirmed deletion.");
+        Alert.alert("Erreur", "Données de rendez-vous incomplètes pour la suppression. Veuillez réessayer.");
         return;
     }
+
     try {
-      await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
-        texte: messageText,
-        expediteurId: 'systeme',
-        nomExpediteur: 'Système Rendez-vous',
-        createdAt: serverTimestamp(),
-        type: 'text',
-      });
-      await updateDoc(doc(db, 'tickets', ticketId), {
-        lastMessage: messageText.substring(0, 50),
-        lastUpdated: serverTimestamp(),
-        lastMessageSender: 'systeme',
-      });
-      await updateDoc(doc(db, 'conversations', ticketId), {
-        lastMessage: messageText.substring(0, 50),
-        lastUpdated: serverTimestamp(),
-        lastMessageSender: 'systeme',
-      });
-    } catch (error) {
-      console.error("ERROR: Failed to send system message from AppointmentManager:", error);
-    }
-  }, [ticketId]);
+        const batch = writeBatch(db);
 
-  // Modified handleCancelAppointment to delete documents
-  const handleCancelAppointment = async (appointmentToCancel) => {
-    // --- ADD THIS CHECK ---
-    if (!appointmentToCancel || !appointmentToCancel.id || !appointmentToCancel.partnerId || !appointmentToCancel.appointmentId) {
-        console.error("ERROR: Missing critical appointment data for cancellation:", appointmentToCancel);
-        Alert.alert("Erreur", "Données de rendez-vous incomplètes pour l'annulation. Veuillez réessayer.");
-        return;
-    }
-    // --- END ADDITION ---
+        // 1. Delete from main 'appointments' collection
+        const rdvDocRefMain = doc(db, 'appointments', appointmentId);
+        batch.delete(rdvDocRefMain);
 
-    Alert.alert(
-      "Annuler Rendez-vous",
-      `Êtes-vous sûr de vouloir annuler et supprimer le rendez-vous avec ${appointmentToCancel.partnerName} du ${formatDateTime(appointmentToCancel.appointmentDateTime)} ? Cette action est irréversible.`,
-      [
-        { text: "Non", style: "cancel" },
-        {
-          text: "Oui, Supprimer",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const batch = writeBatch(db);
+        // 2. Delete from partner's subcollection 'rdv_reservation'
+        const partnerRdvDocRef = doc(db, 'partners', partnerId, 'rdv_reservation', appointmentId);
+        batch.delete(partnerRdvDocRef);
 
-              const rdvDocRefMain = doc(db, 'appointments', appointmentToCancel.id);
-              batch.delete(rdvDocRefMain);
-              console.log("DEBUG_CANCEL: Marked for deletion from top-level 'appointments':", appointmentToCancel.id);
+        await batch.commit();
 
-              const partnerRdvDocRef = doc(db, 'partners', appointmentToCancel.partnerId, 'rdv_reservation', appointmentToCancel.appointmentId);
-              batch.delete(partnerRdvDocRef);
-              console.log("DEBUG_CANCEL: Marked for deletion from partner's 'rdv_reservation' subcollection:", appointmentToCancel.partnerId, appointmentToCancel.appointmentId);
-
-              if (ticketId) {
-                const ticketDocRef = doc(db, 'tickets', ticketId);
-                const ticketSnapshot = await getDoc(ticketDocRef);
-
-                if (ticketSnapshot.exists()) {
-                    const currentAppointmentsInTicket = ticketSnapshot.data().appointments || [];
-                    // --- SLIGHTLY MORE ROBUST FILTER ---
-                    const updatedAppointments = currentAppointmentsInTicket.filter(
-                        appt => appt && appt.appointmentId && appt.appointmentId !== appointmentToCancel.appointmentId
-                    );
-                    batch.update(ticketDocRef, { appointments: updatedAppointments });
-                    console.log("DEBUG_CANCEL: Marked ticket's appointments array for update/removal.");
-                } else {
-                    console.warn("WARN: Ticket document not found for array update during cancellation.");
-                }
-              }
-
-              await batch.commit();
-              console.log("DEBUG_CANCEL: All batched deletions/updates committed successfully.");
-
-              let message = `Votre rendez-vous avec ${appointmentToCancel.partnerName} du ${formatDateTime(appointmentToCancel.appointmentDateTime)} a été annulé et supprimé.`;
-              if (appointmentToCancel.description) {
-                message += ` Description: ${appointmentToCancel.description}.`;
-              }
-              await sendSystemMessageToTicket(message);
-
-              Alert.alert("Succès", "Rendez-vous annulé et supprimé.");
-            } catch (error) {
-              console.error("ERROR: Error cancelling/deleting appointment:", error);
-              Alert.alert("Erreur", "Impossible d'annuler ou de supprimer le rendez-vous. Il se peut qu'il ait déjà été supprimé ou qu'une erreur de permission se soit produite. Veuillez réessayer ou contacter le support.");
-            }
-          }
+        let message = `Le rendez-vous avec ${apptDetailsForMessage.partnerNom} du ${formatDateTime(apptDetailsForMessage.appointmentDateTime)} a été supprimé par l'agent ${loggedInAgentData?.name || 'inconnu'}.`;
+        if (apptDetailsForMessage.description) {
+          message += ` Description: ${apptDetailsForMessage.description}.`;
         }
-      ]
-    );
-};
+        await sendSystemMessageToTicket(message);
 
-  const formatDateTime = (dateISOString) => {
-    if (!dateISOString) return 'N/A';
-    const date = new Date(dateISOString);
-    return date.toLocaleDateString('fr-FR') + ' à ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleOpenEditModal = (appointment) => {
-    setAppointmentToEdit(appointment);
-    setShowAppointmentFormModal(true);
-  };
-
-  const handleBookingSuccessFromModal = useCallback((newOrUpdatedAppointment) => {
-    if (appointmentToEdit) {
-        setAppointmentToEdit(null);
+        Alert.alert("Succès", "Rendez-vous supprimé.");
+    } catch (error) {
+        console.error("ERROR: Error deleting appointment:", error);
+        Alert.alert(
+            "Erreur",
+            "Impossible de supprimer le rendez-vous. Il se peut qu'il ait déjà été supprimé ou qu'une erreur de permission se soit produite. Veuillez réessayer ou contacter le support."
+        );
     }
-  }, [appointmentToEdit]);
+  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime]);
 
 
-  if (loadingPartners) {
+  if (loadingPartners || loadingAgentData) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Chargement des partenaires...</Text>
+        <ActivityIndicator size="large" color="#0a8fdf" />
+        <Text style={styles.loadingText}>Chargement des données...</Text>
       </View>
     );
   }
@@ -243,98 +291,74 @@ const AppointmentManager = ({ route, navigation }) => {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#2C2C2C" />
+          <Ionicons name="arrow-back" size={28} color="#2D3748" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gérer Rendez-vous</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.headerTitle}>Gérer les Rendez-vous</Text>
+        <View style={{ width: 28 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollViewContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
 
         <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
                 onPress={() => {
-                    setAppointmentToEdit(null);
+                    setAppointmentToEdit(null); // Ensure we're creating a new one
                     setShowAppointmentFormModal(true);
                 }}
                 style={styles.newAppointmentButton}
             >
-                <Ionicons name="add-circle" size={20} color="white" />
+                <Ionicons name="add-circle" size={22} color="white" />
                 <Text style={styles.newAppointmentButtonText}>Nouveau Rendez-vous</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                onPress={() => navigation.navigate('AppointmentListScreen', {
+                    // Pass current ticket/client info if AppointmentListScreen needs to highlight specific appointments
+                    // Or if editing/deleting needs to navigate back with this context
+                    ticketId: ticketId,
+                    initialUserId: initialUserId,
+                    initialUserName: initialUserName,
+                    userPhone: userPhone,
+                    initialUserEmail: initialUserEmail,
+                    allPartners: partners, // Pass partners for context in AppointmentListScreen if needed (e.g. for display)
+                    loggedInAgentId: loggedInAgentData?.id || currentUser?.uid,
+                    loggedInAgentName: loggedInAgentData?.name || currentUser?.displayName,
+                })}
+                style={styles.viewAppointmentsButton}
+            >
+                <Ionicons name="calendar" size={22} color="#0a8fdf" />
+                <Text style={styles.viewAppointmentsButtonText}>Voir les Rendez-vous</Text>
             </TouchableOpacity>
         </View>
 
-
-        {appointments.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={80} color="#CBD5E1" />
-            <Text style={styles.emptyText}>Aucun rendez-vous pour ce ticket.</Text>
-            <Text style={styles.emptySubtitle}>
-              Ajoutez un nouveau rendez-vous ci-dessus.
+        <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={24} color="#0a8fdf" style={{ marginRight: 10 }} />
+            <Text style={styles.infoText}>
+                Utilisez le bouton "Nouveau Rendez-vous" pour planifier une nouvelle rencontre.
+                {"\n"}
+                Cliquez sur "Voir les Rendez-vous" pour consulter et gérer l'historique de tous les rendez-vous.
             </Text>
-          </View>
-        ) : (
-          <View style={styles.existingAppointmentsSection}>
-            <Text style={styles.sectionHeading}>Rendez-vous existants pour ce ticket:</Text>
-            {appointments.map((appt) => (
-              <View key={appt.id} style={[styles.existingAppointmentItem, appt.status === 'cancelled' && styles.cancelledAppointment]}>
-                <Text style={styles.existingAppointmentText}>
-                  <Text style={{ fontWeight: 'bold' }}>Partenaire:</Text> {appt.partnerName}
-                </Text>
-                <Text style={styles.existingAppointmentText}>
-                  <Text style={{ fontWeight: 'bold' }}>Date:</Text> {formatDateTime(appt.appointmentDateTime)}
-                </Text>
-                <Text style={styles.existingAppointmentText}>
-                  <Text style={{ fontWeight: 'bold' }}>Pour:</Text> {appt.clientNames ? appt.clientNames.join(', ') : 'N/A'}
-                </Text>
-                {appt.description && (
-                  <Text style={styles.existingAppointmentText}>
-                    <Text style={{ fontWeight: 'bold' }}>Description:</Text> {appt.description}
-                  </Text>
-                )}
-                {/* Note: If you choose to delete cancelled appointments, the 'status' text below might become redundant for them */}
-                <Text style={[styles.existingAppointmentStatus, appt.status === 'cancelled' ? styles.statusCancelledText : styles.statusScheduledText]}>
-                  Statut: {appt.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
-                </Text>
-                <View style={styles.appointmentActions}>
-                  {appt.status !== 'cancelled' && ( // Only show buttons if not already cancelled (and thus, not yet deleted from UI)
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.editButton]}
-                        onPress={() => handleOpenEditModal(appt)}
-                      >
-                        <Ionicons name="create-outline" size={18} color="white" />
-                        <Text style={styles.actionButtonText}>Modifier</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.cancelButton]}
-                        onPress={() => handleCancelAppointment(appt)} // This will now trigger deletion
-                      >
-                        <Ionicons name="close-circle-outline" size={18} color="white" />
-                        <Text style={styles.actionButtonText}>Supprimer</Text> {/* Changed text to reflect deletion */}
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
+        </View>
+
       </ScrollView>
 
+      {/* Appointment Form Modal (for creation and editing) */}
       <AppointmentFormModal
           isVisible={showAppointmentFormModal}
           onClose={() => {
               setShowAppointmentFormModal(false);
-              setAppointmentToEdit(null);
+              setAppointmentToEdit(null); // Clear edit state on close
           }}
           onBookingSuccess={handleBookingSuccessFromModal}
           ticketId={ticketId}
           initialUserId={initialUserId}
           initialUserName={initialUserName}
           userPhone={userPhone}
+          initialUserEmail={initialUserEmail}
           allPartners={partners}
           editingAppointment={appointmentToEdit}
+          loggedInAgentId={loggedInAgentData?.id || currentUser?.uid}
+          loggedInAgentName={loggedInAgentData?.name || currentUser?.displayName}
       />
     </KeyboardAvoidingView>
   );
@@ -343,161 +367,111 @@ const AppointmentManager = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#EBF3F8',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#EBF3F8',
   },
   loadingText: {
     marginTop: 10,
-    color: '#6B7280',
+    color: '#4A5568',
     fontSize: 16,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 15,
-    paddingTop: Platform.OS === 'android' ? 40 : 50,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 15,
+    marginTop: 25,
+    paddingHorizontal: 20,
   },
   backButton: {
     padding: 5,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2C2C2C',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2D3748',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 10,
   },
-  scrollViewContent: {
-    padding: 16,
+  scrollContent: {
+    padding: 20,
     paddingBottom: 40,
-  },
-  sectionHeading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2C2C2C',
-    marginBottom: 10,
-  },
-  existingAppointmentsSection: {
-    marginBottom: 20,
-    padding: 10,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-  },
-  existingAppointmentItem: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderColor: '#007AFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cancelledAppointment: {
-    borderColor: '#A0AEC0',
-    opacity: 0.7, // Visual cue for items that are 'cancelled' but not yet removed from UI by listener
-  },
-  existingAppointmentText: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 3,
-  },
-  existingAppointmentStatus: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
-  statusScheduledText: {
-    color: '#34C759',
-  },
-  statusCancelledText: {
-    color: '#EF4444',
-  },
-  appointmentActions: {
-    flexDirection: 'row',
-    marginTop: 10,
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginLeft: 8,
-  },
-  editButton: {
-    backgroundColor: '#FF9500',
-  },
-  cancelButton: { // Renamed from cancelButton for clarity, now used for deletion
-    backgroundColor: '#FF3B30',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 15,
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-around',
+    marginBottom: 30,
     marginTop: 10,
+    flexWrap: 'wrap',
   },
   newAppointmentButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#34C759',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    shadowColor: '#34C759',
-    shadowOffset: { width: 0, height: 4 },
+    backgroundColor: '#0a8fdf',
+    paddingVertical: 16,
+    paddingHorizontal: 25,
+    borderRadius: 12,
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
+    shadowRadius: 10,
+    elevation: 10,
+    marginVertical: 10,
+    minWidth: '45%',
+    justifyContent: 'center',
   },
   newAppointmentButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  emptyContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 50,
-    marginTop: 20,
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  emptyText: {
     fontSize: 18,
-    color: '#6B7280',
-    marginTop: 20,
-    textAlign: 'center',
+    fontWeight: '700',
+    marginLeft: 10,
   },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 10,
-    textAlign: 'center',
+  viewAppointmentsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF3F8',
+    paddingVertical: 16,
+    paddingHorizontal: 25,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#0a8fdf',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
+    marginVertical: 10,
+    minWidth: '45%',
+    justifyContent: 'center',
+  },
+  viewAppointmentsButtonText: {
+    color: '#0a8fdf',
+    fontSize: 18,
+    fontWeight: '700',
+    marginLeft: 10,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#e6f7ff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    borderLeftWidth: 5,
+    borderColor: '#0a8fdf',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#4A5568',
+    lineHeight: 22,
   },
 });
 

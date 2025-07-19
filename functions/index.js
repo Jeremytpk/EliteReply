@@ -3,7 +3,7 @@
 // Import Firebase Functions and Admin SDK
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const admin = require('firebase-admin'); // <--- ADDED: import the admin object
+const admin = require('firebase-admin');
 
 // Correct v2 imports for Cloud Function triggers
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
@@ -13,7 +13,7 @@ const { Expo } = require('expo-server-sdk');
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
-  admin.initializeApp(); // Use admin.initializeApp() for the imported admin object
+  admin.initializeApp();
 }
 
 // Initialize Expo SDK
@@ -22,8 +22,8 @@ const expo = new Expo();
 const db = getFirestore(); // Get Firestore instance once globally
 
 // --- Custom Notification Sound Name ---
-const CUSTOM_SOUND_NAME = "er_notification"; // This name MUST match the one configured in app.json
-const ANDROID_NOTIFICATION_CHANNEL_ID = "er_notification_channel"; // <--- NEW: Define Android channel ID here
+const CUSTOM_SOUND_NAME = "er_notification";
+const ANDROID_NOTIFICATION_CHANNEL_ID = "er_notification_channel";
 
 
 // --- Cloud Function for New Messages ---
@@ -100,7 +100,7 @@ exports.onNewMessage = onDocumentCreated('tickets/{ticketId}/messages/{messageId
       ticketId: ticketId,
       link: `elitereply://app/conversation/${ticketId}`
     },
-    android: { // <--- ADDED: Specify Android channel
+    android: {
       channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
     },
   }];
@@ -165,7 +165,7 @@ exports.onNewSurvey = onDocumentCreated('surveys/{surveyId}', async (event) => {
           surveyId: surveyId,
           link: `elitereply://app/survey/${surveyId}`
         },
-        android: { // <--- ADDED: Specify Android channel
+        android: {
           channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
         },
       });
@@ -216,6 +216,7 @@ exports.sendAppointmentNotifications = onDocumentCreated('appointments/{appointm
     return null;
   }
 
+  // Ensure newAppointment.appointmentDateTime is a Timestamp object or has a seconds property
   const appointmentDate = new Date(newAppointment.appointmentDateTime.seconds * 1000);
   const formattedDateTime = appointmentDate.toLocaleDateString('fr-FR', {
       year: 'numeric',
@@ -235,17 +236,23 @@ exports.sendAppointmentNotifications = onDocumentCreated('appointments/{appointm
       const clientName = clientDoc.data().name || 'Client';
 
       if (Expo.isExpoPushToken(clientPushToken)) {
+        // Construct client names for notification if available
+        let clientNamesForNotification = (newAppointment.clientNames && newAppointment.clientNames.length > 0)
+            ? ` pour ${newAppointment.clientNames.join(', ')}`
+            : '';
+
         messagesToSend.push({
           to: clientPushToken,
           sound: CUSTOM_SOUND_NAME,
           title: 'Votre Rendez-vous Confirmé !',
-          body: `Votre rendez-vous avec ${newAppointment.partnerName || 'un partenaire'} est confirmé pour le ${formattedDateTime}.`,
+          // Use 'partnerNom' here for the partner's name
+          body: `Votre rendez-vous avec ${newAppointment.partnerNom || 'un partenaire'}${clientNamesForNotification} est confirmé pour le ${formattedDateTime}.`,
           data: {
             type: 'appointment_client_confirmed',
             appointmentId: appointmentId,
             link: `elitereply://app/appointments`,
           },
-          android: { // <--- ADDED: Specify Android channel
+          android: {
             channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
           },
         });
@@ -265,20 +272,24 @@ exports.sendAppointmentNotifications = onDocumentCreated('appointments/{appointm
     const partnerDoc = await db.collection('users').doc(newAppointment.partnerId).get();
     if (partnerDoc.exists && partnerDoc.data().expoPushToken) {
       const partnerPushToken = partnerDoc.data().expoPushToken;
-      const partnerName = partnerDoc.data().name || 'Partenaire';
+      const partnerName = partnerDoc.data().name || 'Partenaire'; // This is the user's display name, not partnerNom from appointment
 
       if (Expo.isExpoPushToken(partnerPushToken)) {
         messagesToSend.push({
           to: partnerPushToken,
           sound: CUSTOM_SOUND_NAME,
           title: 'Nouveau Rendez-vous Réservé !',
+          // Use 'clientName' for the client's name from appointment data
           body: `Un nouveau rendez-vous a été planifié avec ${newAppointment.clientName || 'un client'} pour le ${formattedDateTime}.`,
           data: {
             type: 'appointment_partner_new',
             appointmentId: appointmentId,
             link: `elitereply://app/partner/appointments`,
+            // Consider adding partnerNom and partnerCategorie if needed for context in app
+            partnerNom: newAppointment.partnerNom,
+            partnerCategorie: newAppointment.partnerCategorie
           },
-          android: { // <--- ADDED: Specify Android channel
+          android: {
             channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
           },
         });
@@ -348,7 +359,8 @@ exports.notifyNewTicketToAgents = onDocumentCreated('tickets/{ticketId}', async 
   }
 
   const notificationTitle = `Nouveau Ticket en Attente !`;
-  const notificationBody = `Un ticket de type "${newTicket.category || 'inconnu'}" de ${newTicket.userName || 'un utilisateur'} est en attente.`;
+  // Use 'categorie' here for the ticket category
+  const notificationBody = `Un ticket de type "${newTicket.categorie || 'inconnu'}" de ${newTicket.userName || 'un utilisateur'} est en attente.`;
 
   for (const doc of itAgentsSnapshot.docs) {
     const agentData = doc.data();
@@ -365,7 +377,7 @@ exports.notifyNewTicketToAgents = onDocumentCreated('tickets/{ticketId}', async 
           ticketId: ticketId,
           link: `elitereply://app/ticket/${ticketId}`
         },
-        android: { // <--- ADDED: Specify Android channel
+        android: {
           channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
         },
       });
@@ -437,7 +449,8 @@ exports.notifyEscalatedTicketToAgents = onDocumentUpdated('tickets/{ticketId}', 
   }
 
   const notificationTitle = `Jey a Escaladé un Ticket !`;
-  const notificationBody = `Le ticket "${afterData.category || 'inconnu'}" de ${afterData.userName || 'un utilisateur'} a été escaladé par Jey. Il nécessite une intervention humaine.`;
+  // Use 'categorie' here for the ticket category
+  const notificationBody = `Le ticket "${afterData.categorie || 'inconnu'}" de ${afterData.userName || 'un utilisateur'} a été escaladé par Jey. Il nécessite une intervention humaine.`;
 
   for (const doc of itAgentsSnapshot.docs) {
     const agentData = doc.data();
@@ -454,7 +467,7 @@ exports.notifyEscalatedTicketToAgents = onDocumentUpdated('tickets/{ticketId}', 
           ticketId: ticketId,
           link: `elitereply://app/ticket/${ticketId}`
         },
-        android: { // <--- ADDED: Specify Android channel
+        android: {
           channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
         },
       });

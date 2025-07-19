@@ -6,7 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  Image,
+  Image, // Make sure Image is imported
   RefreshControl,
   Animated,
   Easing,
@@ -26,7 +26,7 @@ import { db } from '../firebase';
 import *as Animatable from 'react-native-animatable';
 
 // Import the custom NotificationBanner component
-import NotificationBanner from './NotificationBanner'; // Make sure this path is correct
+//import NotificationBanner from './NotificationBanner'; // Make sure this path is correct
 
 const { width } = Dimensions.get('window');
 
@@ -67,6 +67,10 @@ const Dashboard = () => {
   const lastNotifiedSurveyId = useRef(null);
 
   const APP_LOGO = require('../assets/images/favicon.png');
+  // --- NEW: IMPORT YOUR CUSTOM ICONS HERE ---
+  const ASSISTANCE_ICON = require('../assets/icons/assistance.png');
+  const PROMO_ICON = require('../assets/icons/promos.png');
+  // --- END NEW IMPORTS ---
 
   const fetchUserData = async () => {
     try {
@@ -475,7 +479,7 @@ const Dashboard = () => {
       <TouchableOpacity
         key={item.id}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('News', { newsItem: item })}
+        onPress={() => navigation.navigate('NewsDetail', { newsItem: item })}
         style={[styles.slideContainer, { backgroundColor: bgColor }]}
       >
         <View style={styles.slideContent}>
@@ -516,7 +520,7 @@ const Dashboard = () => {
     );
   }
 
-  const greetingText = `Bonjour, ${userData?.name || userData?.email?.split('@')[0] || 'Client'} !`;
+  const greetingText = `Bonjour, ${userData?.name || userData?.email?.split('@')[0] || 'Client'}  !`;
 
   return (
     <View style={{ flex: 1 }}>
@@ -542,7 +546,7 @@ const Dashboard = () => {
                 style={styles.premiumIcon}
               />
             )}
-            <Text style={styles.helpText}>Comment pouvons-nous vous aider?</Text>
+            <Text style={styles.helpText}>Bienvenu(e) chez l'Elite du service client en Afrique.</Text>
           </View>
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
             {userData?.photoURL ? (
@@ -577,7 +581,7 @@ const Dashboard = () => {
         ) : (
           <View style={styles.emptySwiper}>
             <Ionicons name="images" size={40} color="#cbd5e1" />
-            <Text style={styles.emptySwiperText}>Aucune actualité disponible</Text>
+            <Text style={styles.emptySwiperText}>Aucune promotions disponible</Text>
           </View>
         )}
 
@@ -589,7 +593,9 @@ const Dashboard = () => {
               onPress={() => navigation.navigate('UserRequest')}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#ff6b6b' }]}>
-                <MaterialIcons name="headset" size={24} color="#fff" />
+                {/* --- MODIFIED: Use your custom image for Assistance --- */}
+                <Image source={ASSISTANCE_ICON} style={styles.customActionIcon} />
+                {/* --- END MODIFIED --- */}
               </View>
               <Text style={styles.actionText}>Assistance</Text>
             </TouchableOpacity>
@@ -599,9 +605,11 @@ const Dashboard = () => {
               onPress={() => navigation.navigate('News')}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#25c15b' }]}>
-                <MaterialCommunityIcons name="newspaper" size={24} color="#fff" />
+                {/* --- MODIFIED: Use your custom image for Promos --- */}
+                <Image source={PROMO_ICON} style={styles.customActionIcon} />
+                {/* --- END MODIFIED --- */}
               </View>
-              <Text style={styles.actionText}>Actualités</Text>
+              <Text style={styles.actionText}>Promos</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -701,7 +709,7 @@ const Dashboard = () => {
           )}
         </TouchableOpacity>
       </Animated.View>
-
+      {/*
       {showNotificationBanner && notificationType && (
         <NotificationBanner
           isVisible={showNotificationBanner}
@@ -714,6 +722,8 @@ const Dashboard = () => {
           type={notificationType}
         />
       )}
+
+      */}
 
       <Modal
         animationType="slide"
@@ -810,7 +820,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '600',
     color: '#1e293b',
     marginRight: 8,
@@ -942,6 +952,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  // --- NEW STYLE FOR CUSTOM IMAGE ICONS ---
+  customActionIcon: {
+    width: 28, // Adjust size as needed
+    height: 28, // Adjust size as needed
+    resizeMode: 'contain', // Ensures the image scales properly within the view
+    tintColor: '#fff', // This will make the icon white, matching the previous icons' color
+  },
+  // --- END NEW STYLE ---
   actionText: {
     fontSize: 14,
     fontWeight: '500',

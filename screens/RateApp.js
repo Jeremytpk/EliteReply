@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Alert, 
-  TextInput, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  TextInput,
   ScrollView,
   ActivityIndicator,
-  Image,
+  Image, // Make sure Image is imported
   Modal,
   FlatList
 } from 'react-native';
@@ -16,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
 import { doc, setDoc, addDoc, getDoc, getFirestore, serverTimestamp, collection, query, orderBy, limit, onSnapshot, where, getDocs, updateDoc } from 'firebase/firestore';
 import { app } from '../firebase';
+
+// Import the GIF asset directly
+import ReviewGif from '../assets/gif/review_anim.gif'; // Adjust path as needed
 
 const EvaluerService = ({ navigation }) => {
   const [note, setNote] = useState(0);
@@ -63,7 +66,7 @@ const EvaluerService = ({ navigation }) => {
       setEvaluationsRecentes(evaluations);
       setEvaluationsFiltrees(evaluations);
       setChargement(false);
-      
+
       getDocs(collection(db, 'evaluations')).then((snapshot) => {
         setTotalEvaluations(snapshot.size);
       });
@@ -77,7 +80,7 @@ const EvaluerService = ({ navigation }) => {
     if (recherche.trim() === '') {
       setEvaluationsFiltrees(evaluationsRecentes);
     } else {
-      const filtrees = evaluationsRecentes.filter(item => 
+      const filtrees = evaluationsRecentes.filter(item =>
         item.commentaire?.toLowerCase().includes(recherche.toLowerCase()) ||
         item.nomUtilisateur?.toLowerCase().includes(recherche.toLowerCase()) ||
         item.note.toString().includes(recherche)
@@ -129,10 +132,10 @@ const EvaluerService = ({ navigation }) => {
     }
 
     setEnvoiEnCours(true);
-    
+
     try {
       const utilisateur = auth.currentUser;
-      
+
       if (!utilisateur) {
         Alert.alert('Erreur', 'Vous devez être connecté pour évaluer notre service');
         navigation.navigate('Connexion');
@@ -159,7 +162,7 @@ const EvaluerService = ({ navigation }) => {
       await addDoc(collection(db, 'evaluations'), donneesEvaluation);
 
       Alert.alert(
-        'Merci!', 
+        'Merci!',
         'Votre évaluation a été enregistrée avec succès',
         [
           { text: 'OK', onPress: () => navigation.goBack() }
@@ -195,54 +198,53 @@ const EvaluerService = ({ navigation }) => {
   };
 
   const transfererEvaluation = async () => {
-  if (!partenaireSelectionne || !evaluationATransferer) return;
+    if (!partenaireSelectionne || !evaluationATransferer) return;
 
-  try {
-    // Vérifier si l'évaluation existe déjà chez le partenaire
-    const existingReview = await getDoc(
-      doc(db, 'partners', partenaireSelectionne.id, 'evaluations', evaluationATransferer.id)
-    );
+    try {
+      const existingReview = await getDoc(
+        doc(db, 'partners', partenaireSelectionne.id, 'evaluations', evaluationATransferer.id)
+      );
 
-    if (existingReview.exists()) {
-      Alert.alert("Attention", "Cette évaluation a déjà été transférée à ce partenaire");
-      return;
+      if (existingReview.exists()) {
+        Alert.alert("Attention", "Cette évaluation a déjà été transférée à ce partenaire");
+        return;
+      }
+
+      await setDoc(
+        doc(db, 'partners', partenaireSelectionne.id, 'evaluations', evaluationATransferer.id),
+        {
+          ...evaluationATransferer,
+          partnerId: partenaireSelectionne.id,
+          transferredAt: serverTimestamp(),
+          transferredBy: auth.currentUser.uid,
+          originalEvaluationId: evaluationATransferer.id
+        }
+      );
+
+      await updateDoc(
+        doc(db, 'evaluations', evaluationATransferer.id),
+        {
+          partnerId: partenaireSelectionne.id,
+          isTransferred: true,
+          transferredAt: serverTimestamp()
+        }
+      );
+
+      Alert.alert("Succès", `Évaluation transférée à ${partenaireSelectionne.name}`);
+      setModalVisible(false);
+      setPartenaireSelectionne(null);
+      setEvaluationATransferer(null);
+
+    } catch (error) {
+      console.error("Erreur de transfert:", error);
+      Alert.alert(
+        "Erreur",
+        error.code === 'failed-precondition'
+          ? "Configuration Firestore manquante. Contactez le support."
+          : "Échec du transfert de l'évaluation"
+      );
     }
-
-    // Ajouter à la sous-collection du partenaire
-    await setDoc(
-      doc(db, 'partners', partenaireSelectionne.id, 'evaluations', evaluationATransferer.id),
-      {
-        ...evaluationATransferer,
-        partnerId: partenaireSelectionne.id,
-        transferredAt: serverTimestamp(),
-        transferredBy: auth.currentUser.uid,
-        originalEvaluationId: evaluationATransferer.id
-      }
-    );
-
-    // Mettre à jour l'original
-    await updateDoc(
-      doc(db, 'evaluations', evaluationATransferer.id),
-      {
-        partnerId: partenaireSelectionne.id,
-        isTransferred: true,
-        transferredAt: serverTimestamp()
-      }
-    );
-
-    Alert.alert("Succès", `Évaluation transférée à ${partenaireSelectionne.name}`);
-    setModalVisible(false);
-    
-  } catch (error) {
-    console.error("Erreur de transfert:", error);
-    Alert.alert(
-      "Erreur", 
-      error.code === 'failed-precondition'
-        ? "Configuration Firestore manquante. Contactez le support."
-        : "Échec du transfert de l'évaluation"
-    );
-  }
-};
+  };
 
   const partenairesFiltres = partenaires.filter(partenaire =>
     partenaire.name.toLowerCase().includes(recherchePartenaire.toLowerCase())
@@ -251,9 +253,25 @@ const EvaluerService = ({ navigation }) => {
   return (
     <View style={styles.conteneur}>
       <ScrollView style={styles.scrollConteneur}>
+        {/* GIF Animation */}
+        <View style={styles.animationContainer}>
+          <Image source={ReviewGif} style={styles.reviewAnimation} />
+        </View>
+
         <Text style={styles.titreSection}>Évaluations récentes ({totalEvaluations} au total)</Text>
+        {/*
+        <View style={styles.searchBarContainer}>
+          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher des évaluations..."
+            value={recherche}
+            onChangeText={setRecherche}
+          />
+        </View>
+          */}
         {chargement ? (
-          <ActivityIndicator size="small" color="#34C759" style={styles.indicateurChargement} />
+          <ActivityIndicator size="large" color="#34C759" style={styles.indicateurChargement} />
         ) : evaluationsFiltrees.length === 0 ? (
           <Text style={styles.aucuneEvaluation}>Aucune évaluation trouvée</Text>
         ) : (
@@ -270,7 +288,7 @@ const EvaluerService = ({ navigation }) => {
                   )}
                   <Text style={styles.nomUtilisateur}>{item.nomUtilisateur}</Text>
                   {(userData?.isAdmin || userData?.isITSupport) && (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.transferButton}
                       onPress={() => ouvrirModalTransfert(item)}
                     >
@@ -339,6 +357,7 @@ const EvaluerService = ({ navigation }) => {
         </View>
       </ScrollView>
 
+      {/* Transfer Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -348,7 +367,7 @@ const EvaluerService = ({ navigation }) => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Transférer l'évaluation</Text>
-            
+
             <View style={styles.searchBarContainer}>
               <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
               <TextInput
@@ -384,7 +403,10 @@ const EvaluerService = ({ navigation }) => {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setPartenaireSelectionne(null);
+                }}
               >
                 <Text style={styles.modalButtonText}>Annuler</Text>
               </TouchableOpacity>
@@ -406,13 +428,37 @@ const EvaluerService = ({ navigation }) => {
 const styles = StyleSheet.create({
   conteneur: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    //bottom: 60
+    backgroundColor: '#F0F2F5',
   },
   scrollConteneur: {
     flex: 1,
-    paddingTop: 60,
-    paddingHorizontal: 20,
+    paddingTop: 30,
+    paddingHorizontal: 15,
+  },
+  animationContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  reviewAnimation: {
+    width: 250, // Set desired width for your GIF
+    height: 250, // Set desired height for your GIF
+    resizeMode: 'contain', // Or 'cover', 'stretch' depending on your GIF
+    alignSelf: 'center',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   searchIcon: {
     marginRight: 10,
@@ -425,210 +471,243 @@ const styles = StyleSheet.create({
   transferButton: {
     marginLeft: 'auto',
     padding: 5,
+    borderRadius: 5,
   },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   modalContent: {
     backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 15,
+    padding: 25,
     width: '90%',
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 20,
     textAlign: 'center',
     color: '#333',
   },
   partnerList: {
-    maxHeight: 200,
-    marginBottom: 15,
+    maxHeight: 250,
+    marginBottom: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   partnerItem: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
   },
   selectedPartnerItem: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#E6F3FF',
+    borderColor: '#3498DB',
+    borderWidth: 1,
   },
   partnerName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#333',
   },
   partnerEmail: {
     fontSize: 14,
-    color: '#666',
+    color: '#777',
     marginTop: 5,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    justifyContent: 'space-around',
+    marginTop: 15,
   },
   modalButton: {
-    padding: 12,
-    borderRadius: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 5,
+    marginHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   cancelButton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#A0A0A0',
   },
   confirmButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#28A745',
   },
   disabledButton: {
-    backgroundColor: '#A5D6A7',
+    backgroundColor: '#C8E6C9',
   },
   modalButtonText: {
     color: '#FFF',
-    fontWeight: '600',
-  },
-  boutonRetour: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 1,
+    fontWeight: '700',
+    fontSize: 16,
   },
   titreSection: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2C3E50',
     marginBottom: 15,
-    marginTop: 10,
+    textAlign: 'center',
   },
   indicateurChargement: {
-    marginVertical: 20,
+    marginVertical: 30,
   },
   aucuneEvaluation: {
-    color: '#666',
+    color: '#777',
     textAlign: 'center',
-    marginVertical: 20,
+    marginVertical: 30,
+    fontSize: 16,
   },
   listeEvaluations: {
-    marginBottom: 30,
+    marginBottom: 40,
   },
   itemEvaluation: {
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 5,
+    elevation: 4,
+    borderLeftWidth: 5,
+    borderLeftColor: '#34C759',
   },
   infoUtilisateur: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   avatarParDefaut: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   nomUtilisateur: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#333',
   },
   conteneurEtoiles: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   commentaireUtilisateur: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#555',
-    lineHeight: 20,
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 10,
   },
   dateEvaluation: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#999',
+    textAlign: 'right',
   },
   formulaireEvaluation: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 30,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 25,
+    marginBottom: 50,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
   },
   titre: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#2C3E50',
+    marginBottom: 10,
     textAlign: 'center',
   },
   sousTitre: {
     fontSize: 16,
-    color: '#666',
+    color: '#777',
     marginBottom: 30,
     textAlign: 'center',
+    lineHeight: 22,
   },
   conteneurNote: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
   },
   texteNote: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#555',
-    marginBottom: 30,
+    marginBottom: 35,
     textAlign: 'center',
+    fontWeight: '500',
   },
   champCommentaire: {
     width: '100%',
-    minHeight: 120,
-    backgroundColor: '#FAFAFA',
+    minHeight: 100,
+    backgroundColor: '#F9F9F9',
     borderWidth: 1,
-    borderColor: '#EEE',
+    borderColor: '#E0E0E0',
     borderRadius: 10,
     padding: 15,
-    marginBottom: 30,
+    marginBottom: 35,
     fontSize: 16,
     textAlign: 'left',
+    color: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   boutonSoumettre: {
     backgroundColor: '#34C759',
-    paddingVertical: 15,
-    borderRadius: 25,
-    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 30,
+    width: '90%',
+    alignSelf: 'center',
     alignItems: 'center',
-    marginBottom: 40
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
   },
   boutonDesactive: {
     backgroundColor: '#A5D6A7',
+    opacity: 0.7,
   },
   texteBouton: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });
 

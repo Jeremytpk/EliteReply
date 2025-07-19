@@ -49,7 +49,7 @@ const CreateSurveyScreen = ({ navigation }) => {
   const [expiryDate, setExpiryDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [sponsoredBy, setSponsoredBy] = useState(''); // Stores partnerId
-  const [sponsoredByName, setSponsoredByName] = useState(''); // Stores partnerName for display
+  const [sponsoredByName, setSponsoredByName] = useState(''); // Stores partner 'nom' for display
 
   // Partners List for Selection
   const [partners, setPartners] = useState([]);
@@ -71,8 +71,21 @@ const CreateSurveyScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const businessCategories = [
-    'restaurant', 'boutique', 'service', 'divertissement', 'autre'
-  ];
+  { id: 'airBnB', name: 'AirBnB', icon: 'night-shelter' },
+  { id: 'autre', name: 'Autres', icon: 'help' },
+  { id: 'events', name: 'Events', icon: 'event' },
+  { id: 'salon de coiffure', name: 'Salon de Coiffure', icon: 'content-cut' },
+  { id: 'media', name: 'Media', icon: 'movie' },
+  { id: 'technologie', name: 'Technologie', icon: 'devices' },
+  { id: 'nails', name: 'Ongles', icon: 'back-hand' },
+  { id: 'restaurants', name: 'Restaurants', icon: 'restaurant' },
+  { id: 'sante', name: 'Santé', icon: 'local-hospital' },
+  { id: 'spa', name: 'Spa', icon: 'spa' },
+  { id: 'stores', name: 'Shopping', icon: 'shopping-cart' },
+  { id: 'transport', name: 'Transport', icon: 'directions-bus' },
+  { id: 'voyage', name: 'Voyage', icon: 'flight' },
+  { id: 'justice', name: 'Justice', icon: 'balance' },
+].sort((a, b) => a.name.localeCompare(b.name));
 
   const discountTypes = [
     { label: 'Pourcentage (%)', value: 'percentage' },
@@ -85,15 +98,20 @@ const CreateSurveyScreen = ({ navigation }) => {
     { label: 'Échelle de notation (1-5)', value: 'rating' }
   ];
 
-  // --- NEW: Fetch Partners on component mount ---
+  // Fetch Partners on component mount
   useEffect(() => {
     const fetchPartners = async () => {
       setPartnersLoading(true);
       try {
-        const q = query(collection(db, 'partners'), fbOrderBy('name')); // Assuming a 'name' field in partners
+        // Query partners, ordering by 'nom' (name) for a sorted list
+        const q = query(collection(db, 'partners'), fbOrderBy('nom'));
         const querySnapshot = await getDocs(q);
-        // Store both id and name
-        const fetchedPartners = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+        // Store id, 'nom', and 'categorie' for selection and display
+        const fetchedPartners = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            nom: doc.data().nom, // Using 'nom' from Firestore
+            categorie: doc.data().categorie // Using 'categorie' from Firestore
+        }));
         setPartners(fetchedPartners);
         setFilteredPartners(fetchedPartners); // Initially, filtered list is all partners
       } catch (error) {
@@ -106,29 +124,31 @@ const CreateSurveyScreen = ({ navigation }) => {
     fetchPartners();
   }, []);
 
-  // --- NEW: Filter partners based on search query ---
+  // Filter partners based on search query
   useEffect(() => {
     if (searchPartnerQuery.trim() === '') {
       setFilteredPartners(partners);
     } else {
       setFilteredPartners(
         partners.filter(partner =>
-          partner.name.toLowerCase().includes(searchPartnerQuery.toLowerCase())
+          // Filter using 'nom' (name) field
+          partner.nom.toLowerCase().includes(searchPartnerQuery.toLowerCase())
         )
       );
     }
   }, [searchPartnerQuery, partners]);
 
-  // --- NEW: Handle Partner Selection ---
-  const selectPartner = (partnerId, partnerName) => {
-    setSponsoredBy(partnerId); // Store the ID
-    setSponsoredByName(partnerName); // Store the name for display
-    setPartnerModalVisible(false);
-    setSearchPartnerQuery(''); // Clear search query when modal closes
+  // Handle Partner Selection
+  const selectPartner = (partnerId, partnerNom, partnerCategorie) => {
+    setSponsoredBy(partnerId); // Store the partner's ID
+    setSponsoredByName(partnerNom); // Store the partner's 'nom' for display
+    // If you need to store or display the category in the main form,
+    // you would add a state for it, e.g., setSponsoredByCategory(partnerCategorie);
+    setPartnerModalVisible(false); // Close the modal
+    setSearchPartnerQuery(''); // Clear search query when modal closes for next open
   };
-  // --- END NEW ---
 
-  // --- Question Modal Logic (existing, no changes) ---
+  // Question Modal Logic
   const openAddQuestionModal = () => {
     setCurrentQuestion(null);
     setQText('');
@@ -213,7 +233,7 @@ const CreateSurveyScreen = ({ navigation }) => {
     );
   };
 
-  // --- Date Picker Logic (existing, no changes) ---
+  // Date Picker Logic
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
     if (selectedDate) {
@@ -221,17 +241,17 @@ const CreateSurveyScreen = ({ navigation }) => {
     }
   };
 
-  const formatDate = (date) => {
+  const formatDateDisplay = (date) => {
     return date.toLocaleDateString('fr-FR');
   };
 
-  // --- Survey Validation & Creation (existing logic, updated for sponsor) ---
+  // Survey Validation & Creation
   const validateSurvey = () => {
     if (!title.trim() || !description.trim()) {
       Alert.alert('Champs obligatoires', 'Veuillez remplir tous les champs principaux de l\'enquête (Titre, Description).');
       return false;
     }
-    // NEW: Explicitly check if sponsoredBy (ID) is selected/filled
+    // Explicitly check if sponsoredBy (ID) is selected/filled
     if (!sponsoredBy.trim()) {
       Alert.alert('Champs obligatoires', 'Veuillez sélectionner un sponsor pour l\'enquête.');
       return false;
@@ -295,18 +315,20 @@ const CreateSurveyScreen = ({ navigation }) => {
           description: couponDescription.trim(),
           type: discountType,
           value: parseFloat(discountValue),
-          expiryDate: expiryDate.toISOString(),
-          sponsor: sponsoredBy.trim(), // Use the selected partner ID
-          sponsorName: sponsoredByName.trim(), // Store partner name for easy display
+          expiryDate: expiryDate.toISOString(), // Store as ISO string for Firebase Timestamp conversion
+          sponsor: sponsoredBy.trim(),      // This is the partner ID (e.g., R03TjjqHqBfs...)
+          sponsorName: sponsoredByName.trim(), // This is the 'nom' (e.g., "Jerttech")
+          // Get the 'categorie' from the currently selected partner in the 'partners' state
+          sponsorCategory: partners.find(p => p.id === sponsoredBy)?.categorie || '', // Store 'categorie'
         },
-        active: true,
-        createdAt: serverTimestamp(),
+        active: true, // Survey is active upon creation
+        createdAt: serverTimestamp(), // Firestore server timestamp
         responsesCount: 0,
-        completedByUsers: [],
+        completedByUsers: [], // Initialize as empty array
         cardColor: assignedColor,
       });
       Alert.alert('Succès', 'Enquête créée avec succès');
-      navigation.goBack();
+      navigation.goBack(); // Navigate back after successful creation
     } catch (error) {
       console.error("Error creating survey:", error);
       Alert.alert('Erreur', 'Une erreur est survenue lors de la création de l\'enquête: ' + error.message);
@@ -345,17 +367,21 @@ const CreateSurveyScreen = ({ navigation }) => {
           />
 
           <Text style={styles.label}>Catégorie d'entreprise *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={businessCategory}
-              onValueChange={(itemValue) => setBusinessCategory(itemValue)}
-              style={styles.picker}
-            >
-              {businessCategories.map((category, index) => (
-                <Picker.Item key={index} label={category.charAt(0).toUpperCase() + category.slice(1)} value={category} />
-              ))}
-            </Picker>
-          </View>
+<View style={styles.pickerContainer}>
+  <Picker
+    selectedValue={businessCategory}
+    onValueChange={(itemValue) => setBusinessCategory(itemValue)}
+    style={styles.picker}
+  >
+    {businessCategories.map((category) => ( // 'category' is an object here
+      <Picker.Item
+        key={category.id} // Use category.id for the key
+        label={category.name} // Use category.name for the display label
+        value={category.id} // Use category.id for the value
+      />
+    ))}
+  </Picker>
+</View>
 
           <Text style={styles.label}>Durée estimée (minutes)</Text>
           <TextInput
@@ -458,7 +484,7 @@ const CreateSurveyScreen = ({ navigation }) => {
             style={[styles.input, styles.datePickerButton]}
             onPress={() => setShowDatePicker(true)}
           >
-            <Text style={styles.datePickerText}>{formatDate(expiryDate)}</Text>
+            <Text style={styles.datePickerText}>{formatDateDisplay(expiryDate)}</Text>
             <Ionicons name="calendar-outline" size={20} color="#6B7280" />
           </TouchableOpacity>
 
@@ -468,11 +494,11 @@ const CreateSurveyScreen = ({ navigation }) => {
               mode="date"
               display="default"
               onChange={handleDateChange}
-              minimumDate={new Date()}
+              minimumDate={new Date()} // Prevent setting past dates
             />
           )}
 
-          {/* NEW: Sponsor selection */}
+          {/* Sponsor selection */}
           <Text style={styles.label}>Sponsorisé par *</Text>
           <TouchableOpacity
             style={[styles.input, styles.sponsorSelectButton]}
@@ -501,7 +527,7 @@ const CreateSurveyScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
 
-        {/* Question Creation/Edit Modal (existing, no changes) */}
+        {/* Question Creation/Edit Modal */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -532,7 +558,7 @@ const CreateSurveyScreen = ({ navigation }) => {
                   onValueChange={(itemValue) => {
                     setQType(itemValue);
                     if (itemValue !== 'single-choice') {
-                      setQOptions([{ id: generateUniqueId(), text: '' }]);
+                      setQOptions([{ id: generateUniqueId(), text: '' }]); // Reset options if not single-choice
                     }
                   }}
                   style={styles.picker}
@@ -592,12 +618,15 @@ const CreateSurveyScreen = ({ navigation }) => {
           </KeyboardAvoidingView>
         </Modal>
 
-        {/* NEW: Partner Selection Modal */}
+        {/* Partner Selection Modal */}
         <Modal
           animationType="slide"
           transparent={true}
           visible={isPartnerModalVisible}
-          onRequestClose={() => setPartnerModalVisible(false)}
+          onRequestClose={() => {
+            setPartnerModalVisible(false);
+            setSearchPartnerQuery(''); // Clear search on close
+          }}
         >
           <KeyboardAvoidingView
             style={styles.modalOverlay}
@@ -621,9 +650,12 @@ const CreateSurveyScreen = ({ navigation }) => {
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={styles.partnerListItem}
-                      onPress={() => selectPartner(item.id, item.name)} // Pass both ID and name
+                      // Pass both 'nom' and 'categorie' to selectPartner
+                      onPress={() => selectPartner(item.id, item.nom, item.categorie)}
                     >
-                      <Text style={styles.partnerListItemText}>{item.name}</Text>
+                      <Text style={styles.partnerListItemText}>
+                        {item.nom} (Catégorie: {item.categorie}) {/* Display 'nom' and 'categorie' */}
+                      </Text>
                     </TouchableOpacity>
                   )}
                   ListEmptyComponent={
@@ -635,7 +667,7 @@ const CreateSurveyScreen = ({ navigation }) => {
                 style={[styles.modalButton, styles.cancelButton, { marginTop: 20 }]}
                 onPress={() => {
                   setPartnerModalVisible(false);
-                  setSearchPartnerQuery('');
+                  setSearchPartnerQuery(''); // Clear search query when modal closes
                 }}
               >
                 <Text style={styles.modalButtonText}>Fermer</Text>
@@ -643,7 +675,6 @@ const CreateSurveyScreen = ({ navigation }) => {
             </View>
           </KeyboardAvoidingView>
         </Modal>
-        {/* END NEW */}
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -706,11 +737,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 8,
     marginBottom: 15,
-    overflow: 'hidden',
+    overflow: 'hidden', // Ensures picker content stays within bounds
     justifyContent: 'center',
   },
   picker: {
-    height: 50,
+    height: 50, // Standard height for pickers
     width: '100%',
     color: '#2D3748',
   },
@@ -727,8 +758,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
-    top: 25,
-    right: 60
+    top: 25, // Adjust positioning to align with card title
+    right: 60, // Adjust positioning
   },
   addButtonText: {
     color: '#0a8fdf',
@@ -831,13 +862,14 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 25,
     width: '90%',
-    maxHeight: '85%',
+    maxHeight: '85%', // Limit height to prevent overflow on smaller screens
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 8,
-    height: 400
+    // Dynamic height based on content or fixed if preferred, currently fixed from previous code
+    // Consider using 'flex: 1' inside KeyboardAvoidingView for better modal sizing
   },
   modalTitle: {
     fontSize: 22,
@@ -866,7 +898,7 @@ const styles = StyleSheet.create({
   optionInput: {
     flex: 1,
     marginRight: 10,
-    marginBottom: 0,
+    marginBottom: 0, // Override default input marginBottom
   },
   deleteButton: {
     padding: 5,
@@ -910,10 +942,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     color: '#0a8fdf',
-    flexShrink: 1,
-  },
-  keyboardAvoidingContainer: {
-    flex: 1,
+    flexShrink: 1, // Allow text to wrap
   },
   // NEW STYLES FOR PARTNER MODAL
   sponsorSelectButton: {

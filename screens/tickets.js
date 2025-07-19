@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,9 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Added MaterialCommunityIcons for checkbox
 import { db } from '../firebase';
-import { collection, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore'; // Added writeBatch
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -22,6 +22,9 @@ const TerminatedTickets = ({ navigation }) => {
   const [currentCollectionTickets, setCurrentCollectionTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('terminated');
+
+  const [selectedTickets, setSelectedTickets] = useState(new Set()); // State to hold selected ticket IDs
+  const [isSelectMode, setIsSelectMode] = useState(false); // New state to toggle select mode
 
   const [showCurrentTicketsOverviewModal, setShowCurrentTicketsOverviewModal] = useState(false);
   const [currentTicketsDetailedCounts, setCurrentTicketsDetailedCounts] = useState({
@@ -44,38 +47,42 @@ const TerminatedTickets = ({ navigation }) => {
   const [modalCurrentPageIndex, setModalCurrentPageIndex] = useState(0);
   const scrollViewRef = useRef(null);
 
+  // Memoized function to fetch tickets to prevent unnecessary re-creation
+  const fetchAndSeparateTickets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const terminatedSnapshot = await getDocs(collection(db, 'terminatedTickets'));
+      const terminatedData = terminatedSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        source: 'terminated',
+        createdAt: doc.data().createdAt?.toDate(),
+      }));
+      setTerminatedCollectionTickets(terminatedData);
+
+      const currentTicketsSnapshot = await getDocs(collection(db, 'tickets'));
+      const currentData = currentTicketsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        source: 'current',
+        createdAt: doc.data().createdAt?.toDate(),
+      }));
+      setCurrentCollectionTickets(currentData);
+
+      setSelectedTickets(new Set()); // Clear selection on data reload
+      setIsSelectMode(false); // Exit select mode on data reload
+
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+      Alert.alert("Error", "Failed to load tickets.");
+    } finally {
+      setLoading(false);
+    }
+  }, []); // No dependencies for this useCallback as it's a fetch action
+
   useEffect(() => {
-    const fetchAndSeparateTickets = async () => {
-      setLoading(true);
-      try {
-        const terminatedSnapshot = await getDocs(collection(db, 'terminatedTickets'));
-        const terminatedData = terminatedSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          source: 'terminated',
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
-        setTerminatedCollectionTickets(terminatedData);
-
-        const currentTicketsSnapshot = await getDocs(collection(db, 'tickets'));
-        const currentData = currentTicketsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          source: 'current',
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
-        setCurrentCollectionTickets(currentData);
-
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-        Alert.alert("Error", "Failed to load tickets.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAndSeparateTickets();
-  }, []);
+  }, [fetchAndSeparateTickets]); // Depend on the memoized fetch function
 
   const fetchCurrentTicketsDetailedCounts = async () => {
     try {
@@ -101,7 +108,8 @@ const TerminatedTickets = ({ navigation }) => {
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       const usersRef = collection(db, 'users');
-      const agentsQuery = query(usersRef, where('isITSupport', '==', true));
+      // Assuming 'isITSupport' is the field to identify agents
+      const agentsQuery = query(usersRef, where('role', '==', 'IT')); // Changed to 'role' == 'IT' as per ITDashboard.js
       const agentsSnapshot = await getDocs(agentsQuery);
       const agents = agentsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name || 'Unknown Agent' }));
 
@@ -132,28 +140,29 @@ const TerminatedTickets = ({ navigation }) => {
           return;
         }
 
-        total++;
+        total++; // Count only non-terminated tickets for overall active total
 
         if (isToday) {
           todayTotal++;
         }
 
-        if (ticket.status === 'pending') {
+        if (ticket.status === 'nouveau' || ticket.status === 'escalated_to_agent') { // 'pending' status is now 'nouveau' or 'escalated_to_agent'
           pending++;
           if (isToday && isAssigned) agentTodayScores[ticket.assignedTo].pending++;
-        } else if (ticket.status === 'completed' || ticket.status === 'resolved') {
+        } else if (ticket.status === 'terminé' || ticket.status === 'résolu') { // 'completed' or 'resolved' is 'terminé' or 'résolu'
           completed++;
           if (isToday && isAssigned) agentTodayScores[ticket.assignedTo].completed++;
         } else if (ticket.status === 'jey-handling') {
           jeyHandling++;
           if (isToday) {
-            todayInProgress++;
+            todayInProgress++; // Jey-handling tickets are "in progress" by Jey
             todayJeyHandling++;
           }
-          if (isAssigned) {
-              agentHandlingCounts[ticket.assignedTo].count++;
-              if (isToday) agentTodayScores[ticket.assignedTo].inProgress++;
-          }
+          // Jey-handling tickets are not counted towards agent's individual inProgress count unless assigned
+          // if (isAssigned) {
+          //     agentHandlingCounts[ticket.assignedTo].count++;
+          //     if (isToday) agentTodayScores[ticket.assignedTo].inProgress++;
+          // }
         } else if (ticket.status === 'in-progress') {
           if (isToday) {
             todayInProgress++;
@@ -162,6 +171,8 @@ const TerminatedTickets = ({ navigation }) => {
               agentHandlingCounts[ticket.assignedTo].count++;
               if (isToday) agentTodayScores[ticket.assignedTo].inProgress++;
           } else {
+            // This 'else' path for 'otherAgentHandling' might be tricky if tickets are always assigned
+            // Consider if this state is truly possible or indicates an unassigned in-progress ticket
             otherAgentHandling++;
           }
         }
@@ -170,14 +181,19 @@ const TerminatedTickets = ({ navigation }) => {
         }
       });
 
+      // Filter out agents with no active tickets for display in modal
+      const filteredAgentHandlingCounts = Object.fromEntries(
+        Object.entries(agentHandlingCounts).filter(([key, value]) => value.count > 0)
+      );
+
       setCurrentTicketsDetailedCounts({
         total,
-        pending,
+        pending, // This is 'nouveau' + 'escalated_to_agent'
         jeyHandling,
-        otherAgentHandling,
-        completed,
-        terminatedInCurrent,
-        agentHandlingCounts,
+        otherAgentHandling, // Potentially unassigned 'in-progress'
+        completed, // This is 'terminé' (from current collection) + 'résolu'
+        terminatedInCurrent, // Count of 'terminated' tickets found in the 'tickets' collection
+        agentHandlingCounts: filteredAgentHandlingCounts, // Only show agents with tickets
         today: {
           total: todayTotal,
           terminated: todayTerminated,
@@ -194,12 +210,39 @@ const TerminatedTickets = ({ navigation }) => {
 
   useEffect(() => {
     fetchCurrentTicketsDetailedCounts();
-  }, [currentCollectionTickets]);
+  }, [currentCollectionTickets]); // Re-fetch counts when current collection tickets change
 
-  const handleDeleteTicket = async (ticketId, sourceCollection) => {
+  const toggleSelectTicket = (ticketId) => {
+    setSelectedTickets(prevSelected => {
+      const newSelected = new Set(prevSelected);
+      if (newSelected.has(ticketId)) {
+        newSelected.delete(ticketId);
+      } else {
+        newSelected.add(ticketId);
+      }
+      return newSelected;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const displayed = activeTab === 'terminated' ? terminatedCollectionTickets : currentCollectionTickets;
+    if (selectedTickets.size === displayed.length) {
+      setSelectedTickets(new Set()); // Deselect all
+    } else {
+      const allIds = new Set(displayed.map(t => t.id));
+      setSelectedTickets(allIds); // Select all
+    }
+  };
+
+  const handleDeleteSelectedTickets = async () => {
+    if (selectedTickets.size === 0) {
+      Alert.alert("No Tickets Selected", "Please select tickets to delete.");
+      return;
+    }
+
     Alert.alert(
       "Confirm Deletion",
-      "Are you sure you want to delete this ticket? This action is irreversible.",
+      `Are you sure you want to delete ${selectedTickets.size} ticket(s)? This action is irreversible.`,
       [
         {
           text: "Cancel",
@@ -208,29 +251,33 @@ const TerminatedTickets = ({ navigation }) => {
         {
           text: "Delete",
           onPress: async () => {
+            setLoading(true);
             try {
-              let collectionName;
-              if (sourceCollection === 'terminated') {
-                collectionName = 'terminatedTickets';
-              } else if (sourceCollection === 'current') {
-                collectionName = 'tickets';
-              } else {
-                console.error("Unknown source collection for deletion:", sourceCollection);
-                Alert.alert("Error", "Could not determine collection for deletion.");
-                return;
-              }
+              const batch = writeBatch(db);
+              const collectionName = activeTab === 'terminated' ? 'terminatedTickets' : 'tickets';
+              
+              selectedTickets.forEach(ticketId => {
+                const docRef = doc(db, collectionName, ticketId);
+                batch.delete(docRef);
+              });
+              await batch.commit();
 
-              await deleteDoc(doc(db, collectionName, ticketId));
-              if (sourceCollection === 'terminated') {
-                setTerminatedCollectionTickets(prev => prev.filter(t => t.id !== ticketId));
+              // Update local state after successful deletion
+              if (activeTab === 'terminated') {
+                setTerminatedCollectionTickets(prev => prev.filter(t => !selectedTickets.has(t.id)));
               } else {
-                setCurrentCollectionTickets(prev => prev.filter(t => t.id !== ticketId));
-                fetchCurrentTicketsDetailedCounts();
+                setCurrentCollectionTickets(prev => prev.filter(t => !selectedTickets.has(t.id)));
+                // Re-fetch detailed counts as current collection has changed
+                fetchCurrentTicketsDetailedCounts(); 
               }
-              Alert.alert("Success", "Ticket deleted successfully");
+              setSelectedTickets(new Set()); // Clear selection
+              setIsSelectMode(false); // Exit select mode
+              Alert.alert("Success", `${selectedTickets.size} ticket(s) deleted successfully`);
             } catch (error) {
-              console.error("Error deleting ticket:", error);
-              Alert.alert("Error", "Failed to delete ticket");
+              console.error("Error deleting selected tickets:", error);
+              Alert.alert("Error", "Failed to delete selected tickets");
+            } finally {
+              setLoading(false);
             }
           }
         }
@@ -238,54 +285,82 @@ const TerminatedTickets = ({ navigation }) => {
     );
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.ticketItem}
-      onPress={() => navigation.navigate('TicketInfo', { ticketId: item.id, sourceCollection: item.source })}
-    >
-      <View style={styles.ticketHeader}>
-        <Text style={styles.ticketTitle}>{item.category || 'N/A'}</Text>
-        <Text style={[
-          styles.ticketStatus,
-          item.status === 'terminated' && styles.statusTerminated,
-          item.status === 'pending' && styles.statusPending,
-          item.status === 'in-progress' && styles.statusInProgress,
-          item.status === 'completed' && styles.statusCompleted,
-          item.status === 'resolved' && styles.statusCompleted,
-          item.status === 'jey-handling' && styles.statusJeyHandling,
-          !item.status && styles.statusDefault
-        ]}>
-          {item.status || 'Unknown'}
-        </Text>
-      </View>
-      <Text style={styles.ticketDescription}>{item.message || 'No description available.'}</Text>
-      <Text style={styles.ticketUser}>User: {item.userName || 'Unknown'}</Text>
-
-      {item.assignedToName && (
-        <Text style={styles.ticketAgent}>Assigned To: {item.assignedToName}</Text>
-      )}
-
-      {item.participants && item.participants.length > 0 && (
-        <Text style={styles.ticketParticipants}>
-          Participants: {item.participants.join(', ')}
-        </Text>
-      )}
-
+  const renderItem = ({ item }) => {
+    const isSelected = selectedTickets.has(item.id);
+    return (
       <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDeleteTicket(item.id, item.source)}
+        style={[styles.ticketItem, isSelected && styles.selectedTicketItem]}
+        onPress={() => isSelectMode ? toggleSelectTicket(item.id) : navigation.navigate('TicketInfo', { ticketId: item.id, sourceCollection: item.source })}
+        onLongPress={() => setIsSelectMode(true)} // Enter select mode on long press
       >
-        <Ionicons name="trash-outline" size={20} color="#fff" />
-        <Text style={styles.buttonText}>Delete</Text>
+        {isSelectMode && (
+          <TouchableOpacity onPress={() => toggleSelectTicket(item.id)} style={styles.checkboxContainer}>
+            <MaterialCommunityIcons
+              name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+              size={24}
+              color={isSelected ? '#0a8fdf' : '#ccc'}
+            />
+          </TouchableOpacity>
+        )}
+        <View style={styles.ticketContent}>
+          <View style={styles.ticketHeader}>
+            <Text style={styles.ticketTitle}>{item.category || 'N/A'}</Text>
+            <Text style={[
+              styles.ticketStatus,
+              item.status === 'terminated' && styles.statusTerminated,
+              item.status === 'nouveau' && styles.statusPending, // 'pending' changed to 'nouveau'
+              item.status === 'in-progress' && styles.statusInProgress,
+              (item.status === 'terminé' || item.status === 'résolu') && styles.statusCompleted, // 'completed' changed to 'terminé' or 'résolu'
+              item.status === 'jey-handling' && styles.statusJeyHandling,
+              item.status === 'escalated_to_agent' && styles.statusPending, // Add style for escalated
+              !item.status && styles.statusDefault
+            ]}>
+              {item.status || 'Unknown'}
+            </Text>
+          </View>
+          <Text style={styles.ticketDescription}>{item.message || 'No description available.'}</Text>
+          <Text style={styles.ticketUser}>User: {item.userName || 'Unknown'}</Text>
+
+          {item.assignedToName && (
+            <Text style={styles.ticketAgent}>Assigned To: {item.assignedToName}</Text>
+          )}
+
+          {item.participants && item.participants.length > 0 && (
+            <Text style={styles.ticketParticipants}>
+              Participants: {item.participantNames ? item.participantNames.join(', ') : item.participants.join(', ')} {/* Use participantNames if available */}
+            </Text>
+          )}
+        </View>
+
+        {!isSelectMode && ( // Only show single delete button if not in select mode
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteTicket(item.id, item.source)}
+          >
+            <Ionicons name="trash-outline" size={20} color="#fff" />
+            <Text style={styles.buttonText}>Delete</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const onScroll = (event) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(contentOffsetX / screenWidth);
     setModalCurrentPageIndex(newIndex);
   };
+
+  const displayedTickets = activeTab === 'terminated' ? terminatedCollectionTickets : currentCollectionTickets;
+  const headerText = activeTab === 'terminated'
+    ? `Terminated Tickets (${terminatedCollectionTickets.length})`
+    : `Current Tickets (${currentCollectionTickets.length})`;
+  
+  const allSelected = selectedTickets.size > 0 && selectedTickets.size === displayedTickets.length;
+  const hasSelected = selectedTickets.size > 0;
+
+  const agentsForSwipe = Object.values(currentTicketsDetailedCounts.agentTodayScores)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   if (loading) {
     return (
@@ -294,14 +369,6 @@ const TerminatedTickets = ({ navigation }) => {
       </View>
     );
   }
-
-  const displayedTickets = activeTab === 'terminated' ? terminatedCollectionTickets : currentCollectionTickets;
-  const headerText = activeTab === 'terminated'
-    ? `Terminated Tickets (${terminatedCollectionTickets.length})`
-    : `Current Tickets (${currentCollectionTickets.length})`;
-
-  const agentsForSwipe = Object.values(currentTicketsDetailedCounts.agentTodayScores)
-    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <View style={styles.container}>
@@ -320,7 +387,11 @@ const TerminatedTickets = ({ navigation }) => {
       <View style={styles.toggleButtonsContainer}>
         <TouchableOpacity
           style={[styles.toggleButton, activeTab === 'terminated' && styles.activeToggleButton]}
-          onPress={() => setActiveTab('terminated')}
+          onPress={() => {
+            setActiveTab('terminated');
+            setSelectedTickets(new Set()); // Clear selection on tab change
+            setIsSelectMode(false); // Exit select mode on tab change
+          }}
         >
           <Text style={[styles.toggleButtonText, activeTab === 'terminated' && styles.activeToggleButtonText]}>
             Terminated
@@ -328,13 +399,54 @@ const TerminatedTickets = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleButton, activeTab === 'current' && styles.activeToggleButton]}
-          onPress={() => setActiveTab('current')}
+          onPress={() => {
+            setActiveTab('current');
+            setSelectedTickets(new Set()); // Clear selection on tab change
+            setIsSelectMode(false); // Exit select mode on tab change
+          }}
         >
           <Text style={[styles.toggleButtonText, activeTab === 'current' && styles.activeToggleButtonText]}>
             Current Tickets
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Select All and Bulk Delete Controls */}
+      {displayedTickets.length > 0 && (
+        <View style={styles.selectionControls}>
+            <TouchableOpacity onPress={() => setIsSelectMode(!isSelectMode)} style={styles.toggleSelectModeButton}>
+                <Text style={styles.toggleSelectModeText}>
+                    {isSelectMode ? 'Exit Select Mode' : 'Select'}
+                </Text>
+            </TouchableOpacity>
+
+            {isSelectMode && (
+                <>
+                    <TouchableOpacity onPress={handleSelectAll} style={styles.selectAllButton}>
+                        <MaterialCommunityIcons
+                            name={allSelected ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                            size={22}
+                            color={allSelected ? '#0a8fdf' : '#666'}
+                        />
+                        <Text style={styles.selectAllText}>
+                            {allSelected ? 'Deselect All' : 'Select All'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={handleDeleteSelectedTickets}
+                        style={[styles.bulkDeleteButton, !hasSelected && styles.disabledBulkDeleteButton]}
+                        disabled={!hasSelected}
+                    >
+                        <Ionicons name="trash" size={20} color="#fff" />
+                        <Text style={styles.bulkDeleteButtonText}>
+                            Delete ({selectedTickets.size})
+                        </Text>
+                    </TouchableOpacity>
+                </>
+            )}
+        </View>
+      )}
 
       {displayedTickets.length === 0 ? (
         <Text style={styles.emptyText}>No tickets found in this view.</Text>
@@ -455,7 +567,7 @@ const TerminatedTickets = ({ navigation }) => {
             <View style={styles.paginationDotsContainer}>
               {[currentTicketsDetailedCounts.today, ...agentsForSwipe].map((_, index) => (
                 <View
-                  key={`dot-${index}`} // Added unique key here
+                  key={`dot-${index}`}
                   style={[
                     styles.paginationDot,
                     modalCurrentPageIndex === index && styles.paginationDotActive,
@@ -472,7 +584,7 @@ const TerminatedTickets = ({ navigation }) => {
                   .filter(agent => agent.count > 0)
                   .sort((a, b) => b.count - a.count)
                   .map(agent => (
-                    <View key={agent.name} style={styles.statItem}> {/* Key is already present here, but double-check it's unique */}
+                    <View key={agent.name} style={styles.statItem}>
                       <Text style={styles.statLabel}>{agent.name}:</Text>
                       <Text style={styles.statValueAgent}>{agent.count}</Text>
                     </View>
@@ -569,6 +681,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    flexDirection: 'row', // Added for checkbox alignment
+    alignItems: 'center', // Added for checkbox alignment
+  },
+  selectedTicketItem: {
+    borderColor: '#0a8fdf',
+    borderWidth: 2,
+  },
+  checkboxContainer: {
+    marginRight: 10,
+    padding: 5, // Make it easier to tap
+  },
+  ticketContent: {
+    flex: 1, // Allow content to take remaining space
   },
   ticketHeader: {
     flexDirection: 'row',
@@ -594,7 +719,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE8E9',
     color: '#EA4335',
   },
-  statusPending: {
+  statusPending: { // Used for 'nouveau' and 'escalated_to_agent'
     backgroundColor: '#FFEEEE',
     color: '#FF3B30',
   },
@@ -602,7 +727,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6F7EE',
     color: '#34C759',
   },
-  statusCompleted: {
+  statusCompleted: { // Used for 'terminé' and 'résolu'
     backgroundColor: '#D1E7DD',
     color: '#155724',
   },
@@ -641,9 +766,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FF3B30',
-    padding: 10,
+    padding: 8, // Slightly reduced padding for single delete button
     borderRadius: 5,
     marginTop: 10,
+    alignSelf: 'flex-end', // Align to the right
   },
   buttonText: {
     color: '#fff',
@@ -786,6 +912,53 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  selectionControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#e9ecef',
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  toggleSelectModeButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  toggleSelectModeText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  selectAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  selectAllText: {
+    marginLeft: 5,
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  bulkDeleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dc3545',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  bulkDeleteButtonText: {
+    color: '#fff',
+    marginLeft: 5,
+    fontWeight: '600',
+  },
+  disabledBulkDeleteButton: {
+    backgroundColor: '#adb5bd',
   },
 });
 

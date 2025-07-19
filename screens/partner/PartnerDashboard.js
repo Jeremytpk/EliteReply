@@ -110,7 +110,7 @@ const PartnerDashboard = ({ navigation }) => {
 
   // Promotion functions (no changes)
   const getPromotionColor = () => {
-    if (!partnerData?.isPromoted || !partnerData.promotionEndDate) return '#34C759';
+    if (!partnerData?.estPromu || !partnerData.promotionEndDate) return '#34C759';
 
     const endDate = new Date(partnerData.promotionEndDate);
     const today = new Date();
@@ -126,7 +126,7 @@ const PartnerDashboard = ({ navigation }) => {
   };
 
   const getPromotionDaysLeft = () => {
-    if (!partnerData?.isPromoted || !partnerData.promotionEndDate) return 0;
+    if (!partnerData?.estPromu || !partnerData.promotionEndDate) return 0;
 
     const endDate = new Date(partnerData.promotionEndDate);
     const today = new Date();
@@ -176,7 +176,7 @@ const PartnerDashboard = ({ navigation }) => {
     return () => {
       pulseAnim.stopAnimation();
     };
-  }, [partnerData?.promotionEndDate, partnerData?.isPromoted, pulseAnim]); // Added isPromoted to dependencies
+  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Added isPromoted to dependencies
 
   // Fetch reviews (no changes, but ensure evaluations collection exists and partnerId is correct)
   const fetchReviews = useCallback(async (partnerId) => {

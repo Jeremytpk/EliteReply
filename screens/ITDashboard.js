@@ -61,7 +61,7 @@ const ITDashboard = () => {
     totalTickets: 0,
     waitingTickets: 0,
     activeConversations: 0,
-    completedTickets: 0,
+    completedTickets: 0, // This stat will still count completed tickets for the dashboard summary
     rating: 4.5,
     unreadPartnerMessagesCount: 0,
     agentTerminatedTickets: 0,
@@ -130,19 +130,19 @@ const ITDashboard = () => {
   };
 
   // --- Updates dashboard statistics based on fetched tickets ---
-  const updateTicketStats = (ticketsData) => {
+  const updateTicketStats = (allTicketsData) => { // Renamed parameter to clarify it's all tickets
     setStats(prevStats => ({
       ...prevStats,
-      totalTickets: ticketsData.length,
-      waitingTickets: ticketsData.filter(t =>
+      totalTickets: allTicketsData.length,
+      waitingTickets: allTicketsData.filter(t =>
         (t.status === 'nouveau' && !t.assignedTo) ||
         (t.status === 'jey-handling' && t.isAgentRequested && !t.assignedTo) ||
         (t.status === 'escalated_to_agent' && !t.assignedTo)
       ).length,
-      activeConversations: ticketsData.filter(t => t.status === 'in-progress' && t.assignedTo === currentUser?.uid).length,
-      completedTickets: ticketsData.filter(t => t.status === 'terminé').length, 
-      jeyHandlingTicketsCount: ticketsData.filter(t => t.status === 'jey-handling' && !t.isAgentRequested).length,
-      premiumTicketsCount: ticketsData.filter(t => t.userIsPremium).length,
+      activeConversations: allTicketsData.filter(t => t.status === 'in-progress' && t.assignedTo === currentUser?.uid).length,
+      completedTickets: allTicketsData.filter(t => t.status === 'terminé').length, 
+      jeyHandlingTicketsCount: allTicketsData.filter(t => t.status === 'jey-handling' && !t.isAgentRequested).length,
+      premiumTicketsCount: allTicketsData.filter(t => t.userIsPremium).length,
     }));
   };
 
@@ -302,7 +302,7 @@ const ITDashboard = () => {
       );
 
       const unsubscribeTickets = onSnapshot(ticketsQuery, async (snapshot) => {
-        const newTicketsData = snapshot.docs
+        const allFetchedTickets = snapshot.docs // Renamed to clearly indicate all tickets are fetched initially
           .map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -312,12 +312,17 @@ const ITDashboard = () => {
             userIsPremium: doc.data().userIsPremium || false,
           }));
 
+        // --- Filter out terminated tickets for display on the dashboard list ---
+        // We calculate stats based on ALL fetched tickets (allFetchedTickets)
+        // but set the 'tickets' state (for display) to only non-terminated ones.
+        const activeDisplayTickets = allFetchedTickets.filter(t => t.status !== 'terminé');
+
         // --- Push Notification and In-App Notification Logic for IT Agents ---
         if (currentUser?.uid && isClockedIn) {
-          const currentTicketIds = new Set(newTicketsData.map(t => t.id));
+          const currentTicketIds = new Set(allFetchedTickets.map(t => t.id)); // Use allFetchedTickets for notification logic
           const previouslyKnownTicketIds = new Set(lastKnownTicketsRef.current.map(t => t.id));
 
-          for (const newTicket of newTicketsData) {
+          for (const newTicket of allFetchedTickets) { // Iterate over allFetchedTickets for notifications
               const oldTicketState = lastKnownTicketsRef.current.find(t => t.id === newTicket.id);
               const isNewTicketAdded = !previouslyKnownTicketIds.has(newTicket.id);
 
@@ -325,6 +330,11 @@ const ITDashboard = () => {
               let shouldSendPush = false;
               let notificationTitle = "Nouveau Ticket!";
               let notificationBody = "";
+
+              // Skip notifications for tickets that are already terminated
+              if (newTicket.status === 'terminé') {
+                  continue; 
+              }
 
               // Case 1: Brand new ticket
               if (isNewTicketAdded) {
@@ -334,7 +344,8 @@ const ITDashboard = () => {
                   console.log(`[NOTIFY] NEW TICKET ADDED: ${newTicket.id}`);
               }
               // Case 2: Jey handling ticket where agent was requested (status change from Jey-handling to agent-requested)
-              else if (oldTicketState?.status === 'jey-handling' && oldTicketState?.isAgentRequested === false && newTicket.isAgentRequested === true) {
+              // Only notify if it wasn't already assigned to an agent
+              else if (oldTicketState?.status === 'jey-handling' && oldTicketState?.isAgentRequested === false && newTicket.isAgentRequested === true && !newTicket.assignedTo) {
                   notificationTitle = "Jey a demandé un Agent!";
                   notificationBody = `Le client a demandé un agent pour le ticket "${newTicket.category}" de ${newTicket.userName}.`;
                   shouldNotifyInApp = true;
@@ -342,21 +353,23 @@ const ITDashboard = () => {
                   console.log(`[NOTIFY] JEY REQUESTED AGENT: ${newTicket.id}`);
               }
               // Case 3: Ticket escalated by Jey (status change)
-              else if (oldTicketState?.status === 'jey-handling' && newTicket.status === 'escalated_to_agent' && oldTicketState?.isAgentRequested !== true) {
+              // Only notify if it wasn't already assigned to an agent
+              else if (oldTicketState?.status === 'jey-handling' && newTicket.status === 'escalated_to_agent' && !newTicket.assignedTo) {
                   notificationTitle = "Ticket Escaladé par Jey!";
-                  notificationBody = `Jey a escaladé le ticket "${newTicket.category}" de ${newTicket.userName}.`;
+                  notificationBody = `Jey a escaladé le ticket "${newTicket.category}" de ${newTicket.userName}. Il nécessite une intervention humaine.`;
                   shouldNotifyInApp = true;
                   shouldSendPush = true;
                   console.log(`[NOTIFY] JEY ESCALATED: ${newTicket.id}`);
               }
               // Case 4: A new ticket that starts directly in Jey-handling without explicit agent request (optional notification)
-              else if (isNewTicketAdded && newTicket.status === 'jey-handling' && !newTicket.isAgentRequested) {
-                  notificationTitle = "Ticket Géré par Jey (Nouveau)!";
-                  notificationBody = `Un nouveau ticket de type "${newTicket.category}" est géré par Jey.`;
-                  shouldNotifyInApp = true;
-                  shouldSendPush = true;
-                  console.log(`[NOTIFY] NEW JEY-HANDLING: ${newTicket.id}`);
-              }
+              // This is commented out based on prior discussions where direct Jey-handling might not need immediate agent notification
+              // if (isNewTicketAdded && newTicket.status === 'jey-handling' && !newTicket.isAgentRequested) {
+              //     notificationTitle = "Ticket Géré par Jey (Nouveau)!";
+              //     notificationBody = `Un nouveau ticket de type "${newTicket.category}" est géré par Jey.`;
+              //     shouldNotifyInApp = true;
+              //     shouldSendPush = true;
+              //     console.log(`[NOTIFY] NEW JEY-HANDLING: ${newTicket.id}`);
+              // }
 
               if (shouldNotifyInApp && !notifiedTicketsRef.current.has(newTicket.id + '_inapp') && isFocused) {
                 setInAppNotification({
@@ -379,7 +392,8 @@ const ITDashboard = () => {
                   
                   itAgentsSnap.forEach(agentDoc => {
                       const agentData = agentDoc.data();
-                      if (agentData.expoPushToken && agentDoc.id !== currentUser.uid) {
+                      // Only send push if not to the current agent (they get in-app)
+                      if (agentData.expoPushToken && agentDoc.id !== currentUser.uid) { 
                           sendPushNotification(
                               agentData.expoPushToken,
                               notificationTitle,
@@ -393,6 +407,7 @@ const ITDashboard = () => {
               }
           }
 
+          // Cleanup notifiedTicketsRef for tickets that are no longer in the fetched list (e.g., terminated)
           notifiedTicketsRef.current.forEach(notifiedId => {
               const ticketId = notifiedId.split('_')[0];
               if (!currentTicketIds.has(ticketId)) {
@@ -401,30 +416,29 @@ const ITDashboard = () => {
           });
         }
 
-        newTicketsData.sort((a, b) => {
+        // Sort the *active* tickets for display
+        activeDisplayTickets.sort((a, b) => {
             const getPriority = (ticket) => {
                 if (ticket.status === 'in-progress' && ticket.assignedTo === currentUser?.uid) {
-                    return 0;
+                    return 0; // My active conversations
                 }
                 if (ticket.status === 'jey-handling' && ticket.isAgentRequested === true) {
-                    return 1;
+                    return 1; // Jey requested agent (client initiated)
                 }
                 if (ticket.status === 'escalated_to_agent') {
-                    return 2;
+                    return 2; // Jey escalated (Jey initiated)
                 }
                 if (ticket.status === 'nouveau' && !ticket.assignedTo) {
-                    return 3;
+                    return 3; // Truly new, unassigned
                 }
                 if (ticket.status === 'jey-handling' && (ticket.assignedTo === null || ticket.assignedTo === undefined || ticket.assignedTo === '')) {
-                    return 4;
+                    return 4; // Jey handling, not agent requested
                 }
                 if (ticket.status === 'in-progress' && ticket.assignedTo && ticket.assignedTo !== currentUser?.uid) {
-                    return 5;
+                    return 5; // Other agent's active conversations
                 }
-                if (ticket.status === 'terminé') {
-                    return 6;
-                }
-                return 99;
+                // 'terminé' tickets are now filtered out before this sort
+                return 99; // Fallback for any unexpected status
             };
 
             const priorityA = getPriority(a);
@@ -434,16 +448,18 @@ const ITDashboard = () => {
                 return priorityA - priorityB;
             }
 
+            // Secondary sort: Premium tickets come first
             if (a.userIsPremium && !b.userIsPremium) return -1;
             if (!a.userIsPremium && b.userIsPremium) return 1;
 
+            // Tertiary sort: Oldest first for same priority/premium
             return a.createdAt?.toDate() - b.createdAt?.toDate();
         });
 
 
-        setTickets(newTicketsData);
-        lastKnownTicketsRef.current = newTicketsData;
-        updateTicketStats(newTicketsData);
+        setTickets(activeDisplayTickets); // Set the state with ONLY non-terminated tickets
+        lastKnownTicketsRef.current = allFetchedTickets; // Keep ALL tickets for notification logic
+        updateTicketStats(allFetchedTickets); // Update stats based on ALL tickets
       }, (error) => {
         console.error("Error fetching tickets:", error);
       });
@@ -509,12 +525,17 @@ const ITDashboard = () => {
         Alert.alert("Erreur", "Vous devez être connecté pour prendre un ticket.");
         return;
     }
+    // Allow taking a ticket if it's 'nouveau', 'escalated_to_agent', or 'jey-handling' AND agent was requested
     if (ticket.status === 'jey-handling' && !ticket.isAgentRequested) {
-      Alert.alert("Information", "Ce ticket est actuellement géré par Jey et le client n'a pas encore demandé d'agent humain.");
-      return;
+        Alert.alert("Information", "Ce ticket est actuellement géré par Jey et le client n'a pas encore demandé d'agent humain.");
+        return;
     }
     if (ticket.status === 'in-progress' && ticket.assignedTo !== currentUser?.uid) {
         Alert.alert("Information", `Ce ticket est déjà pris en charge par ${ticket.assignedToName || 'un autre agent'}.`);
+        return;
+    }
+    if (ticket.status === 'terminé') { // Should be caught by UI filter, but good to have
+        Alert.alert("Information", "Ce ticket est déjà terminé.");
         return;
     }
 
@@ -526,7 +547,7 @@ const ITDashboard = () => {
         assignedTo: currentUser.uid,
         assignedToName: userData?.name || currentUser.displayName || 'Agent',
         updatedAt: serverTimestamp(),
-        isAgentRequested: false,
+        isAgentRequested: false, // Reset this flag once agent takes over
         agentJoinedNotified: true,
       });
 
@@ -563,6 +584,7 @@ const ITDashboard = () => {
 
       await batch.commit();
 
+      // Add system message about agent taking over
       await addDoc(collection(db, 'tickets', ticket.id, 'messages'), {
         texte: `${userData?.name || currentUser.displayName || 'Un agent'} a pris le relais de cette conversation.`,
         expediteurId: 'systeme',
@@ -715,7 +737,7 @@ const ITDashboard = () => {
 
       {/* Tickets Section Header */}
       <View style={styles.ticketSectionHeader}>
-        <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text>
+        <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text> {/* This now reflects only non-terminated tickets */}
         {stats.jeyHandlingTicketsCount > 0 && (
           <Text style={styles.jeyHandlingLabel}>Jey ({stats.jeyHandlingTicketsCount})</Text>
         )}
@@ -729,13 +751,13 @@ const ITDashboard = () => {
 
       {/* Ticket List */}
       <FlatList
-        data={tickets}
+        data={tickets} // This data now only contains non-terminated tickets
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={[
             styles.ticketCard,
             item.userIsPremium && styles.premiumTicketCard,
-            item.status === 'terminé' && styles.terminatedTicketCard
+            // Removed terminatedTicketCard styling as these items won't be in the list
           ]}>
             <View style={styles.ticketHeader}>
               <View style={styles.ticketStatusContainer}>
@@ -761,9 +783,7 @@ const ITDashboard = () => {
                 {item.status === 'jey-handling' && item.isAgentRequested && (
                     <View style={[styles.statusDot, styles.purpleDot]} />
                 )}
-                {item.status === 'terminé' && (
-                    <View style={[styles.statusDot, styles.grayDot]} />
-                )}
+                {/* Removed grayDot for terminated as they won't be displayed */}
 
                 <Text style={styles.ticketCategory}>{item.category}</Text>
 
@@ -817,17 +837,12 @@ const ITDashboard = () => {
              {item.status === 'escalated_to_agent' && (
                 <Text style={styles.assignedText}>Agent demandé par Jey.</Text>
             )}
-            {item.status === 'terminé' && (
-                <Text style={styles.assignedText}>Statut: Terminée</Text>
-            )}
+            {/* Removed 'Terminé' status display as these tickets are filtered out */}
 
 
             <View style={styles.ticketActions}>
-              {item.status === 'terminé' ? (
-                <TouchableOpacity style={[styles.actionButton, styles.disabledButton]} disabled={true}>
-                  <Text style={styles.buttonText}>Terminé</Text>
-                </TouchableOpacity>
-              ) : item.assignedTo === currentUser?.uid ? (
+              {/* The 'Terminé' button logic is no longer needed here as terminated tickets are not rendered */}
+              {item.assignedTo === currentUser?.uid ? (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.inProgressButton]}
                   onPress={() => navigation.navigate('Conversation', {
@@ -870,7 +885,7 @@ const ITDashboard = () => {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle" size={60} color="#34C759" />
-            <Text style={styles.emptyText}>Aucun ticket trouvé.</Text>
+            <Text style={styles.emptyText}>Aucun ticket actif trouvé.</Text> {/* Updated text */}
           </View>
         }
         refreshControl={
@@ -1106,7 +1121,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFD700',
     borderWidth: 1,
   },
-  terminatedTicketCard: {
+  terminatedTicketCard: { // This style is now effectively unused for display filtering
     opacity: 0.7,
     borderColor: '#B0B9C2',
   },
@@ -1143,7 +1158,7 @@ const styles = StyleSheet.create({
   purpleDot: {
     backgroundColor: '#AF52DE',
   },
-  grayDot: {
+  grayDot: { // This style is now effectively unused for display filtering
     backgroundColor: '#6B7280',
   },
   ticketHeaderRight: {
@@ -1200,7 +1215,7 @@ const styles = StyleSheet.create({
   inProgressButton: {
     backgroundColor: '#4285F4',
   },
-  completeButton: {
+  completeButton: { // This style is now effectively unused for display filtering
     backgroundColor: '#6B7280',
   },
   disabledButton: {

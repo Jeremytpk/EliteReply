@@ -51,6 +51,11 @@ const AdminScreen = () => {
   const notifiedPaymentIds = useRef(new Set());
   const notifiedPartnerConvosMsgs = useRef(new Set());
 
+  // --- NEW: Import your custom icons ---
+  const USERS_ICON = require('../assets/icons/users.png');
+  const PARTNERS_ICON = require('../assets/icons/partners.png');
+  // --- END NEW IMPORTS ---
+
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
@@ -367,7 +372,9 @@ const AdminScreen = () => {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#E3F2FD' }]}>
-            <Ionicons name="people" size={24} color="#0a8fdf" />
+            {/* --- MODIFIED: Use custom image for Users stat --- */}
+            <Image source={USERS_ICON} style={styles.customStatIcon} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.statNumber}>{stats.users}</Text>
           <Text style={styles.statLabel}>Utilisateurs</Text>
@@ -391,7 +398,9 @@ const AdminScreen = () => {
 
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#F3E5F5' }]}>
-            <Feather name="users" size={24} color="#9C27B0" />
+            {/* --- MODIFIED: Use custom image for Partners stat --- */}
+            <Image source={PARTNERS_ICON} style={styles.customStatIcon} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.statNumber}>{stats.partners}</Text>
           <Text style={styles.statLabel}>Partenaires</Text>
@@ -406,7 +415,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('Users')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#0a8fdf' }]}>
-            <Ionicons name="people-outline" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Manage Users action --- */}
+            <Image source={USERS_ICON} style={styles.customActionIcon} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Gérer les utilisateurs</Text>
         </TouchableOpacity>
@@ -446,7 +457,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('Partners')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#9C27B0' }]}>
-            <Feather name="users" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Partners action --- */}
+            <Image source={PARTNERS_ICON} style={styles.customActionIcon} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Partenaires</Text>
         </TouchableOpacity>
@@ -490,7 +503,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
     padding: 15,
-    //marginTop: 20
+    marginTop: 25
   },
   loadingContainer: {
     flex: 1,
@@ -568,6 +581,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  // --- NEW STYLE FOR CUSTOM STAT ICONS ---
+  customStatIcon: {
+    width: 28, // Adjust size as needed
+    height: 28, // Adjust size as needed
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Adjust to match the color of the original Ionicons
+  },
+  // --- END NEW STYLE ---
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -611,6 +632,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  // --- NEW STYLE FOR CUSTOM ACTION ICONS ---
+  customActionIcon: {
+    width: 32, // Adjust size as needed
+    height: 32, // Adjust size as needed
+    resizeMode: 'contain',
+    tintColor: '#fff', // Typically, these icons are white on colored backgrounds
+  },
+  // --- END NEW STYLE ---
   actionText: {
     fontSize: 14,
     fontWeight: '600',

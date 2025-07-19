@@ -80,11 +80,10 @@ const SurveyScreen = ({ navigation }) => {
           const createdAt = surveyData.createdAt?.toDate 
             ? surveyData.createdAt.toDate() 
             : null;
-          // --- FIX START: Changed 'expirationDate' to 'expiryDate' ---
-          const expiryDate = surveyData.expiryDate?.toDate // Now correctly looking for 'expiryDate'
+          // Correctly looking for 'expiryDate'
+          const expiryDate = surveyData.expiryDate?.toDate 
             ? surveyData.expiryDate.toDate() 
             : null;
-          // --- FIX END ---
           
           // --- Auto-deletion logic for expired surveys ---
           // Use 'expiryDate' here
@@ -223,7 +222,7 @@ const SurveyScreen = ({ navigation }) => {
   );
 };
 
-// --- FIX START: Define baseCardStyles outside StyleSheet.create ---
+// Define baseCardStyles outside StyleSheet.create to allow spreading
 const baseCardStyles = {
     backgroundColor: '#FFFFFF',
     borderRadius: 15,
@@ -235,7 +234,6 @@ const baseCardStyles = {
     shadowRadius: 10,
     elevation: 6,
 };
-// --- FIX END ---
 
 const styles = StyleSheet.create({
   container: {
@@ -305,9 +303,6 @@ const styles = StyleSheet.create({
   },
   surveyCard: {
     ...baseCardStyles, // Use spread operator to include common card styles
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 15,
     // Specific surveyCard shadows if needed, or rely on baseCard
   },
   newSurveyCard: {

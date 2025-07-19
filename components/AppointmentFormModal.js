@@ -1,4 +1,3 @@
-// components/AppointmentFormModal.js
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Modal,
@@ -14,8 +13,8 @@ import {
     Pressable,
     LayoutAnimation,
     UIManager,
-    Dimensions, // Import Dimensions for width
-    ScrollView // Import ScrollView
+    Dimensions,
+    FlatList
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -26,18 +25,19 @@ import {
     addDoc,
     updateDoc,
     serverTimestamp,
-    arrayUnion,
-    arrayRemove, // Keep for potential use if specific array updates are needed
-    getDocs,
+    getDoc,
+    runTransaction,
+    increment,
+    deleteDoc,
     query,
-    orderBy,
-    getDoc, // Added getDoc for ticket update logic
+    where,
+    getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 
-import { db, auth, storage } from '../firebase'; // Adjust path if necessary
+import { db, auth, storage } from '../firebase';
 import moment from 'moment';
 import 'moment/locale/fr';
 
@@ -48,7 +48,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const { width } = Dimensions.get('window'); // Get window width for QR code sizing
+const { width } = Dimensions.get('window');
 
 const generateRandomString = (length) => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012B0123456789';
@@ -63,18 +63,23 @@ const generateRandomString = (length) => {
 const AppointmentFormModal = ({
     isVisible,
     onClose,
-    onBookingSuccess, // Callback with new/updated appointment data
+    onBookingSuccess,
     ticketId,
-    initialUserId,
-    initialUserName,
-    userPhone,
-    allPartners, // Pass the full list of partners
-    editingAppointment // Pass the appointment object if in edit mode
+    allPartners,
+    editingAppointment,
+    isAgentMode = false // NEW PROP: Default to false for client-side
 }) => {
     const currentUser = auth.currentUser;
-    // Determine actual client UID and Name based on context (from Conversation or IT Support directly)
-    const actualClientUid = initialUserId || currentUser?.uid;
-    const actualClientName = initialUserName || currentUser?.displayName || 'Client';
+
+    // State to store fetched ticket data
+    const [currentTicketData, setCurrentTicketData] = useState(null);
+    const [isLoadingTicketData, setIsLoadingTicketData] = useState(false);
+
+    // Derived client identity for ticket display (only relevant in agent mode)
+    const actualClientUid = ticketId && currentTicketData?.clientId ? currentTicketData.clientId : currentUser?.uid;
+    const actualClientName = ticketId && currentTicketData?.name ? currentTicketData.name : currentUser?.displayName || 'Client';
+    const actualClientPhone = ticketId && currentTicketData?.phone ? currentTicketData.phone : null;
+
 
     const [selectedPartner, setSelectedPartner] = useState(null);
     const [formClientNames, setFormClientNames] = useState([{ id: Date.now(), name: '' }]);
@@ -83,12 +88,139 @@ const AppointmentFormModal = ({
     const [showFormDatePicker, setShowFormDatePicker] = useState(false);
     const [showFormTimePicker, setShowFormTimePicker] = useState(false);
     const [formAppointmentDescription, setFormAppointmentDescription] = useState('');
-    const [isProcessingBooking, setIsProcessingBooking] = useState(false); // Indicates if booking/update is in progress
+    const [isProcessingBooking, setIsProcessingBooking] = useState(false);
 
-    const [generatedCode, setGeneratedCode] = useState(null); // State to hold generated QR code data
-    const qrCodeViewShotRef = useRef(); // Ref for ViewShot
+    const [generatedCode, setGeneratedCode] = useState(null);
+    const qrCodeViewShotRef = useRef();
 
-    // Effect to pre-fill form if editing an existing appointment
+    // New State for Client Selection (Agent Mode Only)
+    const [allClients, setAllClients] = useState([]);
+    const [filteredClients, setFilteredClients] = useState([]);
+    const [clientSearchText, setClientSearchText] = useState('');
+    // Stores { id: 'uid', name: 'display name', email: 'email', phone: 'phone' }
+    const [selectedClient, setSelectedClient] = useState(
+        !isAgentMode && currentUser
+            ? { id: currentUser.uid, name: currentUser.displayName, email: currentUser.email, phone: currentUser.phoneNumber || null }
+            : null
+    );
+    const [isSearchingClients, setIsSearchingClients] = useState(false);
+    const [debouncedClientSearchText, setDebouncedClientSearchText] = useState('');
+
+    // Debounce effect for client search (Agent Mode Only)
+    useEffect(() => {
+        if (!isAgentMode) return; // Only run in agent mode
+        const handler = setTimeout(() => {
+            setDebouncedClientSearchText(clientSearchText);
+        }, 300);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [clientSearchText, isAgentMode]);
+
+    // Effect to fetch ticket data based on ticketId (Agent Mode relevant)
+    useEffect(() => {
+        const fetchTicketData = async () => {
+            if (!ticketId || !isAgentMode) { // Only fetch ticket data in agent mode
+                setCurrentTicketData(null);
+                if (!editingAppointment) {
+                    setFormClientNames([{ id: Date.now(), name: '' }]);
+                    setSelectedClient(null);
+                }
+                return;
+            }
+            setIsLoadingTicketData(true);
+            try {
+                const ticketDocRef = doc(db, 'tickets', ticketId);
+                const ticketSnap = await getDoc(ticketDocRef);
+                if (ticketSnap.exists()) {
+                    const data = ticketSnap.data();
+                    setCurrentTicketData(data);
+                    console.log("DEBUG: Fetched ticket data for ID:", ticketId, data);
+
+                    if (!editingAppointment && data.name && formClientNames.length === 1 && formClientNames[0].name === '') {
+                        setFormClientNames([{ id: Date.now(), name: data.name }]);
+                        if (data.clientId && allClients.length > 0) {
+                            const client = allClients.find(c => c.id === data.clientId);
+                            if (client) {
+                                setSelectedClient(client);
+                            }
+                        }
+                    }
+                } else {
+                    console.log("DEBUG: No ticket found with ID:", ticketId);
+                    setCurrentTicketData(null);
+                    if (!editingAppointment) {
+                        setFormClientNames([{ id: Date.now(), name: '' }]);
+                        setSelectedClient(null);
+                    }
+                }
+            } catch (error) {
+                console.error("ERROR: Failed to fetch ticket data:", error);
+                setCurrentTicketData(null);
+                if (!editingAppointment) {
+                    setFormClientNames([{ id: Date.now(), name: '' }]);
+                    setSelectedClient(null);
+                }
+            } finally {
+                setIsLoadingTicketData(false);
+            }
+        };
+
+        if (isVisible) {
+            fetchTicketData();
+        } else {
+            setCurrentTicketData(null);
+        }
+    }, [isVisible, ticketId, editingAppointment, allClients, isAgentMode]); // Added isAgentMode
+
+    // Effect to fetch users with role 'user' (Agent Mode Only)
+    useEffect(() => {
+        const fetchClients = async () => {
+            setIsSearchingClients(true);
+            try {
+                const q = query(collection(db, 'users'), where('role', '==', 'user'));
+                const querySnapshot = await getDocs(q);
+                const clientsList = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().displayName || doc.data().email || 'Utilisateur Inconnu',
+                    email: doc.data().email || null,
+                    phone: doc.data().phone || null
+                }));
+                setAllClients(clientsList);
+                setFilteredClients(clientsList);
+                console.log("DEBUG: Fetched all clients:", clientsList);
+            } catch (error) {
+                console.error("ERROR: Failed to fetch clients:", error);
+                setAllClients([]);
+                setFilteredClients([]);
+            } finally {
+                setIsSearchingClients(false);
+            }
+        };
+
+        if (isVisible && isAgentMode) { // Only fetch clients if in agent mode
+            fetchClients();
+        }
+    }, [isVisible, isAgentMode]); // Added isAgentMode
+
+    // Effect to handle client search filtering - NOW USES DEBOUNCED TEXT (Agent Mode Only)
+    useEffect(() => {
+        if (!isAgentMode) return; // Only run in agent mode
+        if (debouncedClientSearchText.trim() === '') {
+            setFilteredClients(allClients);
+        } else {
+            const lowerCaseSearch = debouncedClientSearchText.toLowerCase();
+            const filtered = allClients.filter(client =>
+                client.name.toLowerCase().includes(lowerCaseSearch) ||
+                (client.email && client.email.toLowerCase().includes(lowerCaseSearch)) ||
+                (client.phone && client.phone.includes(debouncedClientSearchText.trim()))
+            );
+            setFilteredClients(filtered);
+        }
+    }, [debouncedClientSearchText, allClients, isAgentMode]); // Added isAgentMode
+
+    // Effect to handle editing mode and reset form
     useEffect(() => {
         if (editingAppointment && allPartners.length > 0) {
             console.log("AppointmentFormModal: In EDIT mode. Pre-filling form.");
@@ -97,19 +229,30 @@ const AppointmentFormModal = ({
 
             setFormClientNames((editingAppointment.clientNames || []).map((name, index) => ({ id: `${editingAppointment.id}-${index}`, name: name })));
 
-            // Ensure date/time are proper Date objects
             const apptDateTime = editingAppointment.appointmentDateTime ? new Date(editingAppointment.appointmentDateTime) : new Date();
             setFormAppointmentDate(apptDateTime);
             setFormAppointmentTime(apptDateTime);
             setFormAppointmentDescription(editingAppointment.description || '');
 
-            // Pre-fill generated QR code data if available for display/re-capture
+            // Pre-select the client based on editingAppointment.clientId (Agent Mode Only)
+            if (isAgentMode && editingAppointment.clientId && allClients.length > 0) {
+                const client = allClients.find(c => c.id === editingAppointment.clientId);
+                if (client) {
+                    setSelectedClient(client);
+                    setClientSearchText(client.name);
+                }
+            } else if (!isAgentMode && editingAppointment.clientId === currentUser?.uid) {
+                // Client Mode: If editing and the appointment client is current user
+                setSelectedClient(currentUser ? { id: currentUser.uid, name: currentUser.displayName, email: currentUser.email, phone: currentUser.phoneNumber || null } : null);
+            }
+
+
             if (editingAppointment.codeData) {
                 setGeneratedCode({
                     type: editingAppointment.codeData.type,
                     value: editingAppointment.codeData.value,
                     qrContent: editingAppointment.codeData.qrContent,
-                    partnerName: editingAppointment.partnerName,
+                    partnerName: editingAppointment.partnerNom,
                     clientNames: editingAppointment.clientNames,
                     appointmentDate: editingAppointment.appointmentDateTime,
                     appointmentTime: editingAppointment.appointmentDateTime,
@@ -120,21 +263,29 @@ const AppointmentFormModal = ({
                 setGeneratedCode(null);
             }
         } else if (!editingAppointment) {
-            // Reset form when opening for new booking (no editingAppointment)
             console.log("AppointmentFormModal: In CREATE mode. Resetting form.");
             resetForm();
         }
-    }, [editingAppointment, allPartners]); // Re-run if editingAppointment or allPartners change
+    }, [editingAppointment, allPartners, currentTicketData, allClients, isAgentMode, currentUser, resetForm]); // Added isAgentMode, currentUser, resetForm
 
-    // Reset form fields
     const resetForm = useCallback(() => {
         setSelectedPartner(null);
-        setFormClientNames([{ id: Date.now(), name: '' }]);
+        if (!isAgentMode) {
+             // For client mode, pre-fill with current user's name
+             setFormClientNames([{ id: Date.now(), name: currentUser?.displayName || '' }]);
+             setSelectedClient(currentUser ? { id: currentUser.uid, name: currentUser.displayName, email: currentUser.email, phone: currentUser.phoneNumber || null } : null);
+        } else {
+             // For agent mode, use ticket data if available, otherwise empty
+             setFormClientNames(currentTicketData?.name ? [{ id: Date.now(), name: currentTicketData.name }] : [{ id: Date.now(), name: '' }]);
+             setSelectedClient(null); // Agents start with no client selected by default
+        }
         setFormAppointmentDate(new Date());
         setFormAppointmentTime(new Date());
         setFormAppointmentDescription('');
         setGeneratedCode(null);
-    }, []);
+        setClientSearchText('');
+        setDebouncedClientSearchText('');
+    }, [currentTicketData, isAgentMode, currentUser]);
 
     const addClientNameFormField = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -164,7 +315,6 @@ const AppointmentFormModal = ({
         setFormAppointmentTime(currentTime);
     };
 
-    // Helper to send system message to the ticket
     const sendSystemMessageToTicket = useCallback(async (messageText, messageType = 'text', messageData = {}) => {
         if (!ticketId) {
             console.warn("WARN: Not sending system message, no ticketId provided to AppointmentFormModal.");
@@ -195,8 +345,6 @@ const AppointmentFormModal = ({
         }
     }, [ticketId]);
 
-
-    // Function to generate QR Code data (now returns the object)
     const generateQRCodeData = useCallback(() => {
         if (!selectedPartner) {
             Alert.alert("Erreur", "Veuillez sélectionner un partenaire pour générer le code.");
@@ -208,9 +356,9 @@ const AppointmentFormModal = ({
             return null;
         }
 
-        const partnerFirstNameInitial = selectedPartner.name ? selectedPartner.name[0].toUpperCase() : '';
-        const partnerLastNameInitial = selectedPartner.name && selectedPartner.name.split(' ').length > 1
-            ? selectedPartner.name.split(' ').pop()[0].toUpperCase()
+        const partnerFirstNameInitial = selectedPartner.nom ? selectedPartner.nom[0].toUpperCase() : '';
+        const partnerLastNameInitial = selectedPartner.nom && selectedPartner.nom.split(' ').length > 1
+            ? selectedPartner.nom.split(' ').pop()[0].toUpperCase()
             : '';
 
         const randomPart = generateRandomString(7);
@@ -225,16 +373,25 @@ const AppointmentFormModal = ({
             0
         );
 
+        // Prioritize selectedClient for QR content if available, otherwise use currentUser for client mode
+        const qrClientName = selectedClient?.name || currentUser?.displayName || 'N/A';
+        const qrClientId = selectedClient?.id || currentUser?.uid || 'N/A';
+        const qrClientEmail = selectedClient?.email || currentUser?.email || 'N/A';
+        const qrClientPhone = selectedClient?.phone || currentUser?.phoneNumber || 'N/A';
+
         const qrContent = JSON.stringify({
             code: codeValue,
             type: 'qr',
-            partner: selectedPartner.name,
-            category: selectedPartner.category || 'N/A',
+            partner: selectedPartner.nom,
+            category: selectedPartner.categorie || 'N/A',
             clients: validClientNames.map(cn => cn.name),
             date: combinedDateTime.toLocaleDateString('fr-FR'),
             time: combinedDateTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
             description: formAppointmentDescription || 'N/A',
-            bookedBy: currentUser?.displayName || 'Agent',
+            bookedByClientName: qrClientName,
+            bookedByClientId: qrClientId,
+            bookedByClientEmail: qrClientEmail,
+            bookedByClientPhone: qrClientPhone,
             ticketId: ticketId || 'N/A'
         });
 
@@ -242,16 +399,16 @@ const AppointmentFormModal = ({
             type: 'qr',
             value: codeValue,
             qrContent: qrContent,
-            partnerName: selectedPartner.name,
+            partnerName: selectedPartner.nom,
             clientNames: validClientNames.map(cn => cn.name),
             appointmentDate: combinedDateTime.toISOString(),
             appointmentTime: combinedDateTime.toISOString(),
             description: formAppointmentDescription,
         };
 
-        setGeneratedCode(newGeneratedCode); // Update local state for display
+        setGeneratedCode(newGeneratedCode);
         return newGeneratedCode;
-    }, [selectedPartner, formClientNames, formAppointmentDate, formAppointmentTime, formAppointmentDescription, currentUser?.displayName, ticketId]);
+    }, [selectedPartner, formClientNames, formAppointmentDate, formAppointmentTime, formAppointmentDescription, selectedClient, currentUser, ticketId]);
 
 
     const handleBookingSubmission = async () => {
@@ -265,6 +422,18 @@ const AppointmentFormModal = ({
             return;
         }
 
+        // Ensure a client is selected, especially in agent mode
+        if (isAgentMode && !selectedClient) {
+            Alert.alert("Champs manquants", "Veuillez sélectionner le client principal du rendez-vous.");
+            return;
+        }
+        // If not in agent mode, selectedClient should already be the currentUser.
+        // If currentUser is null (not logged in), prevent booking.
+        if (!isAgentMode && !currentUser) {
+             Alert.alert("Erreur", "Vous devez être connecté pour prendre un rendez-vous.");
+             return;
+        }
+
         setIsProcessingBooking(true);
 
         const combinedDateTime = new Date(
@@ -276,17 +445,12 @@ const AppointmentFormModal = ({
         );
 
         try {
-            // 1. Generate QR Code data
             const newGeneratedCodeData = generateQRCodeData();
             if (!newGeneratedCodeData) {
-                // If generateQRCodeData returned null (e.g. due to missing partner/client names validation failed there)
                 throw new Error("Échec de la génération du code QR. Vérifiez les informations saisies.");
             }
 
-            // Allow UI to update and QR code to render before capturing
-            // This is crucial for ViewShot to capture the rendered QR code
-            // Give it a slightly longer timeout to be safe given past issues
-            await new Promise(resolve => setTimeout(resolve, 200)); 
+            await new Promise(resolve => setTimeout(resolve, 200));
 
             let qrCodeImageUrl = null;
             if (qrCodeViewShotRef.current) {
@@ -298,30 +462,42 @@ const AppointmentFormModal = ({
                     const storageRef = ref(storage, filename);
                     await uploadBytes(storageRef, blob);
                     qrCodeImageUrl = await getDownloadURL(storageRef);
-                    setGeneratedCode(prev => ({ ...prev, imageURL: qrCodeImageUrl })); // Update state with actual URL
+                    setGeneratedCode(prev => ({ ...prev, imageURL: qrCodeImageUrl }));
                 } catch (captureError) {
                     console.error("ERROR: Failed to capture or upload QR Code image:", captureError);
-                    // Continue without image if capture fails, but log the error
                     Alert.alert("Avertissement", "Échec de la capture ou du téléchargement du code QR. Le rendez-vous sera quand même enregistré.");
                 }
             } else {
                 console.warn("WARN: QR Code ref not available for capture in AppointmentFormModal.");
             }
 
+            // Determine final client details for booking based on mode
+            const finalClientId = isAgentMode ? selectedClient?.id : currentUser?.uid;
+            const finalClientName = isAgentMode ? selectedClient?.name : currentUser?.displayName;
+            const finalClientPhone = isAgentMode ? selectedClient?.phone || null : currentUser?.phoneNumber || null;
+            const finalClientEmail = isAgentMode ? selectedClient?.email || null : currentUser?.email || null;
+
+            if (!finalClientId || !finalClientName) {
+                throw new Error("Impossible de déterminer les informations du client pour la réservation.");
+            }
+
             const appointmentData = {
                 ticketId: ticketId || null,
-                clientId: actualClientUid,
-                clientName: actualClientName,
-                clientPhone: userPhone || null,
-                appointmentDateTime: combinedDateTime,
+                clientId: finalClientId,
+                clientName: finalClientName,
+                clientPhone: finalClientPhone,
+                clientEmail: finalClientEmail,
+                appointmentDateTime: combinedDateTime.toISOString(),
                 clientNames: validClientNames.map(cn => cn.name),
-                partnerId: selectedPartner.id, // This is already correctly here for top-level collection
-                partnerName: selectedPartner.name,
+                partnerId: selectedPartner.id,
+                partnerNom: selectedPartner.nom,
+                partnerCategorie: selectedPartner.categorie,
                 description: formAppointmentDescription.trim(),
                 status: 'scheduled',
-                bookedByAgentId: currentUser?.uid,
-                bookedByAgentName: currentUser?.displayName || 'Agent',
-                createdAt: serverTimestamp(), // Use server timestamp for new bookings
+                // Agent specific fields
+                bookedByAgentId: isAgentMode ? currentUser?.uid : null, // Only set if agent
+                bookedByAgentName: isAgentMode ? (currentUser?.displayName || 'Agent') : null, // Only set if agent
+                createdAt: serverTimestamp(),
                 codeData: {
                     type: newGeneratedCodeData.type,
                     value: newGeneratedCodeData.value,
@@ -330,102 +506,83 @@ const AppointmentFormModal = ({
                 codeImageUrl: qrCodeImageUrl,
             };
 
-            let primaryAppointmentDocRef; // Declare outside conditional for scope
+            let primaryAppointmentDocRef;
 
             if (editingAppointment) {
-                // UPDATE EXISTING APPOINTMENT
-                const rdvDocRef = doc(db, 'appointments', editingAppointment.id);
-                await updateDoc(rdvDocRef, { ...appointmentData, lastUpdated: serverTimestamp() });
+                primaryAppointmentDocRef = doc(db, 'appointments', editingAppointment.id);
+                await updateDoc(primaryAppointmentDocRef, { ...appointmentData, lastUpdated: serverTimestamp() });
 
-                // Update in partner's subcollection (use editingAppointment.partnerId for original location if partner changed)
-                const partnerApptDocRef = doc(db, 'partners', editingAppointment.partnerId, 'rdv_reservation', editingAppointment.appointmentId);
-                const partnerApptSnap = await getDoc(partnerApptDocRef); // Check if it exists before updating
-                if (partnerApptSnap.exists()) {
-                    await updateDoc(partnerApptDocRef, { ...appointmentData, lastUpdated: serverTimestamp() });
+                if (editingAppointment.partnerId !== selectedPartner.id) {
+                    const oldPartnerRdvRef = doc(db, 'partners', editingAppointment.partnerId, 'rdv_reservation', editingAppointment.appointmentId);
+                    const oldPartnerRdvSnap = await getDoc(oldPartnerRdvRef);
+                    if (oldPartnerRdvSnap.exists()) {
+                        await deleteDoc(oldPartnerRdvRef);
+                        console.log(`DEBUG: Deleted old rdv_reservation from partner ${editingAppointment.partnerId}`);
+                    }
+
+                    await addDoc(collection(db, 'partners', selectedPartner.id, 'rdv_reservation'), {
+                        ...appointmentData,
+                        appointmentId: editingAppointment.id
+                    });
+                    console.log(`DEBUG: Added new rdv_reservation to partner ${selectedPartner.id}`);
                 } else {
-                    console.warn(`DEBUG: Appointment not found in original partner's (${editingAppointment.partnerId}) rdv_reservation subcollection. Attempting to add to new partner's if different.`);
-                    // If partner changed, and the original wasn't found, try adding to new partner
-                    if (editingAppointment.partnerId !== selectedPartner.id) {
+                    const partnerApptDocRef = doc(db, 'partners', editingAppointment.partnerId, 'rdv_reservation', editingAppointment.appointmentId);
+                    const partnerApptSnap = await getDoc(partnerApptDocRef);
+
+                    if (partnerApptSnap.exists()) {
+                        await updateDoc(partnerApptDocRef, { ...appointmentData, lastUpdated: serverTimestamp() });
+                        console.log(`DEBUG: Updated existing rdv_reservation for partner ${selectedPartner.id}`);
+                    } else {
                         await addDoc(collection(db, 'partners', selectedPartner.id, 'rdv_reservation'), {
                             ...appointmentData,
-                            appointmentId: editingAppointment.id // Keep top-level ID consistent
+                            appointmentId: editingAppointment.id
                         });
-                        console.log("DEBUG: Re-added appointment to new partner's rdv_reservation subcollection after partner change.");
+                        console.warn(`WARN: rdv_reservation for appointment ${editingAppointment.id} not found for partner ${selectedPartner.id}, recreating.`);
                     }
                 }
 
-                // Update the ticket's appointments array
-                if (ticketId) {
-                    const ticketDocRef = doc(db, 'tickets', ticketId);
-                    const ticketSnapshot = await getDoc(ticketDocRef);
-                    if (ticketSnapshot.exists()) {
-                        const currentAppointmentsInTicket = ticketSnapshot.data().appointments || [];
-                        const updatedAppointments = currentAppointmentsInTicket.map(appt => {
-                            if (appt.appointmentId === editingAppointment.appointmentId) {
-                                return {
-                                    ...appt, // Keep existing fields from the ticket's array, then update specifics
-                                    partnerId: selectedPartner.id,
-                                    partnerName: selectedPartner.name,
-                                    appointmentDateTime: combinedDateTime.toISOString(), // Ensure ISO string for consistency
-                                    clientNames: validClientNames.map(cn => cn.name),
-                                    description: formAppointmentDescription.trim(),
-                                    codeData: { type: newGeneratedCodeData.type, value: newGeneratedCodeData.value, qrContent: newGeneratedCodeData.qrContent },
-                                    codeImageUrl: qrCodeImageUrl,
-                                };
-                            }
-                            return appt;
-                        });
-                        await updateDoc(ticketDocRef, { appointments: updatedAppointments, lastUpdated: serverTimestamp() });
-                    }
-                }
                 Alert.alert("Succès", "Rendez-vous mis à jour et QR Code régénéré!");
-                primaryAppointmentDocRef = doc(db, 'appointments', editingAppointment.id); // Assign the reference for consistent onBookingSuccess
             } else {
-                // BOOK NEW APPOINTMENT
                 primaryAppointmentDocRef = await addDoc(collection(db, 'appointments'), appointmentData);
                 await addDoc(collection(db, 'partners', selectedPartner.id, 'rdv_reservation'), {
                     ...appointmentData,
-                    appointmentId: primaryAppointmentDocRef.id // Link to top-level ID
+                    appointmentId: primaryAppointmentDocRef.id
                 });
 
-                // Update ticket document (if in ticket context)
-                if (ticketId) {
-                    await updateDoc(doc(db, 'tickets', ticketId), {
-                        appointments: arrayUnion({
-                            id: primaryAppointmentDocRef.id, // Primary ID from global appointments collection
-                            appointmentId: primaryAppointmentDocRef.id, // For consistency
-                            // --- START FIX ---
-                            partnerId: selectedPartner.id, // <-- ADDED THIS LINE!
-                            // --- END FIX ---
-                            partnerName: selectedPartner.name,
-                            appointmentDateTime: combinedDateTime.toISOString(), // Ensure ISO string
-                            status: 'scheduled',
-                            clientNames: validClientNames.map(cn => cn.name),
-                            description: formAppointmentDescription.trim(),
-                            codeData: { type: newGeneratedCodeData.type, value: newGeneratedCodeData.value, qrContent: newGeneratedCodeData.qrContent },
-                            codeImageUrl: qrCodeImageUrl,
-                        }),
-                        lastUpdated: serverTimestamp(),
+                if (isAgentMode && currentUser?.uid) { // Only increment agent count if in agent mode
+                    const agentUserRef = doc(db, 'users', currentUser.uid);
+                    await runTransaction(db, async (transaction) => {
+                        const agentDoc = await transaction.get(agentUserRef);
+                        if (!agentDoc.exists()) {
+                            transaction.set(agentUserRef, {
+                                agentAppointmentsBookedCount: 1
+                            }, { merge: true });
+                        } else {
+                            transaction.update(agentUserRef, {
+                                agentAppointmentsBookedCount: increment(1)
+                            });
+                        }
                     });
+                    console.log(`DEBUG: Agent ${currentUser.uid} (Appointments Booked Count) incremented.`);
                 }
+
                 Alert.alert("Succès", "Rendez-vous pris avec succès et QR Code généré!");
             }
 
-            // Send system message to chat
             let message = '';
             if (editingAppointment) {
-                message = `Le rendez-vous avec ${selectedPartner.name} pour ${validClientNames.join(', ')} a été mis à jour pour le ${moment(combinedDateTime).format('DD/MM/YYYY')} à ${moment(combinedDateTime).format('HH:mm')}.`;
+                message = `Le rendez-vous avec ${selectedPartner.nom} pour ${validClientNames.map(cn => cn.name).join(', ')} a été mis à jour pour le ${moment(combinedDateTime).format('DD/MM/YYYY')} à ${moment(combinedDateTime).format('HH:mm')}.`;
             } else {
-                message = `Votre rendez-vous avec ${selectedPartner.name} pour ${validClientNames.join(', ')} a été enregistré pour le ${moment(combinedDateTime).format('DD/MM/YYYY')} à ${moment(combinedDateTime).format('HH:mm')}.`;
+                message = `Votre rendez-vous avec ${selectedPartner.nom} pour ${validClientNames.map(cn => cn.name).join(', ')} a été enregistré pour le ${moment(combinedDateTime).format('DD/MM/YYYY')} à ${moment(combinedDateTime).format('HH:mm')}.`;
             }
             if (formAppointmentDescription.trim()) {
                 message += ` Description: ${formAppointmentDescription.trim()}.`;
             }
 
-            if (ticketId) { // Only send system message if there's a ticket to send it to
+            if (ticketId && isAgentMode) { // Only send system message to ticket in agent mode
                 await sendSystemMessageToTicket(
                     message,
-                    'coupon_qr', // Use coupon_qr type for QR messages in chat
+                    'coupon_qr',
                     {
                         codeType: newGeneratedCodeData.type,
                         codeValue: newGeneratedCodeData.value,
@@ -433,23 +590,21 @@ const AppointmentFormModal = ({
                         appointmentDate: newGeneratedCodeData.appointmentDate,
                         clientNames: newGeneratedCodeData.clientNames,
                         description: newGeneratedCodeData.description,
-                        imageURL: qrCodeImageUrl, // This is the image of the QR code
+                        imageURL: qrCodeImageUrl,
+                        ticketId: ticketId
                     }
                 );
             }
 
-            // Call onBookingSuccess with the relevant data for parent component to update its state/UI
-            // Ensure the data structure passed back is consistent with what parent expects
             onBookingSuccess({
-                id: editingAppointment ? editingAppointment.id : primaryAppointmentDocRef.id, // Top-level appointments ID
-                appointmentId: editingAppointment ? editingAppointment.appointmentId : primaryAppointmentDocRef.id, // Subcollection ID (often same as top-level if new)
+                id: editingAppointment ? editingAppointment.id : primaryAppointmentDocRef.id,
+                appointmentId: editingAppointment ? editingAppointment.id : primaryAppointmentDocRef.id,
                 ...appointmentData,
-                // Ensure date/time are in consistent format for ticket array (ISO string usually)
                 appointmentDateTime: combinedDateTime.toISOString(),
-                createdAt: editingAppointment ? editingAppointment.createdAt : new Date(), // Keep original createdAt for edits
+                createdAt: editingAppointment ? editingAppointment.createdAt : new Date(),
             });
-            onClose(); // Close modal on success
-            resetForm(); // Reset for next use
+            onClose();
+            resetForm();
         } catch (error) {
             console.error("ERROR: Erreur lors de la prise/modification de rendez-vous:", error);
             Alert.alert("Erreur", "Impossible de traiter le rendez-vous. " + error.message);
@@ -458,15 +613,13 @@ const AppointmentFormModal = ({
         }
     };
 
-
-    // Helper for displaying appointment date/time (remains unchanged from previous version for consistency)
     const formatDateTime = (date) => {
         if (!date) return 'N/A';
         try {
             let d = date;
-            if (date.toDate) { // Check if it's a Firestore Timestamp object
+            if (date.toDate) {
                 d = date.toDate();
-            } else if (typeof date === 'string') { // If it's an ISO string
+            } else if (typeof date === 'string') {
                 d = new Date(date);
             }
             return d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -475,7 +628,6 @@ const AppointmentFormModal = ({
             return 'Date/Heure invalide';
         }
     };
-
 
     return (
         <Modal
@@ -488,138 +640,248 @@ const AppointmentFormModal = ({
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.modalBackground}
             >
-                <View style={styles.embeddedFormContainerModal}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeModalButton}>
+                <View style={styles.modalContent}>
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
                     </TouchableOpacity>
-                    <Text style={styles.embeddedFormTitle}>
+                    <Text style={styles.modalTitle}>
                         {editingAppointment ? 'Modifier le Rendez-vous' : 'Prendre un Rendez-vous'}
                     </Text>
-                    <Text style={styles.embeddedFormSubtitle}>Veuillez remplir les détails ci-dessous.</Text>
+                    <Text style={styles.modalSubtitle}>
+                        Veuillez remplir les détails ci-dessous.
+                    </Text>
 
-                    {/* Make content scrollable */}
-                    <ScrollView contentContainerStyle={styles.scrollContent}>
-                        <Text style={styles.formLabel}>Sélectionnez un partenaire:</Text>
-                        <View style={styles.pickerContainer}>
-                            <Picker
-                                selectedValue={selectedPartner?.id || ''}
-                                onValueChange={(itemValue) => {
-                                    const partner = allPartners.find(p => p.id === itemValue);
-                                    setSelectedPartner(partner);
-                                }}
-                                style={styles.picker}
-                                enabled={!isProcessingBooking} // Disable while booking
-                            >
-                                <Picker.Item label="-- Choisissez un partenaire --" value="" />
-                                {allPartners.map(partner => (
-                                    <Picker.Item key={partner.id} label={`${partner.name} (${partner.category})`} value={partner.id} />
-                                ))}
-                            </Picker>
-                        </View>
-                        {selectedPartner && (
-                            <Text style={styles.selectedPartnerText}>
-                                Vous avez sélectionné: **{selectedPartner.name}** ({selectedPartner.category})
-                            </Text>
-                        )}
-
-                        <Text style={styles.formLabel}>Noms des clients:</Text>
-                        {formClientNames.map((client, index) => (
-                            <View key={client.id} style={styles.clientNameInputContainer}>
-                                <TextInput
-                                    style={styles.formInput}
-                                    placeholder={`Nom du client ${index + 1}`}
-                                    value={client.name}
-                                    onChangeText={(text) => updateClientNameFormField(client.id, text)}
-                                    editable={!isProcessingBooking}
-                                />
-                                {formClientNames.length > 1 && (
-                                    <TouchableOpacity onPress={() => removeClientNameFormField(client.id)} disabled={isProcessingBooking}>
-                                        <Ionicons name="close-circle" size={24} color="#FF3B30" style={{ marginLeft: 10 }} />
-                                    </TouchableOpacity>
+                    <FlatList
+                        data={[]}
+                        ListEmptyComponent={<View />}
+                        ListHeaderComponent={() => (
+                            <>
+                                {/* Only show ticket info if in agent mode */}
+                                {isAgentMode && isLoadingTicketData ? (
+                                    <ActivityIndicator size="small" color="#0a8fdf" style={{ marginBottom: 15 }} />
+                                ) : (
+                                    isAgentMode && currentTicketData && (
+                                        <View style={styles.ticketInfoContainer}>
+                                            <Text style={styles.ticketInfoTitle}>Informations du Ticket Associé:</Text>
+                                            <Text style={styles.ticketInfoText}>**Sujet:** {currentTicketData.subject || 'N/A'}</Text>
+                                            <Text style={styles.ticketInfoText}>**Statut:** {currentTicketData.status || 'N/A'}</Text>
+                                            <Text style={styles.ticketInfoText}>**Créé par:** {currentTicketData.creatorName || 'N/A'}</Text>
+                                            <Text style={styles.ticketInfoText}>**Client du ticket:** {actualClientName} (ID: {actualClientUid || 'N/A'})</Text>
+                                            {actualClientPhone && <Text style={styles.ticketInfoText}>**Téléphone du ticket:** {actualClientPhone}</Text>}
+                                        </View>
+                                    )
                                 )}
-                            </View>
-                        ))}
-                        <TouchableOpacity onPress={addClientNameFormField} style={styles.addClientButton} disabled={isProcessingBooking}>
-                            <Ionicons name="add-circle" size={20} color="#34C759" />
-                            <Text style={styles.addClientButtonText}>Ajouter un autre nom</Text>
-                        </TouchableOpacity>
 
-                        <Text style={styles.formLabel}>Date du rendez-vous:</Text>
-                        <Pressable onPress={() => setShowFormDatePicker(true)} style={styles.dateTimeDisplay} disabled={isProcessingBooking}>
-                            <Text>{formAppointmentDate.toLocaleDateString('fr-FR')}</Text>
-                            <Ionicons name="calendar-outline" size={20} color="#34C759" />
-                        </Pressable>
-                        {showFormDatePicker && (
-                            <DateTimePicker
-                                value={formAppointmentDate}
-                                mode="date"
-                                display="default"
-                                onChange={onFormDateChange}
-                            />
-                        )}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Sélectionnez un partenaire:</Text>
+                                    <View style={styles.pickerContainer}>
+                                        <Picker
+                                            selectedValue={selectedPartner?.id || ''}
+                                            onValueChange={(itemValue) => {
+                                                const partner = allPartners.find(p => p.id === itemValue);
+                                                setSelectedPartner(partner);
+                                            }}
+                                            style={styles.picker}
+                                            enabled={!isProcessingBooking}
+                                        >
+                                            <Picker.Item label="-- Choisissez un partenaire --" value="" style={styles.pickerPlaceholder} />
+                                            {allPartners.map(partner => (
+                                                <Picker.Item key={partner.id} label={`${partner.nom} (${partner.categorie})`} value={partner.id} />
+                                            ))}
+                                        </Picker>
+                                    </View>
+                                    {selectedPartner && (
+                                        <Text style={styles.selectedPartnerDisplay}>
+                                            Vous avez sélectionné: **{selectedPartner.nom}** ({selectedPartner.categorie})
+                                        </Text>
+                                    )}
+                                </View>
 
-                        <Text style={styles.formLabel}>Heure du rendez-vous:</Text>
-                        <Pressable onPress={() => setShowFormTimePicker(true)} style={styles.dateTimeDisplay} disabled={isProcessingBooking}>
-                            <Text>{formAppointmentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
-                            <Ionicons name="time-outline" size={20} color="#34C759" />
-                        </Pressable>
-                        {showFormTimePicker && (
-                            <DateTimePicker
-                                value={formAppointmentTime}
-                                mode="time"
-                                display="default"
-                                onChange={onFormTimeChange}
-                            />
-                        )}
+                                {/* Only show client selection dropdown in agent mode */}
+                                {isAgentMode && (
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Sélectionnez le client principal du rendez-vous:</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Rechercher un client par nom, email ou téléphone"
+                                            value={clientSearchText}
+                                            onChangeText={(text) => {
+                                                setClientSearchText(text);
+                                                if (selectedClient && selectedClient.name !== text) {
+                                                    setSelectedClient(null);
+                                                }
+                                            }}
+                                            editable={!isProcessingBooking}
+                                        />
+                                        {isSearchingClients && <ActivityIndicator size="small" color="#0a8fdf" style={{ marginTop: 5 }} />}
+                                        {clientSearchText.length > 0 && !selectedClient && filteredClients.length > 0 && (
+                                            <View style={styles.clientSearchResultsContainer}>
+                                                <FlatList
+                                                    data={filteredClients.slice(0, 5)}
+                                                    keyExtractor={(item) => item.id}
+                                                    renderItem={({ item }) => (
+                                                        <TouchableOpacity
+                                                            style={styles.clientSearchResultItem}
+                                                            onPress={() => {
+                                                                setSelectedClient(item);
+                                                                setClientSearchText(item.name);
+                                                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                                            }}
+                                                        >
+                                                            <Text style={styles.clientSearchResultTextBold}>{item.name}</Text>
+                                                            {item.email && <Text style={styles.clientSearchResultText}>Email: {item.email}</Text>}
+                                                            {item.phone && <Text style={styles.clientSearchResultText}>Tél: {item.phone}</Text>}
+                                                        </TouchableOpacity>
+                                                    )}
+                                                    keyboardShouldPersistTaps="handled"
+                                                />
+                                            </View>
+                                        )}
+                                        {selectedClient && (
+                                            <View style={styles.selectedClientDisplayContainer}>
+                                                <Text style={styles.selectedClientDisplayText}>
+                                                    Client sélectionné: **{selectedClient.name}**
+                                                    {selectedClient.email && `\nEmail: ${selectedClient.email}`}
+                                                    {selectedClient.phone && `\nTél: ${selectedClient.phone}`}
+                                                </Text>
+                                                <TouchableOpacity onPress={() => { setSelectedClient(null); setClientSearchText(''); }} disabled={isProcessingBooking}>
+                                                    <Ionicons name="close-circle" size={20} color="#EF4444" style={{ marginLeft: 10 }} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                        {clientSearchText.length > 0 && !selectedClient && filteredClients.length === 0 && !isSearchingClients && (
+                                            <Text style={styles.noResultsText}>Aucun client trouvé.</Text>
+                                        )}
+                                    </View>
+                                )}
+                                {/* In client mode, if selectedClient exists (i.e., currentUser), display it */}
+                                {!isAgentMode && selectedClient && (
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Client principal du rendez-vous:</Text>
+                                        <View style={styles.selectedClientDisplayContainer}>
+                                            <Text style={styles.selectedClientDisplayText}>
+                                                **{selectedClient.name}**
+                                                {selectedClient.email && `\nEmail: ${selectedClient.email}`}
+                                                {selectedClient.phone && `\nTél: ${selectedClient.phone}`}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
 
-                        <Text style={styles.formLabel}>Description du rendez-vous (optionnel):</Text>
-                        <TextInput
-                            style={[styles.formInput, styles.descriptionInput]}
-                            placeholder="Ex: Réunion préparatoire, Suivi de projet..."
-                            multiline
-                            numberOfLines={4}
-                            value={formAppointmentDescription}
-                            onChangeText={setFormAppointmentDescription}
-                            editable={!isProcessingBooking}
-                        />
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Noms des participants supplémentaires:</Text>
+                                    {formClientNames.map((client, index) => (
+                                        <View key={client.id} style={styles.clientNameInputWrapper}>
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder={`Nom du participant ${index + 1}`}
+                                                value={client.name}
+                                                onChangeText={(text) => updateClientNameFormField(client.id, text)}
+                                                editable={!isProcessingBooking}
+                                                autoCapitalize="words"
+                                            />
+                                            {formClientNames.length > 1 && (
+                                                <TouchableOpacity onPress={() => removeClientNameFormField(client.id)} disabled={isProcessingBooking}>
+                                                    <Ionicons name="close-circle" size={24} color="#FF3B30" style={{ marginLeft: 10 }} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    ))}
+                                    <TouchableOpacity onPress={addClientNameFormField} style={styles.addClientButton} disabled={isProcessingBooking}>
+                                        <Ionicons name="add-circle-outline" size={20} color="#0a8fdf" />
+                                        <Text style={styles.addClientButtonText}>Ajouter un autre participant</Text>
+                                    </TouchableOpacity>
+                                </View>
 
-                        {/* QR Code Preview Section - Now with robust rendering condition */}
-                        {generatedCode && typeof generatedCode.qrContent === 'string' && generatedCode.qrContent.length > 0 && (
-                            <ViewShot ref={qrCodeViewShotRef} options={{ format: "jpg", quality: 0.9 }} style={styles.generatedCodeContainer}>
-                                <Text style={styles.generatedCodeTitle}>Aperçu du Code QR</Text>
-                                <View style={styles.qrCodeWrapper}>
-                                    <QRCode
-                                        value={generatedCode.qrContent} // This should now always be a string
-                                        size={width * 0.4}
-                                        color="black"
-                                        backgroundColor="white"
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Date du rendez-vous:</Text>
+                                    <Pressable onPress={() => setShowFormDatePicker(true)} style={styles.dateTimeInput} disabled={isProcessingBooking}>
+                                        <Text style={styles.dateTimeText}>{formAppointmentDate.toLocaleDateString('fr-FR')}</Text>
+                                        <Ionicons name="calendar-outline" size={20} color="#4A5568" />
+                                    </Pressable>
+                                    {showFormDatePicker && (
+                                        <DateTimePicker
+                                            value={formAppointmentDate}
+                                            mode="date"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'} // Use spinner for iOS
+                                            onChange={onFormDateChange}
+                                        />
+                                    )}
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Heure du rendez-vous:</Text>
+                                    <Pressable onPress={() => setShowFormTimePicker(true)} style={styles.dateTimeInput} disabled={isProcessingBooking}>
+                                        <Text style={styles.dateTimeText}>{formAppointmentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                                        <Ionicons name="time-outline" size={20} color="#4A5568" />
+                                    </Pressable>
+                                    {showFormTimePicker && (
+                                        <DateTimePicker
+                                            value={formAppointmentTime}
+                                            mode="time"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'} // Use spinner for iOS
+                                            onChange={onFormTimeChange}
+                                        />
+                                    )}
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Description du rendez-vous (optionnel):</Text>
+                                    <TextInput
+                                        style={[styles.input, styles.descriptionInput]}
+                                        placeholder="Décrivez le rendez-vous (Ex: Réunion préparatoire, Suivi de projet...)"
+                                        multiline
+                                        numberOfLines={4}
+                                        value={formAppointmentDescription}
+                                        onChangeText={setFormAppointmentDescription}
+                                        editable={!isProcessingBooking}
+                                        textAlignVertical="top"
                                     />
                                 </View>
-                                <Text style={styles.generatedCodeDetails}>Code: {generatedCode.value}</Text>
-                                <Text style={styles.generatedCodeDetails}>Partenaire: {generatedCode.partnerName}</Text>
-                            </ViewShot>
+
+                                {generatedCode && typeof generatedCode.qrContent === 'string' && generatedCode.qrContent.length > 0 && (
+                                    <ViewShot ref={qrCodeViewShotRef} options={{ format: "jpg", quality: 0.9 }} style={styles.qrCodeSection}>
+                                        <Text style={styles.qrCodeTitle}>Aperçu du Code QR</Text>
+                                        <View style={styles.qrCodeWrapper}>
+                                            <QRCode
+                                                value={generatedCode.qrContent}
+                                                size={width * 0.4}
+                                                color="black"
+                                                backgroundColor="white"
+                                            />
+                                        </View>
+                                        <Text style={styles.qrCodeDetails}>Code: {generatedCode.value}</Text>
+                                        <Text style={styles.qrCodeDetails}>Partenaire: {generatedCode.partnerName}</Text>
+                                    </ViewShot>
+                                )}
+                            </>
                         )}
-                    </ScrollView> {/* End ScrollView */}
+                        renderItem={null}
+                        contentContainerStyle={styles.scrollContent}
+                        scrollEnabled={true}
+                        showsVerticalScrollIndicator={true}
+                        keyboardShouldPersistTaps="handled" 
+                    />
 
                     <TouchableOpacity
                         onPress={handleBookingSubmission}
-                        style={[styles.formSubmitButton, isProcessingBooking && { opacity: 0.7 }]}
+                        style={[styles.submitButton, isProcessingBooking && styles.disabledButton]}
                         disabled={isProcessingBooking}
                     >
                         {isProcessingBooking ? (
                             <ActivityIndicator size="small" color="#FFF" />
                         ) : (
-                            <Text style={styles.formSubmitButtonText}>
+                            <Text style={styles.submitButtonText}>
                                 {editingAppointment ? 'Mettre à jour le Rendez-vous' : 'Confirmer le Rendez-vous'}
                             </Text>
                         )}
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={() => { onClose(); resetForm(); }}
-                        style={styles.formCancelButton}
+                        style={[styles.cancelButton, isProcessingBooking && styles.disabledButton]}
                         disabled={isProcessingBooking}
                     >
-                        <Text style={styles.formCancelButtonText}>Annuler</Text>
+                        <Text style={styles.cancelButtonText}>Annuler</Text>
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -634,166 +896,265 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
-    embeddedFormContainerModal: {
-        backgroundColor: '#E6F7FF',
-        borderRadius: 10,
+    modalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 15,
         padding: 20,
         width: '90%',
-        maxHeight: '85%', // Allows content to scroll if it exceeds this height
-        borderColor: '#B3E5FC',
-        borderWidth: 1,
+        maxHeight: '85%',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 6,
     },
-    scrollContent: { // Style for ScrollView content container
-        flexGrow: 1, // Allows content to grow within the ScrollView
-        paddingBottom: 20, // Add some padding at the bottom of the scrollable area
+    scrollContent: {
+        flexGrow: 1,
+        paddingBottom: 20,
     },
-    closeModalButton: {
+    closeButton: {
         position: 'absolute',
         top: 10,
         right: 10,
         zIndex: 1,
         padding: 5,
     },
-    embeddedFormTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#01579B',
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#2D3748',
         marginBottom: 8,
         textAlign: 'center',
     },
-    embeddedFormSubtitle: {
-        fontSize: 14,
-        color: '#424242',
+    modalSubtitle: {
+        fontSize: 15,
+        color: '#4A5568',
         marginBottom: 15,
         textAlign: 'center',
+        fontWeight: '500',
     },
-    formLabel: {
-        fontSize: 14,
+    inputGroup: {
+        marginBottom: 20,
+    },
+    inputLabel: {
+        fontSize: 15,
+        color: '#4A5568',
+        marginBottom: 8,
         fontWeight: '600',
-        color: '#2C2C2C',
-        marginTop: 10,
-        marginBottom: 5,
+    },
+    input: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#CBD5E0',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        fontSize: 16,
+        color: '#2D3748',
+        backgroundColor: '#F7FAFC',
     },
     pickerContainer: {
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#CBD5E0',
+        borderRadius: 10,
         marginBottom: 10,
-        backgroundColor: '#FFF',
+        backgroundColor: '#F7FAFC',
         overflow: 'hidden',
+        justifyContent: 'center',
     },
     picker: {
         height: 50,
         width: '100%',
+        color: '#2D3748',
+        paddingHorizontal: 10, // Added padding
     },
-    selectedPartnerText: {
+    pickerPlaceholder: {
+        color: '#9CA3AF',
+    },
+    selectedPartnerDisplay: {
         fontSize: 14,
-        color: '#01579B',
+        color: '#0a8fdf',
         textAlign: 'center',
-        marginBottom: 10,
+        marginTop: 5,
         fontWeight: 'bold',
     },
-    clientNameInputContainer: {
+    clientNameInputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 5,
-    },
-    formInput: {
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: 8,
-        padding: 10,
-        fontSize: 14,
-        backgroundColor: '#FFF',
-        marginBottom: 5,
-        flex: 1,
+        marginBottom: 10,
     },
     addClientButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 8,
-        borderRadius: 8,
-        backgroundColor: '#E6F7ED',
+        paddingVertical: 10,
+        borderRadius: 10,
+        backgroundColor: '#EBF3F8',
         marginTop: 5,
         borderWidth: 1,
-        borderColor: '#34C759',
+        borderColor: '#0a8fdf',
     },
     addClientButtonText: {
-        color: '#34C759',
-        marginLeft: 5,
-        fontWeight: 'bold',
+        color: '#0a8fdf',
+        marginLeft: 8,
+        fontWeight: '600',
+        fontSize: 15,
     },
-    dateTimeDisplay: {
+    dateTimeInput: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: 8,
-        padding: 10,
-        backgroundColor: '#FFF',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#CBD5E0',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        backgroundColor: '#F7FAFC',
         marginBottom: 10,
     },
+    dateTimeText: {
+        fontSize: 16,
+        color: '#2D3748',
+    },
     descriptionInput: {
-        minHeight: 80,
+        minHeight: 100,
         textAlignVertical: 'top',
     },
-    formSubmitButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 12,
-        borderRadius: 8,
+    submitButton: {
+        backgroundColor: '#0a8fdf',
+        borderRadius: 12,
+        paddingVertical: 16,
         alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#0a8fdf',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 10,
         marginTop: 20,
     },
-    formSubmitButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
+    submitButtonText: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: '700',
     },
-    formCancelButton: {
+    disabledButton: {
+        opacity: 0.7,
+        elevation: 0,
+        shadowOpacity: 0,
+    },
+    cancelButton: {
         backgroundColor: '#6B7280',
-        paddingVertical: 10,
-        borderRadius: 8,
+        borderRadius: 12,
+        paddingVertical: 12,
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: 10,
     },
-    formCancelButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    generatedCodeContainer: {
-        backgroundColor: '#F0F8FF',
-        padding: 10,
-        borderRadius: 10,
-        marginTop: 15,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#AEE2FF',
-    },
-    generatedCodeTitle: {
+    cancelButtonText: {
+        color: '#FFFFFF',
         fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 8,
-        color: '#0D47A1',
+        fontWeight: '600',
+    },
+    qrCodeSection: {
+        backgroundColor: '#F7FAFC',
+        padding: 15,
+        borderRadius: 12,
+        marginTop: 20,
+        alignItems: 'center',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 3,
+    },
+    qrCodeTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 10,
+        color: '#2D3748',
         textAlign: 'center',
     },
     qrCodeWrapper: {
-        padding: 8,
-        backgroundColor: '#FFF',
-        borderRadius: 5,
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#E2E8F0',
     },
-    generatedCodeDetails: {
-        fontSize: 13,
-        color: '#4A4A40',
-        marginTop: 5,
+    qrCodeDetails: {
+        fontSize: 14,
+        color: '#4A5568',
+        marginTop: 8,
         textAlign: 'center',
+        fontWeight: '500',
+    },
+    ticketInfoContainer: {
+        backgroundColor: '#e6f7ff',
+        borderRadius: 10,
+        padding: 15,
+        marginBottom: 20,
+        borderLeftWidth: 5,
+        borderColor: '#0a8fdf',
+    },
+    ticketInfoTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#0a8fdf',
+        marginBottom: 8,
+    },
+    ticketInfoText: {
+        fontSize: 14,
+        color: '#4A5568',
+        marginBottom: 4,
+    },
+    clientSearchResultsContainer: {
+        maxHeight: 150,
+        borderColor: '#CBD5E0',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        marginTop: 5,
+        backgroundColor: '#F7FAFC',
+        overflow: 'hidden',
+    },
+    clientSearchResultItem: {
+        paddingVertical: 10,
+        paddingHorizontal: 15,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: '#E2E8F0',
+    },
+    clientSearchResultTextBold: {
+        fontSize: 16,
+        color: '#2D3748',
+        fontWeight: '600',
+    },
+    clientSearchResultText: {
+        fontSize: 14,
+        color: '#4A5568',
+        marginTop: 2,
+    },
+    selectedClientDisplayContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#e6f7ff',
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#0a8fdf',
+    },
+    selectedClientDisplayText: {
+        flex: 1,
+        fontSize: 15,
+        color: '#0a8fdf',
+        fontWeight: 'bold',
+    },
+    noResultsText: {
+        fontSize: 14,
+        color: '#EF4444',
+        textAlign: 'center',
+        marginTop: 10,
     },
 });
 

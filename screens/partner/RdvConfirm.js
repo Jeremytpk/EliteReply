@@ -42,7 +42,7 @@ const RdvConfirm = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [rdvs, setRdvs] = useState([]); // List of confirmed RDVs
   const [currentPartnerId, setCurrentPartnerId] = useState(null);
-  const [loggedInPartnerName, setLoggedInPartnerName] = useState('');
+  const [loggedInPartnerName, setLoggedInPartnerName] = useState(''); // This will store the partner's 'nom'
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentDetailsModalVisible, setPaymentDetailsModalVisible] = useState(false);
@@ -95,15 +95,25 @@ const RdvConfirm = () => {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists() && userDocSnap.data().partnerId) {
-        setCurrentPartnerId(userDocSnap.data().partnerId);
-        setLoggedInPartnerName(userDocSnap.data().name || 'Partenaire');
+        const partnerIdFromUser = userDocSnap.data().partnerId;
+        setCurrentPartnerId(partnerIdFromUser);
+
+        // ⭐ MODIFIED: Fetch partner's 'nom' using partnerId ⭐
+        const partnerDocRef = doc(db, 'partners', partnerIdFromUser);
+        const partnerDocSnap = await getDoc(partnerDocRef);
+        if (partnerDocSnap.exists()) {
+          setLoggedInPartnerName(partnerDocSnap.data().nom || 'Partenaire Inconnu');
+        } else {
+          setLoggedInPartnerName('Partenaire (Non trouvé)'); // Fallback
+          console.warn("WARN: Partner document not found for ID:", partnerIdFromUser);
+        }
       } else {
         Alert.alert("Erreur", "Votre compte n'est pas lié à un partenaire. Accès refusé.");
         navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       }
     };
     fetchPartnerInfo();
-  }, [navigation]);
+  }, [navigation]); // Added navigation to dependency array
 
   const fetchData = useCallback(async () => {
     if (!currentPartnerId) return;
@@ -173,9 +183,9 @@ const RdvConfirm = () => {
       await addDoc(collection(db, 'partners', currentPartnerId, 'revenue_transactions'), {
         rdvId: selectedRdvForPayment.id,
         clientId: selectedRdvForPayment.clientId,
-        clientName: selectedRdvForPayment.clientName, // Using clientName from appointments document
+        clientName: selectedRdvForPayment.clientName,
         partnerId: currentPartnerId,
-        partnerName: loggedInPartnerName,
+        partnerName: loggedInPartnerName, // Using the partner's 'nom'
         amountReceived: amount,
         commissionAmount: commissionAmount,
         transactionDate: serverTimestamp(),
@@ -226,7 +236,7 @@ const RdvConfirm = () => {
         clientId: clientId,
         partnerId: partnerId,
         rdvId: rdvId,
-        partnerName: partnerName,
+        partnerName: partnerName, // Using the partner's 'nom' here
         requestDate: serverTimestamp(),
         status: 'pending',
       });
@@ -240,14 +250,15 @@ const RdvConfirm = () => {
 
   const renderRdvItem = ({ item }) => {
     const isCompleted = item.status === 'completed';
-    const partnerTotal = item.paymentAmount - item.commissionCalculated;
-    const formattedPartnerTotal = partnerTotal ? partnerTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' }) : '0,00 €';
+    const partnerTotal = (item.paymentAmount || 0) - (item.commissionCalculated || 0); // Handle potential undefined values
+    const formattedPartnerTotal = partnerTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' });
 
     return (
       <View style={styles.rdvCard}>
         <View style={styles.rdvCardHeader}>
           <Ionicons name="calendar-outline" size={24} color="#16a085" />
-          <Text style={styles.rdvCardTitle}>Rendez-vous avec {item.clientNames || 'un client'}</Text>
+          {/* Changed from 'item.clientNames' for consistency if clientNames is an array */}
+          <Text style={styles.rdvCardTitle}>Rendez-vous avec {Array.isArray(item.clientNames) ? item.clientNames.join(', ') : item.clientNames || 'un client'}</Text>
         </View>
         <Text style={styles.rdvCardDetails}>Description: {item.description || 'Non spécifié'}</Text>
         <Text style={styles.rdvCardDetails}>Date: {formatDate(item.appointmentDateTime)}</Text>
@@ -338,7 +349,7 @@ const RdvConfirm = () => {
             <Text style={styles.modalTitle}>Enregistrer le Paiement</Text>
             {selectedRdvForPayment && (
               <Text style={styles.modalSubtitle}>
-                Pour: {selectedRdvForPayment.clientNames} ({formatDate(selectedRdvForPayment.appointmentDateTime)})
+                Pour: {Array.isArray(selectedRdvForPayment.clientNames) ? selectedRdvForPayment.clientNames.join(', ') : selectedRdvForPayment.clientNames || 'un client'} ({formatDate(selectedRdvForPayment.appointmentDateTime)})
               </Text>
             )}
 
@@ -394,7 +405,7 @@ const RdvConfirm = () => {
             <Text style={styles.modalTitle}>Détails du Paiement</Text>
             {displayedPaymentDetails && (
               <>
-                <Text style={styles.detailText}>Client: {displayedPaymentDetails.clientNames}</Text>
+                <Text style={styles.detailText}>Client: {Array.isArray(displayedPaymentDetails.clientNames) ? displayedPaymentDetails.clientNames.join(', ') : displayedPaymentDetails.clientNames || 'N/A'}</Text>
                 <Text style={styles.detailText}>Date RDV: {formatDate(displayedPaymentDetails.appointmentDateTime)}</Text>
                 <Text style={styles.detailText}>Montant Total Reçu: {displayedPaymentDetails.paymentAmount?.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}</Text>
                 <Text style={styles.detailText}>Commission EliteReply: {displayedPaymentDetails.commissionCalculated?.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}</Text>
@@ -417,7 +428,7 @@ const RdvConfirm = () => {
                     displayedPaymentDetails.partnerId,
                     displayedPaymentDetails.id,
                     displayedPaymentDetails.clientName,
-                    loggedInPartnerName
+                    loggedInPartnerName // Using the partner's 'nom' here
                   )}
                 >
                   <Ionicons name="star" size={20} color="white" style={{ marginRight: 5 }} />

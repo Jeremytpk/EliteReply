@@ -20,10 +20,14 @@ const UserRdv = () => {
     if (!date) return 'Date/Heure inconnue';
     try {
       let d = date;
-      if (date.toDate) { // Check if it's a Firestore Timestamp object
+      // Handle Firebase Timestamp objects
+      if (typeof date === 'object' && date !== null && typeof date.toDate === 'function') {
         d = date.toDate();
       } else if (typeof date === 'string') { // If it's an ISO string
         d = new Date(date);
+      } else if (!(d instanceof Date)) { // If it's something else that's not a Date object
+         console.warn("WARN: Invalid date format passed to formatDateTime:", date);
+         return 'Date/Heure invalide';
       }
       return d.toLocaleDateString('fr-FR', {
         year: 'numeric',
@@ -49,10 +53,13 @@ const UserRdv = () => {
           return;
         }
 
+        // Fetching from 'rdv_reservation' collection group
+        // This collection is expected to be under each 'partner' document
+        // Example path: partners/{partnerId}/rdv_reservation/{appointmentId}
         const q = query(
           collectionGroup(db, 'rdv_reservation'),
           where('clientId', '==', currentUser.uid),
-          where('status', 'in', ['scheduled', 'rescheduled']),
+          where('status', 'in', ['scheduled', 'rescheduled']), // Only show active appointments
           orderBy('appointmentDateTime', 'desc')
         );
 
@@ -60,13 +67,13 @@ const UserRdv = () => {
         const fetchedAppointments = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          fetchedAppointments.push({ id: doc.id, ...data });
+          fetchedAppointments.push({ id: doc.id, ...data }); // doc.id here is the ID within rdv_reservation
         });
         setAppointments(fetchedAppointments);
 
       } catch (error) {
         console.error("Error fetching user appointments:", error);
-        Alert.alert('Erreur', 'Impossible de charger vos rendez-vous. Veuillez réessayer ou vérifier la console pour créer un index Firestore.');
+        Alert.alert('Erreur', 'Impossible de charger vos rendez-vous. Veuillez réessayer ou vérifier la console pour créer un index Firestore si nécessaire.');
       } finally {
         setLoading(false);
       }
@@ -127,9 +134,9 @@ const UserRdv = () => {
                 <Ionicons name="calendar" size={30} color="#FF9500" />
               </View>
               <View style={styles.appointmentDetails}>
-                <Text style={styles.appointmentPartnerName}>{appointmentData.partnerName}</Text>
+                <Text style={styles.appointmentPartnerName}>{appointmentData.partnerNom || 'Partenaire Inconnu'}</Text> {/* Using partnerNom */}
                 <Text style={styles.appointmentClientNames}>
-                  Pour: {appointmentData.clientNames ? appointmentData.clientNames.join(', ') : 'N/A'}
+                  Pour: {Array.isArray(appointmentData.clientNames) ? appointmentData.clientNames.join(', ') : appointmentData.clientNames || 'N/A'} {/* Ensure Array.isArray check */}
                 </Text>
                 <Text style={styles.appointmentDateTime}>
                   Le: {formatDateTime(appointmentData.appointmentDateTime)}
@@ -164,13 +171,13 @@ const UserRdv = () => {
               <>
                 <Text style={styles.modalAppointmentTitle}>Détails du Rendez-vous</Text>
                 <Text style={styles.modalDetailText}>
-                  <Text style={styles.modalDetailLabel}>Partenaire:</Text> {selectedAppointment.partnerName}
+                  <Text style={styles.modalDetailLabel}>Partenaire:</Text> {selectedAppointment.partnerNom || 'N/A'} {/* Using partnerNom */}
                 </Text>
                 <Text style={styles.modalDetailText}>
                   <Text style={styles.modalDetailLabel}>Date et Heure:</Text> {formatDateTime(selectedAppointment.appointmentDateTime)}
                 </Text>
                 <Text style={styles.modalDetailText}>
-                  <Text style={styles.modalDetailLabel}>Pour:</Text> {selectedAppointment.clientNames ? selectedAppointment.clientNames.join(', ') : 'N/A'}
+                  <Text style={styles.modalDetailLabel}>Pour:</Text> {Array.isArray(selectedAppointment.clientNames) ? selectedAppointment.clientNames.join(', ') : selectedAppointment.clientNames || 'N/A'} {/* Ensure Array.isArray check */}
                 </Text>
                 {selectedAppointment.description && (
                   <Text style={styles.modalDetailText}>
@@ -181,32 +188,35 @@ const UserRdv = () => {
                   <Text style={styles.modalDetailLabel}>Statut:</Text> {selectedAppointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
                 </Text>
 
-                {/* Logic to determine QR code value and display it - UPDATED */}
+                {/* ⭐⭐⭐ MODIFIED: Improved QR code display logic ⭐⭐⭐ */}
                 {(() => {
                   let qrValueToEncode = null;
                   let displayedCodeValue = null;
 
-                  // Access the correctly named field: selectedAppointment.codeData
-                  if (typeof selectedAppointment.codeData === 'object' && selectedAppointment.codeData !== null) {
-                    // Prefer qrContent for encoding if it exists and is a string
+                  // Your AppointmentFormModal saves codeData as an object { type, value, qrContent }
+                  // and also codeImageUrl.
+                  // The 'id' in rdv_reservation comes from the main 'appointments' collection.
+                  // The rdv_reservation documents should also have 'codeData' saved.
+
+                  if (selectedAppointment.codeData && typeof selectedAppointment.codeData === 'object') {
+                    // Prioritize qrContent for encoding if available and is a valid string
                     if (typeof selectedAppointment.codeData.qrContent === 'string' && selectedAppointment.codeData.qrContent.length > 0) {
                       qrValueToEncode = selectedAppointment.codeData.qrContent;
                     }
-                    // Fallback to 'value' if qrContent is missing or not a string, and 'value' is a string
+                    // Fallback to 'value' for encoding if qrContent is not present/valid, but 'value' is
                     else if (typeof selectedAppointment.codeData.value === 'string' && selectedAppointment.codeData.value.length > 0) {
                       qrValueToEncode = selectedAppointment.codeData.value;
                     }
-                    // If the object exists but contains no valid string to encode, qrValueToEncode remains null.
-
-                    // Determine the human-readable code to display
+                    
+                    // The human-readable code to display is usually 'value'
                     if (typeof selectedAppointment.codeData.value === 'string' && selectedAppointment.codeData.value.length > 0) {
-                        displayedCodeValue = selectedAppointment.codeData.value;
+                      displayedCodeValue = selectedAppointment.codeData.value;
                     }
                   }
-                  // Handle case where codeData itself is a simple string (less likely given your booking component, but good for robustness)
+                  // Handle legacy case if codeData was just a simple string (less likely now)
                   else if (typeof selectedAppointment.codeData === 'string' && selectedAppointment.codeData.length > 0) {
-                    qrValueToEncode = selectedAppointment.codeData;
-                    displayedCodeValue = selectedAppointment.codeData; // For display, use the string itself
+                      qrValueToEncode = selectedAppointment.codeData;
+                      displayedCodeValue = selectedAppointment.codeData;
                   }
 
                   if (qrValueToEncode) {

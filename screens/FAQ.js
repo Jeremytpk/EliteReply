@@ -5,9 +5,21 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Linking
+  Linking,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+// --- Import your actual image files here ---
+import TelecomIcon from '../assets/images/telecom_icon.png';
+import TransportIcon from '../assets/images/transport_icon.png';
+import HealthIcon from '../assets/images/sante_icon.png';
+import EducationIcon from '../assets/images/education_icon.png';
+import TravelIcon from '../assets/images/voyage_icon.png';
+import CommerceIcon from '../assets/images/commerce_icon.png';
+import PMEIcon from '../assets/images/pme_icon.png';
+import IndustryIcon from '../assets/images/industrie_icon.png';
+import SecurityIcon from '../assets/images/securite_icon.png';
 
 const FAQ = () => {
   const [expandedSections, setExpandedSections] = useState({});
@@ -22,134 +34,143 @@ const FAQ = () => {
   const faqData = [
     {
       id: 'telecom',
-      title: '📱 Télécommunications',
+      title: 'Télécommunications',
+      icon: TelecomIcon,
       questions: [
         {
-          q: 'Q1. Comment EliteReply aide les opérateurs télécoms ?',
-          a: '→ Gestion des plaintes (facturation, réseau, forfaits) via WhatsApp/SMS.\n→ Activation de services par chat (ex : *"Envoyez 123# pour recharger").'
+          q: 'Q1. Comment EliteReply aide les utilisateurs face aux problèmes de réseau ?',
+          a: 'Nous assistons les clients en collectant les détails des problèmes réseau (coupures, faible signal) et en les transmettant directement au service technique de leur opérateur télécom actuel, assurant un suivi rapide.'
         },
         {
-          q: 'Q2. Pouvons-nous intégrer EliteReply à notre système CRM ?',
-          a: 'Oui ! API compatible avec Orange Money, Airtel, Vodacom, etc.'
+          q: 'Q2. Puis-je partager des informations spécifiques sur mon abonnement via EliteReply pour obtenir de l\'aide ?',
+          a: 'Oui, vous pouvez partager les informations nécessaires (numéro de contrat, type de forfait) via notre chat sécurisé. EliteReply facilite la communication de ces détails à votre opérateur pour une résolution plus efficace de vos requêtes.'
         }
       ]
     },
     {
       id: 'transport',
-      title: '🚚 Transport & Logistique',
+      title: 'Transport', // Shortened title
+      icon: TransportIcon,
       questions: [
         {
-          q: 'Q3. Comment optimiser le suivi des livraisons avec EliteReply ?',
-          a: '→ Alertes automatiques aux clients (retards, numéros de suivi).\n→ Support B2B pour chauffeurs et fournisseurs (bilingue).'
+          q: 'Q3. Quelles informations puis-je obtenir sur les trajets et tarifs via EliteReply ?',
+          a: 'Nous aidons les clients à obtenir des informations sur les prix des billets, les villes desservies par nos partenaires (itinéraires), et d\'autres détails concernant les voyages.'
         },
         {
-          q: 'Q4. Gérez-vous les réclamations pour les compagnies aériennes ?',
-          a: 'Oui ! Chat dédié pour :\n\n• Changement de vol.\n• Remboursements.\n• Infos bagages.'
+          q: 'Q4. Est-il possible de prendre rendez-vous avec un partenaire de transport via EliteReply ?',
+          a: 'Oui, vous pouvez utiliser EliteReply pour réserver des rendez-vous ou des créneaux horaires avec nos partenaires de transport, que ce soit pour des consultations, des réservations de groupe ou d\'autres services.'
         }
       ]
     },
     {
       id: 'sante',
-      title: '🏥 Santé & Pharmacies',
+      title: 'Santé & Pharmacies',
+      icon: HealthIcon,
       questions: [
         {
-          q: 'Q5. Comment EliteReply améliore l\'accès aux soins ?',
-          a: '→ Prise de RDV automatisée via WhatsApp.\n→ Rappels de médicaments (messagerie cryptée Hippocrate-compatible).'
+          q: 'Q5. Comment EliteReply facilite la prise de rendez-vous médicaux ?',
+          a: 'Nous aidons les clients à prendre rendez-vous directement avec des médecins, des spécialistes ou pour des services de santé variés, simplifiant ainsi l\'accès aux soins.'
         },
         {
-          q: 'Q6. Vos agents comprennent-ils les termes médicaux ?',
-          a: 'Oui ! Nous formons nos agents aux bases de la santé (protocoles confidentiels).'
+          q: 'Q6. EliteReply peut-il m\'aider avec d\'autres services liés à la santé ?',
+          a: 'Au-delà des rendez-vous, nous pouvons assister les clients avec des informations sur les services de santé, les horaires des pharmacies de garde, ou d\'autres requêtes spécifiques en fonction de nos partenaires.'
         }
       ]
     },
     {
       id: 'education',
-      title: '🎓 Éducation & Universités',
+      title: 'Éducation & Universités',
+      icon: EducationIcon,
       questions: [
         {
-          q: 'Q7. Pouvons-nous utiliser EliteReply pour les inscriptions étudiantes ?',
-          a: 'Absolument ! Chatbots pour :\n\n• FAQ sur les filières.\n• Paiement des frais scolaires.\n• Alertes de rentrée.'
+          q: 'Q7. Quelles informations puis-je obtenir sur les écoles et universités via EliteReply ?',
+          a: 'Nous fournissons aux clients des réponses concernant les inscriptions scolaires, les frais de scolarité, les emplacements des établissements, et des listes d\'écoles ou d\'universités partenaires.'
         },
         {
-          q: 'Q8. Prenez-vous en charge les parents non connectés ?',
-          a: 'Oui, via SMS (forfaits adaptés aux écoles rurales).'
+          q: 'Q8. Puis-je prendre rendez-vous avec les établissements d\'enseignement via EliteReply ?',
+          a: 'Oui, vous pouvez utiliser EliteReply pour réserver des rendez-vous pour des entretiens d\'admission, des visites de campus, ou des sessions d\'information avec nos partenaires éducatifs.'
         }
       ]
     },
     {
       id: 'voyage',
-      title: '✈️ Agences de Voyage & Compagnies Aériennes',
+      title: 'Agences de Voyage',
+      icon: TravelIcon,
       questions: [
         {
-          q: 'Q9. Comment boostez-vous les réservations ?',
-          a: '→ Réponses instantanées aux questions sur les visas, promotions, etc.\n→ Intégration avec Amadeus/Sabre (sur demande).'
+          q: 'Q9. EliteReply peut-il me donner des informations sur les prix des billets et destinations ?',
+          a: 'Oui, nous fournissons aux clients des informations actualisées sur les prix des billets d\'avion, voyage et les destinations disponibles, selon les offres de nos partenaires.'
         },
         {
-          q: 'Q10. Que faire en cas d\'urgence voyage (ex : vol annulé) ?',
-          a: 'Nos agents priorisent les urgences 24h/24 et informent les clients par SMS/chat.'
+          q: 'Q10. Puis-je réserver des rendez-vous avec des agents de voyage via EliteReply ?',
+          a: 'Absolument. EliteReply vous permet de planifier des rendez-vous pour discuter de vos projets de voyage, obtenir des devis personnalisés ou finaliser vos réservations avec nos partenaires.'
         }
       ]
     },
     {
       id: 'commerce',
-      title: '🛍️ Commerces (Stores, E-commerce)',
+      title: 'Commerces (Stores, E-commerce)',
+      icon: CommerceIcon,
       questions: [
         {
-          q: 'Q11. Comment EliteReply augmente mes ventes ?',
-          a: '→ Conversion des visiteurs en clients via chat en direct ("Besoin d\'aide pour commander ?").\n→ Relance des paniers abandonnés.'
+          q: 'Q11. Comment EliteReply m\'aide à trouver des produits ou des magasins ?',
+          a: 'Nous aidons les clients à obtenir des informations sur leurs questions liées aux magasins ou au shopping, comme la localisation d\'un article spécifique, la recherche de magasins proposant des promotions, ou les horaires d\'ouverture.'
         },
         {
-          q: 'Q12. Puis-je lier EliteReply à ma boutique Shopify ?',
-          a: 'Oui ! Notification des commandes + suivi livraison.'
+          q: 'Q12. Puis-je poser des questions sur les stocks ou la disponibilité des produits ?',
+          a: 'Oui, EliteReply peut vous connecter avec le commerce pour vérifier la disponibilité des articles, les tailles, les couleurs, ou toute autre information liée au stock avant votre visite ou commande.'
         }
       ]
     },
     {
       id: 'pme',
-      title: '🚀 Startups & PME',
+      title: 'Startups & PME',
+      icon: PMEIcon,
       questions: [
         {
-          q: 'Q13. Je suis une petite entreprise – puis-je me le permettre ?',
-          a: 'Oui ! Forfaits dès $100/mois (50 chats inclus).'
+          q: 'Q13. Comment EliteReply aide les startups à devenir partenaires et à se développer ?',
+          a: 'Nous offrons aux startups des solutions de communication client sur mesure, des tarifs adaptés, et un accompagnement pour intégrer EliteReply. En devenant partenaire, vous bénéficiez d\'une gestion optimisée de vos interactions clients, favorisant ainsi la croissance de votre entreprise et l\'accès à de nouveaux marchés.'
         },
         {
-          q: 'Q14. Comment scalez-vous avec ma croissance ?',
-          a: 'Passage seamless de l\'humain à l\'IA + humain quand vous grandissez.'
+          q: 'Q14. Quels sont les avantages spécifiques pour une startup de s\'associer à EliteReply ?',
+          a: 'En plus de nos forfaits flexibles, les startups partenaires accèdent à notre expertise en IA hybride, des outils d\'automatisation pour la gestion des demandes, et la possibilité de scalabilité rapide de leurs opérations de service client, les aidant à se concentrer sur leur cœur de métier.'
         }
       ]
     },
     {
       id: 'industrie',
-      title: '🏭 Fabrication & Industrie',
+      title: 'Fabrication & Industrie',
+      icon: IndustryIcon,
       questions: [
         {
-          q: 'Q15. Comment fluidifier la chaîne d\'approvisionnement ?',
-          a: '→ Chat dédié aux fournisseurs pour :\n\n• Commandes urgentes.\n• Problèmes logistiques.'
+          q: 'Q15. Comment EliteReply facilite la communication avec les entreprises de fabrication ?',
+          a: 'Nous fournissons aux clients des réponses et des liens directs avec les entreprises de fabrication partenaires. Que ce soit pour des informations sur les produits, les processus de commande, ou le support après-vente, EliteReply simplifie les interactions.'
         },
         {
-          q: 'Q16. Vos agents comprennent-ils les spécificités techniques ?',
-          a: 'Oui ! Formation sur mesure à vos produits/processus.'
+          q: 'Q16. EliteReply peut-il aider avec le support client pour des produits industriels complexes ?',
+          a: 'Oui ! Nos agents sont formés pour comprendre les spécificités techniques de vos produits et processus industriels. Nous aidons à fluidifier la communication entre clients et fabricants pour des questions techniques, logistiques ou de support.'
         }
       ]
     },
     {
       id: 'securite',
-      title: '🔐 Sécurité & Données (Tous Secteurs)',
+      title: 'Sécurité & Données (Tous Secteurs)',
+      icon: SecurityIcon,
       questions: [
         {
-          q: 'Q17. Où sont stockées nos données ?',
-          a: 'Serveurs locaux (RDC) + cryptage niveau bancaire.'
+          q: 'Q17. Comment EliteReply assure-t-il la sécurité et la confidentialité de nos données ?',
+          a: 'Nous assurons à nos clients que leurs données sont en sécurité grâce à un cryptage de niveau bancaire. Nous respectons scrupuleusement notre accord de confidentialité pour protéger toutes vos informations sensibles.'
         },
         {
-          q: 'Q18. Puis-je auditer la sécurité ?',
-          a: 'Oui ! Rapport annuel disponible sur demande.'
+          q: 'Q18. Pouvons-nous avoir confiance en la gestion de nos informations par EliteReply ?',
+          a: 'Absolument. La protection de vos données est notre priorité absolue. Nous mettons en œuvre des protocoles de sécurité stricts et sommes transparents concernant nos pratiques, comme détaillé dans notre politique de confidentialité, garantissant ainsi votre tranquillité d\'esprit.'
         }
       ]
     }
   ];
 
   const openContact = () => {
-    Linking.openURL('mailto:contact@elitereply.cd');
+    Linking.openURL('mailto:contact@elitereply.info');
   };
 
   const openWhatsApp = () => {
@@ -166,16 +187,16 @@ const FAQ = () => {
         </Text>
 
         {faqData.map((section) => (
-          <View key={section.id} style={styles.sectionContainer}>
-            <TouchableOpacity 
+          <View key={section.id} style={styles.sectionCard}>
+            <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => toggleSection(section.id)}
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Ionicons 
-                name={expandedSections[section.id] ? 'chevron-up' : 'chevron-down'} 
-                size={20} 
-                color="#4a6bff" 
+              <Ionicons
+                name={expandedSections[section.id] ? 'chevron-up' : 'chevron-down'}
+                size={22}
+                color="#347afc"
               />
             </TouchableOpacity>
 
@@ -183,6 +204,10 @@ const FAQ = () => {
               <View style={styles.questionsContainer}>
                 {section.questions.map((item, index) => (
                   <View key={index} style={styles.questionItem}>
+                    {/* Render icon ONLY for the first question */}
+                    {index === 0 && section.icon && (
+                      <Image source={section.icon} style={styles.questionIcon} />
+                    )}
                     <Text style={styles.questionText}>{item.q}</Text>
                     <Text style={styles.answerText}>{item.a}</Text>
                   </View>
@@ -195,31 +220,32 @@ const FAQ = () => {
         <View style={styles.whyContainer}>
           <Text style={styles.whyTitle}>📌 Pourquoi EliteReply ?</Text>
           <View style={styles.benefitItem}>
-            <Ionicons name="checkmark-circle" size={16} color="#4a6bff" />
-            <Text style={styles.benefitText}>Secteur-Spécifique : Agents formés à votre domaine</Text>
+            <Ionicons name="checkmark-circle" size={18} color="#347afc" />
+            <Text style={styles.benefitText}>**Secteur-Spécifique :** Agents formés à votre domaine</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="checkmark-circle" size={16} color="#4a6bff" />
-            <Text style={styles.benefitText}>Hybride Humain/IA : Équilibre coût/efficacité</Text>
-          </View>
-          <View style={styles.benefitItem}>
-            <Ionicons name="checkmark-circle" size={16} color="#4a6bff" />
-            <Text style={styles.benefitText}>Kinshasa-Certifié : Adapté aux réalités locales (défis internet, multilinguisme)</Text>
+            <Ionicons name="checkmark-circle" size={18} color="#347afc" />
+            <Text style={styles.benefitText}>**Hybride Humain/IA :** Efficacité maximisée</Text>
           </View>
         </View>
 
+        {/* --- Contact Section Added Here --- */}
         <View style={styles.ctaContainer}>
-          <Text style={styles.ctaText}>Testez sans risque : 7 jours gratuits !</Text>
+          <Text style={styles.ctaText}>Vous avez d'autres questions ?</Text>
+          <Text style={styles.ctaSubText}>Contactez-nous pour en savoir plus sur EliteReply !</Text>
           <TouchableOpacity style={styles.contactButton} onPress={openContact}>
-            <Text style={styles.contactButtonText}>Contact : contact@elitereply.info</Text>
+            <Ionicons name="mail" size={20} color="white" style={styles.buttonIcon} />
+            <Text style={styles.contactButtonText}>Nous Contacter par Email</Text>
           </TouchableOpacity>
           {/*
           <TouchableOpacity style={styles.whatsappButton} onPress={openWhatsApp}>
-            <Ionicons name="logo-whatsapp" size={20} color="white" />
-            <Text style={styles.whatsappButtonText}>WhatsApp : +243 XXX XXX XXX</Text>
+            <Ionicons name="logo-whatsapp" size={20} color="white" style={styles.buttonIcon} />
+            <Text style={styles.whatsappButtonText}>Envoyer un WhatsApp</Text>
           </TouchableOpacity>
           */}
         </View>
+         
+
       </ScrollView>
     </View>
   );
@@ -228,138 +254,191 @@ const FAQ = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#eef2f6', // Lighter background for the entire screen
   },
   scrollContainer: {
-    padding: 20,
+    paddingVertical: 25,
+    paddingHorizontal: 18, // Slightly adjusted horizontal padding
     paddingBottom: 40,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28, // Larger title
+    fontWeight: '800', // Bolder
     color: '#1a1a1a',
-    marginBottom: 4,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   sectionDescription: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 24,
+    marginBottom: 30, // More space
     fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  sectionContainer: {
+  sectionCard: { // Renamed from sectionContainer to reflect card-like appearance
     backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 15, // More rounded corners
+    marginBottom: 18, // More space between cards
     overflow: 'hidden',
-    elevation: 2,
+    elevation: 5, // More prominent shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, // Softer shadow
+    shadowRadius: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f9fa',
+    paddingVertical: 18, // More vertical padding
+    paddingHorizontal: 20, // More horizontal padding
+    backgroundColor: '#f8fbfc', // Slightly off-white for header
+    borderBottomWidth: 1, // Subtle separator
+    borderBottomColor: '#eee',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 17, // Slightly larger
+    fontWeight: '700', // Bolder
+    color: '#222',
+    flex: 1,
+    marginRight: 10,
   },
   questionsContainer: {
-    padding: 16,
+    padding: 20, // Consistent padding
   },
   questionItem: {
-    marginBottom: 16,
+    marginBottom: 20, // More space between questions
+    alignItems: 'flex-start',
+    backgroundColor: '#ffffff', // Explicitly white background
+    borderRadius: 10,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  questionIcon: {
+    width: 200, // Slightly larger icon
+    height: 200,
+    //borderRadius: 100, // This was commented out, leaving it as is.
+    marginBottom: 12, // More space below icon
+    resizeMode: 'contain',
+    alignSelf: 'center', // Center the icon within its question block
   },
   questionText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16, // Slightly larger
+    fontWeight: '700', // Bolder
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10, // More space below question
+    lineHeight: 22,
   },
   answerText: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    fontSize: 15, // Slightly larger
+    color: '#555', // Darker gray for better contrast
+    lineHeight: 22, // Better line height for readability
   },
   whyContainer: {
-    backgroundColor: '#f0f4ff',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 24,
+    backgroundColor: '#d8e7ff', // Lighter blue for this section
+    borderRadius: 15,
+    padding: 20,
+    marginTop: 25, // More margin top
+    marginBottom: 30, // More margin bottom
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
   },
   whyTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 12,
+    fontSize: 20, // Larger title
+    fontWeight: '800',
+    color: '#0a3d99', // Darker blue for emphasis
+    marginBottom: 15,
+    textAlign: 'center',
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12, // More space between benefits
   },
   benefitText: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
+    fontSize: 15,
+    color: '#111', // Darker text
+    marginLeft: 10,
     flex: 1,
+    lineHeight: 22,
   },
   ctaContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#347afc', // EliteReply's primary blue
+    borderRadius: 15,
+    padding: 25,
     alignItems: 'center',
-    elevation: 2,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    marginTop: 30, // Added margin top to separate from benefits
   },
   ctaText: {
+    fontSize: 22, // Larger and more prominent
+    fontWeight: '800',
+    color: 'white',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  ctaSubText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 16,
+    color: '#eef2f6', // Slightly off-white for subtitle
+    marginBottom: 20,
     textAlign: 'center',
   },
   contactButton: {
-    backgroundColor: '#e9ecef',
-    padding: 12,
-    borderRadius: 8,
-    width: '100%',
+    backgroundColor: '#5cb85c', // A professional green
+    paddingVertical: 14,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    width: '90%',
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
   },
   contactButtonText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '700',
+    marginLeft: 10,
   },
   whatsappButton: {
-    backgroundColor: '#25D366',
-    padding: 12,
-    borderRadius: 8,
-    width: '100%',
+    backgroundColor: '#25D366', // WhatsApp's brand green
+    paddingVertical: 14,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    width: '90%',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
   whatsappButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     color: 'white',
-    fontWeight: '600',
-    marginLeft: 8,
+    fontWeight: '700',
+    marginLeft: 10,
+  },
+  buttonIcon: {
+    marginRight: 8,
   },
 });
 
