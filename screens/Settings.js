@@ -91,19 +91,19 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
                 text: 'Oui',
                 onPress: async () => {
                     try {
-                        console.log("Logout initiated. Current user before signOut:", auth.currentUser?.uid); // Log user ID
+                        console.log("Attempting to sign out...");
                         await signOut(auth);
-                        console.log("Sign out function completed.");
-                        // Immediately check user status after signOut
-                        // This might not be null immediately due to async nature, but check for change.
-                        setTimeout(() => {
-                            console.log("User after 100ms delay:", auth.currentUser?.uid);
-                            if (!auth.currentUser) {
-                                console.log("User successfully logged out from Firebase Auth.");
-                            } else {
-                                console.warn("User still present in auth.currentUser after signOut. ID:", auth.currentUser?.uid);
-                            }
-                        }, 100);
+                        console.log("Sign out successful on Firebase side.");
+
+                        // Give a very brief moment for Auth state to propagate, if needed
+                        await new Promise(resolve => setTimeout(resolve, 50));
+
+                        // Explicitly check if current user is null after signOut
+                        if (!auth.currentUser) {
+                            console.log("auth.currentUser is null. User successfully logged out.");
+                        } else {
+                            console.warn("auth.currentUser is NOT null after signOut!", auth.currentUser.uid);
+                        }
 
                         Alert.alert(
                             'Déconnexion réussie',
@@ -111,24 +111,28 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
                             [
                                 {
                                     text: 'OK',
-                                    onPress: () => {
-                                        console.log("Navigating to Login screen...");
-                                        navigation.reset({
-                                            index: 0,
-                                            routes: [{ name: 'Login' }],
-                                        });
-                                        console.log("Navigation reset attempted.");
-                                    },
+                                    onPress: () => navigation.reset({
+                                        index: 0,
+                                        routes: [{ name: 'Login' }],
+                                    }),
                                 },
                             ],
                             { cancelable: false }
                         );
                     } catch (error) {
                         console.error("Erreur de déconnexion:", error.code, error.message, error);
-                        Alert.alert(
-                            'Erreur de Déconnexion',
-                            `Une erreur est survenue lors de la déconnexion: ${error.message}`
-                        );
+                        // Log additional info for network errors
+                        if (error.code === 'auth/network-request-failed') {
+                            Alert.alert(
+                                'Erreur de Déconnexion',
+                                `Problème réseau lors de la déconnexion. Vérifiez votre connexion internet.`
+                            );
+                        } else {
+                            Alert.alert(
+                                'Erreur de Déconnexion',
+                                `Une erreur est survenue lors de la déconnexion: ${error.message}`
+                            );
+                        }
                     }
                 },
             },
