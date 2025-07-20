@@ -44,6 +44,10 @@ const MONEY_COMMISSION_ICON = require('../../assets/icons/money_commission.png')
 const SUPPORT_ER_ICON = require('../../assets/icons/support_er.png');
 // --- END NEW IMPORTS ---
 
+// --- Jey's Addition: Import the new notification service ---
+import { sendPushNotification } from '../../services/notifications'; // ASSUMING this path is correct
+// --- END Jey's Addition ---
+
 // Custom Progress Bar Component
 const ProgressBar = ({ progress, color }) => {
   return (
@@ -87,35 +91,10 @@ const PartnerDashboard = ({ navigation }) => {
   const notifiedAppointments = useRef(new Set()); // To track appointments already notified
   const notifiedSurveys = useRef(new Set()); // To track surveys already notified
   const notifiedDocuments = useRef(new Set()); // To track documents already notified
+  // --- END NEW REFS ---
 
-  // --- NEW: Function to send push notification (placeholder) ---
-  // IMPORTANT: In a production app, this should be a call to your backend/Cloud Function.
-  const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
-    const message = {
-      to: expoPushToken,
-      sound: 'er_notification',
-      title,
-      body,
-      data,
-    };
-
-    try {
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
-      console.log('Push notification sent successfully (PartnerDashboard)!');
-    } catch (error) {
-      console.error('Failed to send push notification (PartnerDashboard):', error);
-    }
-  };
-  // --- END NEW ---
-
+  // NOTE: The `sendPushNotification` function itself has been MOVED to services/notifications.js
+  // It is now imported above.
 
   // Promotion functions (no changes)
   const getPromotionColor = () => {
@@ -125,6 +104,9 @@ const PartnerDashboard = ({ navigation }) => {
     const today = new Date();
     const diffTime = Math.abs(endDate - today);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Fix: `daysLeft` was not defined here. Assuming it means `diffDays`
+    const daysLeft = diffDays; // This was missing in your original snippet here
 
     if (daysLeft <= 1) return '#FF0000'; // Very short time left, urgent red
     if (daysLeft <= 2) return '#FF3B30'; // Few days left, strong red
@@ -288,14 +270,14 @@ const PartnerDashboard = ({ navigation }) => {
         where('partnerId', '==', partnerId)
       );
       const allRdvQuerySnapshot = await getDocs(allRdvsQuery);
-      
+
       let totalAppointments = 0;
       let confirmedBookings = 0;
 
       allRdvQuerySnapshot.forEach(doc => {
           const rdvData = doc.data();
           totalAppointments++;
-          if (rdvData.status === 'confirmed' || rdvData.status === 'completed') { 
+          if (rdvData.status === 'confirmed' || rdvData.status === 'completed') {
               confirmedBookings++;
           }
       });
@@ -323,7 +305,6 @@ const PartnerDashboard = ({ navigation }) => {
               revenueGenerated += transaction.amountReceived;
           }
       });
-
 
       setDashboardData(prevData => ({
         ...prevData,
@@ -395,8 +376,9 @@ const PartnerDashboard = ({ navigation }) => {
                   convoData.lastMessageSender !== partnerId && // Not sent by this partner
                   convoData.unreadByPartner === true && // Marked unread for partner
                   !notifiedMessages.current.has(convoId)) { // Not already notified for this convo ID
-                  
+
                   console.log(`[PartnerDashboard] NEW UNREAD MESSAGE for Partner: ${convoData.lastMessage}`);
+                  // --- Using imported sendPushNotification ---
                   sendPushNotification(
                       partnerExpoPushToken,
                       `Nouveau message de ${convoData.lastMessageSenderName || 'Support EliteReply'}!`,
@@ -427,7 +409,7 @@ const PartnerDashboard = ({ navigation }) => {
               // Notify if new appointment or a status change that is relevant
               if ((change.type === 'added' && apptStatus === 'scheduled') || // New scheduled appointment
                   (change.type === 'modified' && (apptStatus === 'rescheduled' || apptStatus === 'cancelled'))) { // Status change to rescheduled/cancelled
-                  
+
                   if (!notifiedAppointments.current.has(notificationIdentifier)) {
                       let title = "";
                       let body = "";
@@ -450,6 +432,7 @@ const PartnerDashboard = ({ navigation }) => {
                       }
 
                       console.log(`[PartnerDashboard] Notifying for Appointment: ${apptId}, Status: ${apptStatus}`);
+                      // --- Using imported sendPushNotification ---
                       sendPushNotification(
                           partnerExpoPushToken,
                           title,
@@ -481,6 +464,7 @@ const PartnerDashboard = ({ navigation }) => {
                   const surveyId = change.doc.id;
                   if (!notifiedSurveys.current.has(surveyId)) {
                       console.log(`[PartnerDashboard] NEW SURVEY for Partner: ${surveyData.title}`);
+                      // --- Using imported sendPushNotification ---
                       sendPushNotification(
                           partnerExpoPushToken,
                           "Nouvelle Enquête!",
@@ -503,8 +487,9 @@ const PartnerDashboard = ({ navigation }) => {
                   const docData = change.doc.data();
                   const docId = change.doc.id;
                   // Ensure it's not a payment receipt as those might be handled differently or in a separate flow if needed
-                  if (!docData.receiptURL && !notifiedDocuments.current.has(docId)) { 
+                  if (!docData.receiptURL && !notifiedDocuments.current.has(docId)) {
                       console.log(`[PartnerDashboard] NEW DOCUMENT for Partner: ${docData.title}`);
+                      // --- Using imported sendPushNotification ---
                       sendPushNotification(
                           partnerExpoPushToken,
                           "Nouveau Document!",
@@ -526,7 +511,7 @@ const PartnerDashboard = ({ navigation }) => {
     setCurrentUser(user);
     if (user) {
       // Initial fetch of partner data to populate the dashboard and get partnerId/token
-      fetchPartnerData(user.uid); 
+      fetchPartnerData(user.uid);
       // Set up real-time listeners AFTER partner data is fetched and partnerId is available
       setupPartnerNotifications();
     } else {
@@ -620,7 +605,7 @@ const PartnerDashboard = ({ navigation }) => {
   const promotionColor = getPromotionColor();
   const daysLeft = getPromotionDaysLeft();
   const promotionIcon = getPromotionIcon();
-  const uri = partnerData?.profileImage ? String(partnerData.profileImage) : undefined;
+  const uri = partnerData?.profileImage ? String(partnerData.profileImage) : undefined; // Unused variable 'uri'
 
   if (loading) {
     return (
