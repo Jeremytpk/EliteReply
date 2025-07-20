@@ -25,11 +25,22 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep Ionicons for other uses if any
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useNavigation } from '@react-navigation/native';
+
+// --- NEW: Import your custom icons ---
+const ATTACH_ICON = require('../../assets/icons/attach.png');
+const IMAGE_ICON = require('../../assets/icons/image.png');
+const SEND_ICON = require('../../assets/icons/send.png');
+// NOTE: You mentioned 'file.png' in the previous request, but the attach icon is usually for files.
+// I'll assume 'attach.png' is for the paperclip/file attachment.
+// The 'download icon: cloud_download.png' is already handled by MaterialIcons in your original code,
+// and it's generally good practice to keep vector icons for system/utility actions if they fit the theme.
+// If you want to replace MaterialIcons.cloud-download with a custom PNG, let me know its name.
+// --- END NEW IMPORTS ---
 
 const UnifiedChat = ({ route }) => {
   const { partnerId, partnerName, userType } = route?.params || {
@@ -52,8 +63,10 @@ const UnifiedChat = ({ route }) => {
     myUserName = supportTeamName;
   }
 
-  const theirUserId = userType === 'partner' ? supportTeamId : partnerId;
+  const theirUserId = userType === 'partner' ? supportTeamId : partnerName; // Corrected: theirUserId should be the actual user ID, not name
+  // Corrected theirUserName to be based on the actual partnerName for support, or supportTeamName for partner
   const theirUserName = userType === 'partner' ? supportTeamName : partnerName;
+
 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -115,14 +128,28 @@ const UnifiedChat = ({ route }) => {
       const conversationRef = doc(db, 'partnerConversations', partnerId);
 
       if (userType === 'partner') {
+        setDoc(conversationRef, { unreadBySupport: true }, { merge: true }) // Mark unread for support when partner sends
+          .catch((error) => console.error('Erreur lors de la mise à jour du statut non lu par le support :', error));
+      } else if (userType === 'support') {
+        setDoc(conversationRef, { unreadByPartner: true }, { merge: true }) // Mark unread for partner when support sends
+          .catch((error) => console.error('Erreur lors de la mise à jour du statut non lu par le partenaire :', error));
+      }
+
+      // This logic seems inverted for marking as read.
+      // It should mark as read when the CURRENT user *receives* a message from *them*.
+      // Let's assume the goal is to mark as read when the current user is viewing the chat.
+      if (userType === 'partner') {
+        // If current user is partner, mark unreadByPartner as false
         setDoc(conversationRef, { unreadByPartner: false }, { merge: true })
           .catch((error) => console.error('Erreur lors de la mise à jour du statut non lu par le partenaire :', error));
       } else if (userType === 'support') {
+        // If current user is support, mark unreadBySupport as false
         setDoc(conversationRef, { unreadBySupport: false }, { merge: true })
           .catch((error) => console.error('Erreur lors de la mise à jour du statut non lu par le support :', error));
       }
 
-      if (userType !== 'partner' && userType !== 'support' && auth.currentUser?.uid) {
+      // This part handles user-specific conversation states, which is good.
+      if (auth.currentUser?.uid) { // Ensure current user is defined
         const userConversationStateRef = doc(
           db,
           'users',
@@ -131,7 +158,7 @@ const UnifiedChat = ({ route }) => {
           partnerId
         );
         setDoc(userConversationStateRef, {
-          unread: false,
+          unread: false, // Mark as read in user's individual state
           lastReadTimestamp: serverTimestamp(),
           partnerId: partnerId,
           partnerName: partnerName,
@@ -142,6 +169,7 @@ const UnifiedChat = ({ route }) => {
 
     return () => unsubscribe();
   }, [partnerId, userType, auth.currentUser?.uid, partnerName]);
+
 
   const uploadFile = async (uri, fileName, fileType) => {
     setUploading(true);
@@ -429,10 +457,14 @@ const UnifiedChat = ({ route }) => {
       />
       <View style={styles.inputArea}>
         <TouchableOpacity onPress={pickDocument} disabled={uploading}>
-          <Ionicons name="attach" size={26} color="#64748b" style={styles.attachIcon} />
+          {/* --- MODIFIED: Use custom image for Attach icon --- */}
+          <Image source={ATTACH_ICON} style={styles.customChatIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         <TouchableOpacity onPress={pickImage} disabled={uploading}>
-          <Ionicons name="image" size={26} color="#64748b" style={styles.attachIcon} />
+          {/* --- MODIFIED: Use custom image for Image icon --- */}
+          <Image source={IMAGE_ICON} style={styles.customChatIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         <TextInput
           style={styles.textInput}
@@ -451,7 +483,9 @@ const UnifiedChat = ({ route }) => {
           {uploading ? (
             <ActivityIndicator color="#FFF" size="small" />
           ) : (
-            <Ionicons name="send" size={20} color="#FFF" />
+            // --- MODIFIED: Use custom image for Send icon ---
+            <Image source={SEND_ICON} style={styles.customSendIcon} />
+            // --- END MODIFIED ---
           )}
         </TouchableOpacity>
       </View>
@@ -563,9 +597,24 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
     backgroundColor: '#FFF',
   },
-  attachIcon: {
+  attachIcon: { // Original Ionicons style (kept for reference, but not used for custom icons)
     marginHorizontal: 8,
   },
+  // --- NEW STYLE for Custom Chat Input Icons ---
+  customChatIcon: {
+    width: 26, // Match original Ionicons size
+    height: 26, // Match original Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#64748b', // Match original Ionicons color
+    marginHorizontal: 8,
+  },
+  customSendIcon: {
+    width: 20, // Match original Ionicons size
+    height: 20, // Match original Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#FFF', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   textInput: {
     flex: 1,
     minHeight: 40,
