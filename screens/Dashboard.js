@@ -47,9 +47,9 @@ const Dashboard = () => {
   // --- UPDATED: STATES FOR CUSTOM NOTIFICATION BANNER ---
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState('');
-  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState(''); // Corrected
   const [notificationType, setNotificationType] = useState(null);
-  const [notificationSenderName, setNotificationSenderName] = useState('');
+  const [notificationSenderName, setNotificationSenderName] = useState(''); // Corrected
   const [notificationTargetId, setNotificationTargetId] = useState(null);
   // --- END STATES ---
 
@@ -69,12 +69,14 @@ const Dashboard = () => {
   const APP_LOGO = require('../assets/images/favicon.png');
   // --- NEW: IMPORT YOUR CUSTOM ICONS HERE ---
   const ASSISTANCE_ICON = require('../assets/icons/assistance.png');
-  const PROMO_ICON = require('../assets/icons/promos.png'); // Corrected from promo.png to promos.png
-  // --- NEW: Imports for Support Client icons ---
+  const PROMO_ICON = require('../assets/icons/promos.png');
   const RATE_ICON = require('../assets/icons/rate.png');
   const FAQ_ICON = require('../assets/icons/faq.png');
   const INFOS_ICON = require('../assets/icons/infos.png');
   const SETTINGS_ICON = require('../assets/icons/settings.png');
+  // --- NEW: Imports for Survey Banner icons ---
+  const GIFT_ICON = require('../assets/icons/gift.png');
+  const RIGHT_ENTER_ICON_DASH = require('../assets/icons/right_enter.png'); // Renamed to avoid general conflict
   // --- END NEW IMPORTS ---
 
   const fetchUserData = async () => {
@@ -243,7 +245,6 @@ const Dashboard = () => {
           setNotificationMessage(latestMessageText);
           setNotificationType('message');
           setNotificationSenderName(latestMessageSenderName);
-          setNotificationTargetId(latestMessageTicketId);
           setShowNotificationBanner(true);
           lastNotifiedMessageId.current = latestMessageTicketId;
         }
@@ -628,7 +629,9 @@ const Dashboard = () => {
             >
               <View style={styles.catchySurveyCardContent}>
                 <View style={styles.catchySurveyIconSection}>
-                  <Ionicons name="gift-outline" size={45} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Gift Icon --- */}
+                  <Image source={GIFT_ICON} style={styles.customGiftIcon} />
+                  {/* --- END MODIFIED --- */}
                   {activeSurvey.couponDetails?.value && (
                     <Animatable.View animation="bounceIn" delay={300} style={styles.rewardBubble}>
                       <Text style={styles.rewardBubbleText}>
@@ -663,7 +666,9 @@ const Dashboard = () => {
                 </View>
 
                 <View style={styles.catchySurveyArrow}>
-                  <Ionicons name="chevron-forward" size={30} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Right Arrow --- */}
+                  <Image source={RIGHT_ENTER_ICON_DASH} style={styles.customArrowIconDashboard} />
+                  {/* --- END MODIFIED --- */}
                 </View>
               </View>
             </TouchableOpacity>
@@ -673,53 +678,25 @@ const Dashboard = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support Client</Text>
           <View style={styles.optionsGrid}>
-            <TouchableOpacity
-              style={styles.optionCard}
-              onPress={() => navigation.navigate('RateApp')}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: '#feca57' }]}>
-                {/* --- MODIFIED: Use custom image for Évaluer --- */}
-                <Image source={RATE_ICON} style={styles.customOptionIcon} />
-                {/* --- END MODIFIED --- */}
-              </View>
-              <Text style={styles.optionText}>Évaluer</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.optionCard}
-              onPress={() => navigation.navigate('FAQ')}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: '#1dd1a1' }]}>
-                {/* --- MODIFIED: Use custom image for FAQ --- */}
-                <Image source={FAQ_ICON} style={styles.customOptionIcon} />
-                {/* --- END MODIFIED --- */}
-              </View>
-              <Text style={styles.optionText}>FAQ</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.optionCard}
-              onPress={() => navigation.navigate('About')}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: '#5f27cd' }]}>
-                {/* --- MODIFIED: Use custom image for À Propos --- */}
-                <Image source={INFOS_ICON} style={styles.customOptionIcon} />
-                {/* --- END MODIFIED --- */}
-              </View>
-              <Text style={styles.optionText}>À Propos</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.optionCard}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: '#ff9f43' }]}>
-                {/* --- MODIFIED: Use custom image for Paramètres --- */}
-                <Image source={SETTINGS_ICON} style={styles.customOptionIcon} />
-                {/* --- END MODIFIED --- */}
-              </View>
-              <Text style={styles.optionText}>Paramètres</Text>
-            </TouchableOpacity>
+            {[
+              { icon: RATE_ICON, name: 'Évaluer', screen: 'RateApp', color: '#feca57' },
+              { icon: FAQ_ICON, name: 'FAQ', screen: 'FAQ', color: '#1dd1a1' },
+              { icon: INFOS_ICON, name: 'À Propos', screen: 'About', color: '#5f27cd' },
+              { icon: SETTINGS_ICON, name: 'Paramètres', screen: 'Settings', color: '#ff9f43' },
+            ].map((option, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.optionCard}
+                onPress={() => navigation.navigate(option.screen)}
+              >
+                <View style={[styles.optionIcon, { backgroundColor: option.color }]}>
+                  {/* --- MODIFIED: Use custom image for Support Client icons --- */}
+                  <Image source={option.icon} style={styles.customOptionIcon} />
+                  {/* --- END MODIFIED --- */}
+                </View>
+                <Text style={styles.optionText}>{option.name}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -835,7 +812,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#f4f4f4',
     padding: 20,
-    marginTop: 15,
+    //marginTop: 26,
   },
   loadingContainer: {
     flex: 1,
@@ -1036,11 +1013,6 @@ const styles = StyleSheet.create({
     tintColor: '#fff', // These icons should also be white on their colored backgrounds
   },
   // --- END NEW STYLE ---
-  optionText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#334155',
-  },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1139,9 +1111,17 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 15,
   },
+  // --- NEW STYLE for Custom Gift Icon ---
+  customGiftIcon: {
+    width: 45, // Match Ionicons size
+    height: 45, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   rewardBubble: {
     position: 'absolute',
-    top: 35,
+    top: -5,
     right: -10,
     backgroundColor: '#34D399',
     borderRadius: 15,
@@ -1149,7 +1129,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 50,
+    minWidth: 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1187,6 +1167,14 @@ const styles = StyleSheet.create({
   catchySurveyArrow: {
     marginLeft: 'auto',
   },
+  // --- NEW STYLE for Custom Arrow Icon in Dashboard ---
+  customArrowIconDashboard: {
+    width: 30, // Match Ionicons size
+    height: 30, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
 
   ratingModalContent: {
     backgroundColor: '#FFFFFF',
