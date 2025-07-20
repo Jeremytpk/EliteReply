@@ -42,6 +42,16 @@ const HOLD_APT_ICON = require('../../assets/icons/hold_apt.png');
 const MONEY_BILL_ICON = require('../../assets/icons/money_bill.png');
 const MONEY_COMMISSION_ICON = require('../../assets/icons/money_commission.png');
 const SUPPORT_ER_ICON = require('../../assets/icons/support_er.png');
+
+const DASHBOARD_ICON = require('../../assets/icons/dashboard.png');
+const CREDIT_CARD_ICON = require('../../assets/icons/credit_card.png');
+const RATE_HALF_ICON_NAV = require('../../assets/icons/rate_half.png');
+const RIGHT_ENTER_ICON_PARTNER = require('../../assets/icons/right_enter.png');
+const RATE_FULL_ICON = require('../../assets/icons/rate_full.png');
+const RATE_ICON_EMPTY = require('../../assets/icons/rate.png');
+
+// --- NEW IMPORT for this request (GIF) ---
+const REVIEW_ANIM_GIF = require('../../assets/gif/review_anim.gif');
 // --- END NEW IMPORTS ---
 
 // --- Jey's Addition: Import the new notification service ---
@@ -375,7 +385,7 @@ const PartnerDashboard = ({ navigation }) => {
               if ((change.type === 'added' || change.type === 'modified') &&
                   convoData.lastMessageSender !== partnerId && // Not sent by this partner
                   convoData.unreadByPartner === true && // Marked unread for partner
-                  !notifiedMessages.current.has(convoId)) { // Not already notified for this convo ID
+                  !notifiedMessages.current.has(convoId)) {
 
                   console.log(`[PartnerDashboard] NEW UNREAD MESSAGE for Partner: ${convoData.lastMessage}`);
                   // --- Using imported sendPushNotification ---
@@ -531,11 +541,10 @@ const PartnerDashboard = ({ navigation }) => {
       </View>
       <View style={styles.ratingContainer}>
         {[...Array(5)].map((_, i) => (
-          <Ionicons
+          <Image
             key={i}
-            name={i < Math.floor(item.rating || item.note) ? "star" : "star-outline"}
-            size={16}
-            color="#FFD700"
+            source={i < Math.floor(item.rating || item.note) ? RATE_FULL_ICON : RATE_ICON_EMPTY}
+            style={[styles.customReviewStarIcon, { tintColor: '#FFD700' }]}
           />
         ))}
         <Text style={styles.ratingText}>{(item.rating || item.note)?.toFixed(1)}</Text>
@@ -795,7 +804,9 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('RdvConfirm')}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Paiements RDV</Text>
-                      <MaterialIcons name="arrow-forward-ios" size={18} color="white" style={{ marginLeft: 8 }} />
+                      {/* --- MODIFIED: Use custom image for right arrow --- */}
+                      <Image source={RIGHT_ENTER_ICON_PARTNER} style={styles.customActionArrowIcon} />
+                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
             </ScrollView>
@@ -815,11 +826,10 @@ const PartnerDashboard = ({ navigation }) => {
                     </Text>
                     <View style={styles.ratingStars}>
                       {[...Array(5)].map((_, i) => (
-                        <Ionicons
+                        <Image
                           key={`avg_star_${i}`}
-                          name={i < Math.floor(dashboardData.partnerRating) ? "star" : "star-outline"}
-                          size={24}
-                          color="#FFD700"
+                          source={i < Math.floor(dashboardData.partnerRating) ? RATE_FULL_ICON : RATE_ICON_EMPTY}
+                          style={[styles.customReviewStarIcon, { tintColor: '#FFD700' }]}
                         />
                       ))}
                     </View>
@@ -831,7 +841,9 @@ const PartnerDashboard = ({ navigation }) => {
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Ionicons name="chatbox-outline" size={40} color="#ccc" />
+                  {/* --- MODIFIED: Use custom GIF for empty reviews icon --- */}
+                  <Image source={REVIEW_ANIM_GIF} style={styles.customEmptyReviewsGif} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.emptyText}>Aucun avis pour le moment</Text>
                 </View>
               }
@@ -856,11 +868,12 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('dashboard')}
           >
-            <MaterialIcons
-              name="dashboard"
-              size={24}
-              color={activeTab === 'dashboard' ? '#4a6bff' : '#666'}
+            {/* --- MODIFIED: Use custom image for Dashboard icon --- */}
+            <Image
+              source={DASHBOARD_ICON}
+              style={[styles.customNavIcon, { tintColor: activeTab === 'dashboard' ? '#4a6bff' : '#666' }]}
             />
+            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'dashboard' ? '#4a6bff' : '#666' }
@@ -873,11 +886,12 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('payments')}
           >
-            <MaterialIcons
-              name="payment"
-              size={24}
-              color={activeTab === 'payments' ? '#4a6bff' : '#666'}
+            {/* --- MODIFIED: Use custom image for Payments icon --- */}
+            <Image
+              source={CREDIT_CARD_ICON}
+              style={[styles.customNavIcon, { tintColor: activeTab === 'payments' ? '#4a6bff' : '#666' }]}
             />
+            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'payments' ? '#4a6bff' : '#666' }
@@ -890,11 +904,12 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('reviews')}
           >
-            <Ionicons
-              name="star"
-              size={24}
-              color={activeTab === 'reviews' ? '#4a6bff' : '#666'}
+            {/* --- MODIFIED: Use custom image for Reviews icon --- */}
+            <Image
+              source={RATE_HALF_ICON_NAV}
+              style={[styles.customNavIcon, { tintColor: activeTab === 'reviews' ? '#4a6bff' : '#666' }]}
             />
+            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'reviews' ? '#4a6bff' : '#666' }
@@ -917,11 +932,12 @@ const PartnerDashboard = ({ navigation }) => {
               }
             }}
           >
-            <Ionicons
-              name="chatbubbles"
-              size={24}
-              color={activeTab === 'chat' ? '#4a6bff' : '#666'}
+            {/* --- MODIFIED: Use custom image for Support icon --- */}
+            <Image
+              source={SUPPORT_ER_ICON}
+              style={[styles.customNavIcon, { tintColor: activeTab === 'chat' ? '#4a6bff' : '#666' }]}
             />
+            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'chat' ? '#4a6bff' : '#666' }
@@ -1039,7 +1055,7 @@ const styles = StyleSheet.create({
   statIcon: {
     marginBottom: 8,
   },
-  // --- NEW STYLE for Custom Stat Icons ---
+  // --- NEW STYLE for Custom Stat Icons (from previous request) ---
   customStatIcon: {
     width: 24, // Match Ionicons size
     height: 24, // Match Ionicons size
@@ -1106,6 +1122,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textTransform: 'uppercase',
   },
+  // --- NEW STYLE for custom action arrow icon ---
+  customActionArrowIcon: {
+    width: 18, // Match MaterialIcons size
+    height: 18, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Match original MaterialIcons color
+    marginLeft: 8,
+  },
+  // --- END NEW STYLE ---
   paymentSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1202,6 +1227,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
+  // --- NEW STYLE for custom review star icons ---
+  customReviewStarIcon: {
+    width: 16, // Match Ionicons size
+    height: 16, // Match Ionicons size
+    resizeMode: 'contain',
+    marginHorizontal: 1, // Adjust as needed
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   ratingText: {
     fontSize: 14,
     color: '#666',
@@ -1251,6 +1285,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  // --- NEW STYLE for custom nav icons ---
+  customNavIcon: {
+    width: 24, // Match MaterialIcons/Ionicons size
+    height: 24, // Match MaterialIcons/Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   navButtonText: {
     fontSize: 12,
     marginTop: 4,
@@ -1370,6 +1412,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     minHeight: 200,
   },
+  // --- NEW STYLE for custom empty reviews GIF ---
+  customEmptyReviewsGif: {
+    width: 100, // Adjust size as needed
+    height: 100, // Adjust size as needed
+    resizeMode: 'contain',
+    marginBottom: 10,
+  },
+  // --- END NEW STYLE ---
   emptyText: {
     marginTop: 16,
     color: '#666',
