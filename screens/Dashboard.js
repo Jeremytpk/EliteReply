@@ -74,9 +74,9 @@ const Dashboard = () => {
   const FAQ_ICON = require('../assets/icons/faq.png');
   const INFOS_ICON = require('../assets/icons/infos.png');
   const SETTINGS_ICON = require('../assets/icons/settings.png');
-  // --- NEW: Imports for Survey Banner icons ---
   const GIFT_ICON = require('../assets/icons/gift.png');
-  const RIGHT_ENTER_ICON_DASH = require('../assets/icons/right_enter.png'); // Renamed to avoid general conflict
+  const RIGHT_ENTER_ICON_DASH = require('../assets/icons/right_enter.png');
+  const CHAT_BUBBLE_ICON = require('../assets/icons/chat_bubble.png'); // New: Chat bubble icon
   // --- END NEW IMPORTS ---
 
   const fetchUserData = async () => {
@@ -713,7 +713,9 @@ const Dashboard = () => {
         ]}
       >
         <TouchableOpacity onPress={handleChatPress} activeOpacity={0.7}>
-          <Ionicons name="chatbubble-ellipses" size={28} color="#fff" />
+          {/* --- MODIFIED: Use custom image for Chat Bubble Icon --- */}
+          <Image source={CHAT_BUBBLE_ICON} style={styles.customChatBubbleIcon} />
+          {/* --- END MODIFIED --- */}
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -1050,6 +1052,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
+  // --- NEW STYLE for Custom Chat Bubble Icon ---
+  customChatBubbleIcon: {
+    width: 28, // Match Ionicons size
+    height: 28, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   badge: {
     position: 'absolute',
     right: -5,
@@ -1121,7 +1131,7 @@ const styles = StyleSheet.create({
   // --- END NEW STYLE ---
   rewardBubble: {
     position: 'absolute',
-    top: 35,
+    top: -5,
     right: -10,
     backgroundColor: '#34D399',
     borderRadius: 15,
