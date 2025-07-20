@@ -3,16 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   TouchableOpacity,
   Alert,
   Modal,
-  FlatList,
   TextInput,
   ActivityIndicator,
   Image,
   ScrollView // Import ScrollView
 } from 'react-native';
-import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -24,9 +24,18 @@ import {
   deleteDoc,
   serverTimestamp,
   deleteField,
-  getDoc
+  getDoc,
+  setDoc // Import setDoc for evaluations
 } from 'firebase/firestore';
 import moment from 'moment';
+
+// --- NEW: Import your custom icons ---
+const TRANSFER_USER_ICON = require('../assets/icons/transfer_user.png');
+const RATE_HALF_ICON = require('../assets/icons/rate_half.png');
+const REMOVE_USER_ICON = require('../assets/icons/remove_user.png');
+const EDIT_ICON = require('../assets/icons/edit.png');
+const DELETE_ICON_USER = require('../assets/icons/delete.png'); // Renamed to avoid conflict with other delete icons
+// --- END NEW IMPORTS ---
 
 const DetailsUser = ({ route, navigation }) => {
   // --- DEFENSIVE CHECK START ---
@@ -52,7 +61,7 @@ const DetailsUser = ({ route, navigation }) => {
   const [user, setUser] = useState(initialUser);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [tickets, setTickets] = useState([]);
+  const [tickets, setTickets] = useState([]); // This will hold available tickets for transfer
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
   const [rating, setRating] = useState(0);
@@ -159,7 +168,7 @@ const DetailsUser = ({ route, navigation }) => {
 
       // Filter out tickets already assigned to the current user (if they are IT Support)
       // And potentially filter out 'jey-handling' tickets not yet escalated if you don't want them in transfer list
-      const filteredTickets = ticketsData.filter(ticket => 
+      const filteredTickets = ticketsData.filter(ticket =>
         ticket.assignedTo !== user.id && // Not assigned to this specific user
         ticket.status !== 'terminé' && // Not terminated
         ticket.status !== 'completed' // Not completed
@@ -435,7 +444,9 @@ const DetailsUser = ({ route, navigation }) => {
                     style={styles.actionButton}
                     onPress={() => setShowTransferModal(true)}
                   >
-                    <MaterialIcons name="transfer-within-a-station" size={20} color="#fff" />
+                    {/* --- MODIFIED: Use custom image for Transfer Ticket --- */}
+                    <Image source={TRANSFER_USER_ICON} style={styles.customActionButtonIcon} />
+                    {/* --- END MODIFIED --- */}
                     <Text style={styles.actionButtonText}>Transfer Ticket</Text>
                   </TouchableOpacity>
 
@@ -443,7 +454,9 @@ const DetailsUser = ({ route, navigation }) => {
                     style={styles.actionButton}
                     onPress={() => setShowEvaluationModal(true)}
                   >
-                    <FontAwesome name="star" size={20} color="#fff" />
+                    {/* --- MODIFIED: Use custom image for Evaluation --- */}
+                    <Image source={RATE_HALF_ICON} style={styles.customActionButtonIcon} />
+                    {/* --- END MODIFIED --- */}
                     <Text style={styles.actionButtonText}>Evaluation</Text>
                   </TouchableOpacity>
                 </>
@@ -453,7 +466,9 @@ const DetailsUser = ({ route, navigation }) => {
                 style={[styles.actionButton, { backgroundColor: user.isITSupport ? '#FF3B30' : '#34C759' }]}
                 onPress={handleAssignITSupport}
               >
-                <Ionicons name="person" size={20} color="#fff" />
+                {/* --- MODIFIED: Use custom image for Assign/Remove IT Support --- */}
+                <Image source={REMOVE_USER_ICON} style={styles.customActionButtonIcon} />
+                {/* --- END MODIFIED --- */}
                 <Text style={styles.actionButtonText}>
                   {user.isITSupport ? 'Remove IT Support' : 'Assign IT Support'}
                 </Text>
@@ -465,7 +480,9 @@ const DetailsUser = ({ route, navigation }) => {
                     style={[styles.actionButton, { backgroundColor: '#0a8fdf' }]}
                     onPress={handleSaveChanges}
                   >
-                    <Ionicons name="save" size={20} color="#fff" />
+                    {/* --- MODIFIED: Use custom image for Save Changes --- */}
+                    <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
+                    {/* --- END MODIFIED --- */}
                     <Text style={styles.actionButtonText}>Save Changes</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -481,7 +498,9 @@ const DetailsUser = ({ route, navigation }) => {
                   style={[styles.actionButton, { backgroundColor: '#0a8fdf' }]}
                   onPress={() => setEditMode(true)}
                 >
-                  <Ionicons name="create" size={20} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Edit --- */}
+                  <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.actionButtonText}>Edit</Text>
                 </TouchableOpacity>
               )}
@@ -490,7 +509,9 @@ const DetailsUser = ({ route, navigation }) => {
                 style={[styles.actionButton, { backgroundColor: '#FF3B30' }]}
                 onPress={handleDeleteUser}
               >
-                <Ionicons name="trash" size={20} color="#fff" />
+                {/* --- MODIFIED: Use custom image for Delete User --- */}
+                <Image source={DELETE_ICON_USER} style={styles.customActionButtonIcon} />
+                {/* --- END MODIFIED --- */}
                 <Text style={styles.actionButtonText}>Delete User</Text>
               </TouchableOpacity>
             </View>
@@ -719,16 +740,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a8fdf',
+    backgroundColor: '#0a8fdf', // Default background
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
   },
+  // --- NEW STYLE for Custom Action Button Icons ---
+  customActionButtonIcon: {
+    width: 20, // Match original icon size
+    height: 20, // Match original icon size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Typically white on colored buttons
+    marginRight: 10, // Match original spacing
+  },
+  // --- END NEW STYLE ---
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 10,
+    marginLeft: 10, // This will be duplicated if also in customActionButtonIcon, might adjust
   },
   modalContainer: {
     flex: 1,

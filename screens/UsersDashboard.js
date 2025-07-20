@@ -9,10 +9,10 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
-  Image,
+  Image, // Import Image
   Dimensions,
 } from 'react-native';
-import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -26,6 +26,18 @@ import {
   deleteField,
   setDoc // Keeping this, though not used in your current snippet for setDoc
 } from 'firebase/firestore';
+
+// --- NEW: Import your custom icons ---
+const FILTER_LIST_ICON = require('../assets/icons/filter_list.png');
+const EDIT_ICON = require('../assets/icons/edit.png');
+const REMOVE_USER_ICON = require('../assets/icons/remove_user.png');
+const PREMIUM_ICON = require('../assets/icons/premium.png');
+const TRANSFER_USER_ICON = require('../assets/icons/transfer_user.png');
+const RATE_HALF_ICON = require('../assets/icons/rate_half.png');
+const DELETE_ICON_DASH = require('../assets/icons/delete.png'); // Renamed to avoid conflict if 'delete.png' is used elsewhere
+const ARROW_DOWN_SHORT_ICON = require('../assets/icons/arrow_downShort.png'); // New
+const ARROW_UP_SHORT_ICON = require('../assets/icons/arrow_upShort.png'); // New
+// --- END NEW IMPORTS ---
 
 const UsersDashboard = ({ navigation }) => {
   const [users, setUsers] = useState([]);
@@ -563,11 +575,12 @@ const UsersDashboard = ({ navigation }) => {
             style={styles.toggleActionsButton}
             onPress={() => setShowActionsForUser(showActions ? null : user.id)}
           >
-            <Ionicons
-              name={showActions ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color="#0a8fdf"
+            {/* --- MODIFIED: Use custom image for toggle actions --- */}
+            <Image
+              source={showActions ? ARROW_UP_SHORT_ICON : ARROW_DOWN_SHORT_ICON}
+              style={styles.customToggleArrowIcon}
             />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.toggleActionsButtonText}>
               {showActions ? 'Hide Actions' : 'Show Actions'}
             </Text>
@@ -583,7 +596,9 @@ const UsersDashboard = ({ navigation }) => {
                   style={[styles.cardActionButton, { backgroundColor: '#0a8fdf' }]}
                   onPress={() => handleSaveUserChanges(user.id)}
                 >
-                  <Ionicons name="save" size={16} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Save --- */}
+                  <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.cardActionButtonText}>Save</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -600,14 +615,18 @@ const UsersDashboard = ({ navigation }) => {
                   style={[styles.cardActionButton, { backgroundColor: '#0a8fdf' }]}
                   onPress={() => handleEditUser(user)}
                 >
-                  <Ionicons name="create" size={16} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Edit --- */}
+                  <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.cardActionButtonText}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.cardActionButton, { backgroundColor: user.isITSupport ? '#FF3B30' : '#34C759' }]}
                   onPress={() => handleAssignITSupport(user)}
                 >
-                  <Ionicons name="person" size={16} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Assign/Remove IT --- */}
+                  <Image source={REMOVE_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.cardActionButtonText}>
                     {user.isITSupport ? 'Remove IT' : 'Assign IT'}
                   </Text>
@@ -616,7 +635,9 @@ const UsersDashboard = ({ navigation }) => {
                   style={[styles.cardActionButton, { backgroundColor: user.isPremium ? '#FF9500' : '#8A2BE2' }]}
                   onPress={() => handleTogglePremium(user)}
                 >
-                  <FontAwesome name={user.isPremium ? 'diamond' : 'star'} size={16} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Set/Unset Premium --- */}
+                  <Image source={PREMIUM_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.cardActionButtonText}>
                     {user.isPremium ? 'Unset Premium' : 'Set Premium'}
                   </Text>
@@ -628,14 +649,18 @@ const UsersDashboard = ({ navigation }) => {
                       style={[styles.cardActionButton, { backgroundColor: '#4285F4' }]}
                       onPress={() => handleOpenTransferModal(user)}
                     >
-                      <MaterialIcons name="transfer-within-a-station" size={16} color="#fff" />
+                      {/* --- MODIFIED: Use custom image for Transfer --- */}
+                      <Image source={TRANSFER_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                      {/* --- END MODIFIED --- */}
                       <Text style={styles.cardActionButtonText}>Transfer</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.cardActionButton, { backgroundColor: '#FFD700' }]}
                       onPress={() => handleOpenEvaluationModal(user)}
                     >
-                      <FontAwesome name="star" size={16} color="#fff" />
+                      {/* --- MODIFIED: Use custom image for Eval --- */}
+                      <Image source={RATE_HALF_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                      {/* --- END MODIFIED --- */}
                       <Text style={styles.cardActionButtonText}>Eval</Text>
                     </TouchableOpacity>
                   </>
@@ -644,7 +669,9 @@ const UsersDashboard = ({ navigation }) => {
                   style={[styles.cardActionButton, { backgroundColor: '#FF3B30' }]}
                   onPress={() => handleDeleteUser(user.id, user.name)}
                 >
-                  <Ionicons name="trash" size={16} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for Delete --- */}
+                  <Image source={DELETE_ICON_DASH} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.cardActionButtonText}>Delete</Text>
                 </TouchableOpacity>
               </>
@@ -682,7 +709,9 @@ const UsersDashboard = ({ navigation }) => {
           onChangeText={setSearchQuery}
         />
         <TouchableOpacity style={styles.sortButton} onPress={() => setShowSortOptions(true)}>
-          <Ionicons name="filter" size={24} color="#0a8fdf" />
+          {/* --- MODIFIED: Use custom image for Filter icon --- */}
+          <Image source={FILTER_LIST_ICON} style={styles.customFilterIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
       </View>
 
@@ -858,6 +887,14 @@ const styles = StyleSheet.create({
   sortButton: {
     padding: 5,
   },
+  // --- NEW STYLE for Custom Filter Icon ---
+  customFilterIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   gridContainer: {
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -1006,7 +1043,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 5,
   },
-  // END NEW Toggle Actions Button
+  // --- NEW STYLE for Custom Toggle Arrow Icons ---
+  customToggleArrowIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   cardActions: {
     marginTop: 10,
     width: '100%',
@@ -1028,6 +1072,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 5,
   },
+  // --- NEW STYLE for Custom Card Action Icons ---
+  customCardActionIcon: {
+    width: 16, // Match original Ionicons size
+    height: 16, // Match original Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   modalContainer: {
     flex: 1,
     padding: 20,

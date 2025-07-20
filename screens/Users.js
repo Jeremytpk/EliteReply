@@ -7,11 +7,18 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  TextInput
+  TextInput,
+  Image // Import Image component
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { auth, db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+
+// --- NEW: Import your custom icons ---
+const ARROW_UP_ICON = require('../assets/icons/arrow_up.png');
+const APPS_MENU_ICON = require('../assets/icons/apps_menu.png');
+const DELETE_ICON = require('../assets/icons/delete.png');
+// --- END NEW IMPORTS ---
 
 const Users = ({ navigation }) => {
   const [users, setUsers] = useState([]);
@@ -159,14 +166,17 @@ const Users = ({ navigation }) => {
         <Text style={styles.header}>Users Management ({filteredUsers.length})</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={toggleSortOrder} style={styles.iconButton}>
-            <Ionicons
-              name={sortOrder === 'asc' ? "arrow-up" : "arrow-down"}
-              size={24}
-              color="#0a8fdf"
+            {/* --- MODIFIED: Use custom image for sort arrow --- */}
+            <Image
+              source={sortOrder === 'asc' ? ARROW_UP_ICON : ARROW_UP_ICON} // Use ARROW_UP_ICON for both, rely on rotation for down
+              style={[styles.customHeaderIcon, sortOrder === 'desc' && { transform: [{ rotate: '180deg' }] }]}
             />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
           <TouchableOpacity onPress={navigateToUsersDashboard} style={styles.iconButton}>
-            <Ionicons name="apps-outline" size={24} color="#0a8fdf" />
+            {/* --- MODIFIED: Use custom image for apps menu icon --- */}
+            <Image source={APPS_MENU_ICON} style={styles.customHeaderIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
       </View>
@@ -202,7 +212,9 @@ const Users = ({ navigation }) => {
                   style={styles.deleteButton}
                   onPress={() => handleDeleteUser(item.id)}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                  {/* --- MODIFIED: Use custom image for delete icon --- */}
+                  <Image source={DELETE_ICON} style={styles.customDeleteIcon} />
+                  {/* --- END MODIFIED --- */}
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -242,6 +254,14 @@ const styles = StyleSheet.create({
   iconButton: {
     marginLeft: 15,
   },
+  // --- NEW STYLE for Custom Header Icons ---
+  customHeaderIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   emptyText: {
     textAlign: 'center',
     marginTop: 20,
@@ -323,6 +343,14 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginLeft: 10,
   },
+  // --- NEW STYLE for Custom Delete Icon ---
+  customDeleteIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
 });
 
 export default Users;

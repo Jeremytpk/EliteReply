@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView, // Import KeyboardAvoidingView
   Platform // Import Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { auth, db } from '../firebase';
 import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth'; // Import updatePassword and reauthenticateWithCredential, EmailAuthProvider
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -25,9 +25,10 @@ const DISCOUNT_ICON = require('../assets/icons/discount.png');
 const APPOINTMENT_ICON = require('../assets/icons/appointment.png');
 const LOCK_ICON = require('../assets/icons/lock.png');
 const LOGOUT_ICON = require('../assets/icons/logout.png');
+const RIGHT_ENTER_ICON = require('../assets/icons/right_enter.png'); // New: Import the right arrow icon
 // --- END NEW IMPORTS ---
 
-const Paramètres = () => {
+const Paramètres = () => { // This component is likely named 'Settings' in your navigation
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const [userData, setUserData] = useState(null);
@@ -235,7 +236,9 @@ const Paramètres = () => {
             {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Modifier le profil</Text>
           </View>
-          <Ionicons name="chevron-forward-outline" size={20} color="#A0AEC0" />
+          {/* --- MODIFIED: Use custom image for right arrow --- */}
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         {/* Mes Coupons Button */}
@@ -249,7 +252,9 @@ const Paramètres = () => {
             {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Mes Coupons</Text>
           </View>
-          <Ionicons name="chevron-forward-outline" size={20} color="#A0AEC0" />
+          {/* --- MODIFIED: Use custom image for right arrow --- */}
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         {/* Mes Rendez-vous Button */}
@@ -263,7 +268,9 @@ const Paramètres = () => {
             {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Mes Rendez-vous</Text>
           </View>
-          <Ionicons name="chevron-forward-outline" size={20} color="#A0AEC0" />
+          {/* --- MODIFIED: Use custom image for right arrow --- */}
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
       </View>
@@ -281,7 +288,9 @@ const Paramètres = () => {
             <Image source={LOCK_ICON} style={[styles.settingIconCustom, { tintColor: '#0a8fdf' }]} /> {/* Use tintColor matching default icon */}
             <Text style={styles.settingText}>Changer Mot de Passe</Text>
           </View>
-          <Ionicons name="chevron-forward-outline" size={20} color="#A0AEC0" />
+          {/* --- MODIFIED: Use custom image for right arrow --- */}
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         {/* --- END NEW --- */}
 
@@ -493,7 +502,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  settingIcon: { // Original Ionicons style
+  settingIcon: { // Original Ionicons style (kept for reference, but not used for custom icons)
     marginRight: 18,
   },
   // --- NEW STYLE for Custom PNG Icons in Settings ---
@@ -503,6 +512,13 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     marginRight: 18,
     // tintColor is applied inline in the component to maintain specific colors
+  },
+  // --- NEW STYLE for Custom Arrow Icon ---
+  customArrowIcon: {
+    width: 20, // Match Ionicons size for chevron
+    height: 20, // Match Ionicons size for chevron
+    resizeMode: 'contain',
+    tintColor: '#A0AEC0', // Match original Ionicons color
   },
   // --- END NEW STYLE ---
   settingText: {
