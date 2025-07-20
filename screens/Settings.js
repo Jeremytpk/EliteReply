@@ -79,66 +79,88 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
   }, [isFocused]);
 
   const handleLogout = async () => {
-    Alert.alert(
-        'Déconnexion',
-        'Êtes-vous sûr de vouloir vous déconnecter ?',
-        [
-            {
-                text: 'Annuler',
-                style: 'cancel',
-            },
-            {
-                text: 'Oui',
-                onPress: async () => {
-                    try {
-                        console.log("Attempting to sign out...");
-                        await signOut(auth);
-                        console.log("Sign out successful on Firebase side.");
+  Alert.alert(
+    'Déconnexion',
+    'Êtes-vous sûr de vouloir vous déconnecter ?',
+    [
+      {
+        text: 'Annuler',
+        style: 'cancel',
+      },
+      {
+        text: 'Oui',
+        onPress: async () => {
+          try {
+            // Log Firebase Auth instance and current user BEFORE signOut
+            console.log("--- Logout Attempt ---");
+            console.log("auth instance:", auth);
+            console.log("auth.currentUser BEFORE signOut:", auth.currentUser ? auth.currentUser.uid : "No user");
 
-                        // Give a very brief moment for Auth state to propagate, if needed
-                        await new Promise(resolve => setTimeout(resolve, 50));
+            if (!auth || !auth.currentUser) {
+                console.warn("Auth object or current user is null/undefined before signOut. Cannot proceed.");
+                Alert.alert("Erreur de Déconnexion", "Aucun utilisateur n'est actuellement connecté.");
+                return; // Exit if no user to sign out
+            }
 
-                        // Explicitly check if current user is null after signOut
-                        if (!auth.currentUser) {
-                            console.log("auth.currentUser is null. User successfully logged out.");
-                        } else {
-                            console.warn("auth.currentUser is NOT null after signOut!", auth.currentUser.uid);
-                        }
+            await signOut(auth); // This is the crucial line
+            console.log("signOut(auth) call completed."); // This will log if signOut doesn't throw an error immediately
 
-                        Alert.alert(
-                            'Déconnexion réussie',
-                            'Vous avez été déconnecté avec succès',
-                            [
-                                {
-                                    text: 'OK',
-                                    onPress: () => navigation.reset({
-                                        index: 0,
-                                        routes: [{ name: 'Login' }],
-                                    }),
-                                },
-                            ],
-                            { cancelable: false }
-                        );
-                    } catch (error) {
-                        console.error("Erreur de déconnexion:", error.code, error.message, error);
-                        // Log additional info for network errors
-                        if (error.code === 'auth/network-request-failed') {
-                            Alert.alert(
-                                'Erreur de Déconnexion',
-                                `Problème réseau lors de la déconnexion. Vérifiez votre connexion internet.`
-                            );
-                        } else {
-                            Alert.alert(
-                                'Erreur de Déconnexion',
-                                `Une erreur est survenue lors de la déconnexion: ${error.message}`
-                            );
-                        }
-                    }
+            // Give a very brief moment for Auth state to propagate (might not be needed, but good for race conditions)
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Check auth.currentUser AFTER signOut
+            if (!auth.currentUser) {
+              console.log("auth.currentUser is now null. Logout successful from Firebase perspective.");
+            } else {
+              console.warn("auth.currentUser is STILL present after signOut!", auth.currentUser.uid);
+              Alert.alert("Erreur de Déconnexion", "La déconnexion Firebase a échoué localement. Veuillez réessayer.");
+            }
+
+            Alert.alert(
+              'Déconnexion réussie',
+              'Vous avez été déconnecté avec succès',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    console.log("Attempting navigation.reset to Login screen.");
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'Login' }],
+                    });
+                    console.log("navigation.reset called.");
+                  },
                 },
-            },
-        ],
-        { cancelable: true }
-    );
+              ],
+              { cancelable: false }
+            );
+
+          } catch (error) {
+            console.error("Déconnexion error caught:", error.code, error.message, error);
+            if (error.code === 'auth/network-request-failed') {
+                Alert.alert(
+                    'Erreur de Déconnexion',
+                    'Problème réseau lors de la déconnexion. Veuillez vérifier votre connexion internet.'
+                );
+            } else if (error.code) { // Specific Firebase Auth error
+                Alert.alert(
+                    'Erreur de Déconnexion',
+                    `Firebase Auth Error: ${error.code} - ${error.message}`
+                );
+            } else { // Generic error
+                Alert.alert(
+                    'Erreur de Déconnexion',
+                    `Une erreur inattendue est survenue: ${error.message}`
+                );
+            }
+          } finally {
+              console.log("--- Logout Attempt Finished ---");
+          }
+        },
+      },
+    ],
+    { cancelable: true }
+  );
 };
 
   // --- NEW: Handle Password Change ---
