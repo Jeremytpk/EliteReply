@@ -80,47 +80,62 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
 
   const handleLogout = async () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Oui',
-          onPress: async () => {
-            try {
-              console.log("Attempting to sign out...");
-              await signOut(auth);
-              console.log("Sign out successful!");
-              Alert.alert(
-                'Déconnexion réussie',
-                'Vous avez été déconnecté avec succès',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => navigation.reset({
-                      index: 0,
-                      routes: [{ name: 'Login' }],
-                    }),
-                  },
-                ],
-                { cancelable: false }
-              );
-            } catch (error) {
-              console.error("Erreur de déconnexion:", error.code, error.message, error);
-              Alert.alert(
-                'Erreur de Déconnexion',
-                `Une erreur est survenue lors de la déconnexion: ${error.message}`
-              );
-            }
-          },
-        },
-      ],
-      { cancelable: true }
+        'Déconnexion',
+        'Êtes-vous sûr de vouloir vous déconnecter ?',
+        [
+            {
+                text: 'Annuler',
+                style: 'cancel',
+            },
+            {
+                text: 'Oui',
+                onPress: async () => {
+                    try {
+                        console.log("Logout initiated. Current user before signOut:", auth.currentUser?.uid); // Log user ID
+                        await signOut(auth);
+                        console.log("Sign out function completed.");
+                        // Immediately check user status after signOut
+                        // This might not be null immediately due to async nature, but check for change.
+                        setTimeout(() => {
+                            console.log("User after 100ms delay:", auth.currentUser?.uid);
+                            if (!auth.currentUser) {
+                                console.log("User successfully logged out from Firebase Auth.");
+                            } else {
+                                console.warn("User still present in auth.currentUser after signOut. ID:", auth.currentUser?.uid);
+                            }
+                        }, 100);
+
+                        Alert.alert(
+                            'Déconnexion réussie',
+                            'Vous avez été déconnecté avec succès',
+                            [
+                                {
+                                    text: 'OK',
+                                    onPress: () => {
+                                        console.log("Navigating to Login screen...");
+                                        navigation.reset({
+                                            index: 0,
+                                            routes: [{ name: 'Login' }],
+                                        });
+                                        console.log("Navigation reset attempted.");
+                                    },
+                                },
+                            ],
+                            { cancelable: false }
+                        );
+                    } catch (error) {
+                        console.error("Erreur de déconnexion:", error.code, error.message, error);
+                        Alert.alert(
+                            'Erreur de Déconnexion',
+                            `Une erreur est survenue lors de la déconnexion: ${error.message}`
+                        );
+                    }
+                },
+            },
+        ],
+        { cancelable: true }
     );
-  };
+};
 
   // --- NEW: Handle Password Change ---
   const handleChangePassword = async () => {
