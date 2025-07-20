@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
   // --- END NEW STYLE ---
   rewardBubble: {
     position: 'absolute',
-    top: -5,
+    top: 35,
     right: -10,
     backgroundColor: '#34D399',
     borderRadius: 15,
