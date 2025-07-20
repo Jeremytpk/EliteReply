@@ -54,6 +54,13 @@ const AdminScreen = () => {
   // --- NEW: Import your custom icons ---
   const USERS_ICON = require('../assets/icons/users.png');
   const PARTNERS_ICON = require('../assets/icons/partners.png');
+  const TICKET_ICON = require('../assets/icons/ticket.png'); // New
+  const MESSAGE_ICON = require('../assets/icons/message_icon.png'); // New
+  const PROMOS_ICON = require('../assets/icons/promos.png'); // New (was already in Dashboard)
+  const SURVEY_CHECK_ICON = require('../assets/icons/survey_check.png'); // New
+  const MONEY_BILL_ICON = require('../assets/icons/money_bill.png'); // New (already in PartnerDashboard)
+  const ADD_CIRCLE_ICON = require('../assets/icons/add_circle.png'); // New
+  const GRAPHIC_ICON = require('../assets/icons/graphic.png'); // New
   // --- END NEW IMPORTS ---
 
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
@@ -343,7 +350,9 @@ const AdminScreen = () => {
         style={styles.graphicsBanner}
         onPress={() => navigation.navigate('Datas')}
       >
-        <Ionicons name="stats-chart-outline" size={24} color="#fff" />
+        {/* --- MODIFIED: Use custom image for See Graphics --- */}
+        <Image source={GRAPHIC_ICON} style={[styles.customGraphicsIcon, { tintColor: '#fff' }]} />
+        {/* --- END MODIFIED --- */}
         <Text style={styles.graphicsBannerText}>Voir les graphiques des données</Text>
         <Ionicons name="chevron-forward-outline" size={24} color="#fff" />
       </TouchableOpacity>
@@ -371,7 +380,7 @@ const AdminScreen = () => {
       {/* Stats Overview Grid */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#E3F2FD' }]}>
+          <View style={[styles.statIcon, { backgroundColor: '#B3E0F2' }]}> {/* Changed background color */}
             {/* --- MODIFIED: Use custom image for Users stat --- */}
             <Image source={USERS_ICON} style={styles.customStatIcon} />
             {/* --- END MODIFIED --- */}
@@ -382,7 +391,9 @@ const AdminScreen = () => {
 
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#E8F5E9' }]}>
-            <Ionicons name="ticket" size={24} color="#4CAF50" />
+            {/* --- MODIFIED: Use custom image for Tickets stat --- */}
+            <Image source={TICKET_ICON} style={[styles.customStatIcon, { tintColor: '#4CAF50' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.statNumber}>{stats.tickets}</Text>
           <Text style={styles.statLabel}>Tickets</Text>
@@ -390,14 +401,16 @@ const AdminScreen = () => {
 
         <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#FFF3E0' }]}>
-            <MaterialIcons name="chat" size={24} color="#FF9800" />
+            {/* --- MODIFIED: Use custom image for Conversations stat --- */}
+            <Image source={MESSAGE_ICON} style={[styles.customStatIcon, { tintColor: '#FF9800' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.statNumber}>{stats.conversations}</Text>
           <Text style={styles.statLabel}>Conversations (Partenaire)</Text>
         </View>
 
         <View style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: '#F3E5F5' }]}>
+          <View style={[styles.statIcon, { backgroundColor: '#D8BDE0' }]}> {/* Changed background color */}
             {/* --- MODIFIED: Use custom image for Partners stat --- */}
             <Image source={PARTNERS_ICON} style={styles.customStatIcon} />
             {/* --- END MODIFIED --- */}
@@ -427,7 +440,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('tickets')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#4CAF50' }]}>
-            <Ionicons name="ticket-outline" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Gérer les tickets action --- */}
+            <Image source={TICKET_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Gérer les tickets</Text>
         </TouchableOpacity>
@@ -437,7 +452,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('PartnerMsg')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#FF9800' }]}>
-            <MaterialIcons name="chat" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Conversations (Partenaire) action --- */}
+            <Image source={MESSAGE_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Conversations (Partenaire) ({stats.conversations})</Text>
         </TouchableOpacity>
@@ -447,9 +464,11 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('Promotions')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#F44336' }]}>
-            <FontAwesome name="newspaper-o" size={24} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Promos action --- */}
+            <Image source={PROMOS_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
-          <Text style={styles.actionText}>Actualités ({stats.newsCount})</Text>
+          <Text style={styles.actionText}>Promos ({stats.newsCount})</Text> {/* Text changed from Actualités to Promos */}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -469,7 +488,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('Survey')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#FFC107' }]}>
-            <Ionicons name="list" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Enquêtes action --- */}
+            <Image source={SURVEY_CHECK_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Enquêtes ({stats.surveys})</Text>
         </TouchableOpacity>
@@ -479,7 +500,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('Payments')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#607D8B' }]}>
-            <FontAwesome name="money" size={24} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Paiements action --- */}
+            <Image source={MONEY_BILL_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Paiements ({stats.pendingPayments})</Text>
         </TouchableOpacity>
@@ -489,7 +512,9 @@ const AdminScreen = () => {
           onPress={() => navigation.navigate('CreateSurvey')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#4CAF50' }]}>
-            <Ionicons name="add-circle" size={28} color="#fff" />
+            {/* --- MODIFIED: Use custom image for Créer une enquête action --- */}
+            <Image source={ADD_CIRCLE_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />
+            {/* --- END MODIFIED --- */}
           </View>
           <Text style={styles.actionText}>Créer une enquête</Text>
         </TouchableOpacity>
@@ -547,6 +572,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  // --- NEW STYLE for Custom Graphics Icon ---
+  customGraphicsIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   graphicsBannerText: {
     color: '#fff',
     fontSize: 16,
@@ -581,12 +614,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  // --- NEW STYLE FOR CUSTOM STAT ICONS ---
+  // --- NEW STYLE FOR CUSTOM STAT ICONS (already existed, just confirming) ---
   customStatIcon: {
     width: 28, // Adjust size as needed
     height: 28, // Adjust size as needed
     resizeMode: 'contain',
-    tintColor: '#0a8fdf', // Adjust to match the color of the original Ionicons
+    // tintColor is applied inline to match the color of the original Ionicons
   },
   // --- END NEW STYLE ---
   statNumber: {
@@ -632,12 +665,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  // --- NEW STYLE FOR CUSTOM ACTION ICONS ---
+  // --- NEW STYLE FOR CUSTOM ACTION ICONS (already existed, just confirming) ---
   customActionIcon: {
     width: 32, // Adjust size as needed
     height: 32, // Adjust size as needed
     resizeMode: 'contain',
-    tintColor: '#fff', // Typically, these icons are white on colored backgrounds
+    // tintColor is applied inline to typically make these icons white on colored backgrounds
   },
   // --- END NEW STYLE ---
   actionText: {

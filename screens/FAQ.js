@@ -221,11 +221,11 @@ const FAQ = () => {
           <Text style={styles.whyTitle}>📌 Pourquoi EliteReply ?</Text>
           <View style={styles.benefitItem}>
             <Ionicons name="checkmark-circle" size={18} color="#347afc" />
-            <Text style={styles.benefitText}>**Secteur-Spécifique :** Agents formés à votre domaine</Text>
+            <Text style={styles.benefitText}>Secteur-Spécifique : Agents formés à votre domaine</Text>
           </View>
           <View style={styles.benefitItem}>
             <Ionicons name="checkmark-circle" size={18} color="#347afc" />
-            <Text style={styles.benefitText}>**Hybride Humain/IA :** Efficacité maximisée</Text>
+            <Text style={styles.benefitText}>Hybride Humain/IA : Efficacité maximisée</Text>
           </View>
         </View>
 

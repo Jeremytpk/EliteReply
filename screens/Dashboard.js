@@ -69,7 +69,12 @@ const Dashboard = () => {
   const APP_LOGO = require('../assets/images/favicon.png');
   // --- NEW: IMPORT YOUR CUSTOM ICONS HERE ---
   const ASSISTANCE_ICON = require('../assets/icons/assistance.png');
-  const PROMO_ICON = require('../assets/icons/promos.png');
+  const PROMO_ICON = require('../assets/icons/promos.png'); // Corrected from promo.png to promos.png
+  // --- NEW: Imports for Support Client icons ---
+  const RATE_ICON = require('../assets/icons/rate.png');
+  const FAQ_ICON = require('../assets/icons/faq.png');
+  const INFOS_ICON = require('../assets/icons/infos.png');
+  const SETTINGS_ICON = require('../assets/icons/settings.png');
   // --- END NEW IMPORTS ---
 
   const fetchUserData = async () => {
@@ -668,23 +673,53 @@ const Dashboard = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support Client</Text>
           <View style={styles.optionsGrid}>
-            {[
-              { icon: 'star-outline', name: 'Évaluer', screen: 'RateApp', color: '#feca57' },
-              { icon: 'help-circle-outline', name: 'FAQ', screen: 'FAQ', color: '#1dd1a1' },
-              { icon: 'information-circle-outline', name: 'À Propos', screen: 'About', color: '#5f27cd' },
-              { icon: 'settings-outline', name: 'Paramètres', screen: 'Settings', color: '#ff9f43' },
-            ].map((option, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.optionCard}
-                onPress={() => navigation.navigate(option.screen)}
-              >
-                <View style={[styles.optionIcon, { backgroundColor: option.color }]}>
-                  <Ionicons name={option.icon} size={24} color="#fff" />
-                </View>
-                <Text style={styles.optionText}>{option.name}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => navigation.navigate('RateApp')}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: '#feca57' }]}>
+                {/* --- MODIFIED: Use custom image for Évaluer --- */}
+                <Image source={RATE_ICON} style={styles.customOptionIcon} />
+                {/* --- END MODIFIED --- */}
+              </View>
+              <Text style={styles.optionText}>Évaluer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => navigation.navigate('FAQ')}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: '#1dd1a1' }]}>
+                {/* --- MODIFIED: Use custom image for FAQ --- */}
+                <Image source={FAQ_ICON} style={styles.customOptionIcon} />
+                {/* --- END MODIFIED --- */}
+              </View>
+              <Text style={styles.optionText}>FAQ</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => navigation.navigate('About')}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: '#5f27cd' }]}>
+                {/* --- MODIFIED: Use custom image for À Propos --- */}
+                <Image source={INFOS_ICON} style={styles.customOptionIcon} />
+                {/* --- END MODIFIED --- */}
+              </View>
+              <Text style={styles.optionText}>À Propos</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: '#ff9f43' }]}>
+                {/* --- MODIFIED: Use custom image for Paramètres --- */}
+                <Image source={SETTINGS_ICON} style={styles.customOptionIcon} />
+                {/* --- END MODIFIED --- */}
+              </View>
+              <Text style={styles.optionText}>Paramètres</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -800,7 +835,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#f4f4f4',
     padding: 20,
-    //marginTop: 26,
+    marginTop: 15,
   },
   loadingContainer: {
     flex: 1,
@@ -993,6 +1028,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+  // --- NEW STYLE FOR CUSTOM OPTION ICONS ---
+  customOptionIcon: {
+    width: 24, // Adjust size as needed
+    height: 24, // Adjust size as needed
+    resizeMode: 'contain',
+    tintColor: '#fff', // These icons should also be white on their colored backgrounds
+  },
+  // --- END NEW STYLE ---
   optionText: {
     fontSize: 15,
     fontWeight: '500',
@@ -1098,7 +1141,7 @@ const styles = StyleSheet.create({
   },
   rewardBubble: {
     position: 'absolute',
-    top: -5,
+    top: 35,
     right: -10,
     backgroundColor: '#34D399',
     borderRadius: 15,
@@ -1106,7 +1149,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 40,
+    minWidth: 50,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,

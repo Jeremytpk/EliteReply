@@ -35,6 +35,15 @@ import {
   onSnapshot // Import onSnapshot for real-time listeners
 } from 'firebase/firestore';
 
+// --- NEW: Import your custom icons ---
+const DOC_ICON = require('../../assets/icons/doc.png');
+const CHECKED_APT_ICON = require('../../assets/icons/checked_apt.png');
+const HOLD_APT_ICON = require('../../assets/icons/hold_apt.png');
+const MONEY_BILL_ICON = require('../../assets/icons/money_bill.png');
+const MONEY_COMMISSION_ICON = require('../../assets/icons/money_commission.png');
+const SUPPORT_ER_ICON = require('../../assets/icons/support_er.png');
+// --- END NEW IMPORTS ---
+
 // Custom Progress Bar Component
 const ProgressBar = ({ progress, color }) => {
   return (
@@ -348,19 +357,6 @@ const PartnerDashboard = ({ navigation }) => {
   }, [currentUser, fetchPartnerData]);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    setCurrentUser(user);
-
-    if (user) {
-      fetchPartnerData(user.uid);
-    } else {
-      setLoading(false);
-    }
-  }, [fetchPartnerData]);
-
-
-  // --- NEW: Real-time Listeners for Notifications ---
-  useEffect(() => {
     let unsubscribes = []; // To store all unsubscribe functions for cleanup
 
     const setupPartnerNotifications = async () => {
@@ -568,42 +564,42 @@ const PartnerDashboard = ({ navigation }) => {
 
   const statsCards = [
     {
-      icon: <MaterialCommunityIcons name="file-document-multiple-outline" size={24} color="#4a6bff" />,
+      icon: <Image source={DOC_ICON} style={[styles.customStatIcon, { tintColor: '#4a6bff' }]} />,
       title: "Documents",
       value: dashboardData.documentsCount,
       color: "#4a6bff",
       onPress: () => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })
     },
     {
-      icon: <MaterialCommunityIcons name="calendar-check" size={24} color="#34C759" />,
+      icon: <Image source={CHECKED_APT_ICON} style={[styles.customStatIcon, { tintColor: '#34C759' }]} />,
       title: "Confirmées",
       value: dashboardData.confirmedBookings,
       color: "#34C759",
       onPress: () => navigation.navigate('RdvConfirm')
     },
     {
-      icon: <MaterialCommunityIcons name="calendar-clock" size={24} color="#FF7043" />,
+      icon: <Image source={HOLD_APT_ICON} style={[styles.customStatIcon, { tintColor: '#FF7043' }]} />,
       title: "Rendez-vous",
       value: dashboardData.totalAppointments,
       color: "#FF7043",
-      onPress: () => navigation.navigate('PartnerSurvey')
+      onPress: () => navigation.navigate('PartnerSurvey') // This should probably navigate to a list of all appointments, not surveys
     },
     {
-      icon: <FontAwesome name="money" size={24} color="#FBBC05" />,
+      icon: <Image source={MONEY_BILL_ICON} style={[styles.customStatIcon, { tintColor: '#FBBC05' }]} />,
       title: "Revenus",
       value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#FBBC05",
-      onPress: () => navigation.navigate('RdvConfirm')
+      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/revenue screen
     },
     {
-      icon: <MaterialIcons name="attach-money" size={24} color="#9C27B0" />,
+      icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#9C27B0' }]} />,
       title: "Commission",
       value: `${dashboardData.commissionEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#9C27B0",
-      onPress: () => navigation.navigate('RdvConfirm')
+      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/commission screen
     },
     {
-      icon: <Ionicons name="chatbubbles" size={24} color="#EA4335" />,
+      icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#EA4335' }]} />,
       title: "Support ER",
       value: "",
       color: "#EA4335",
@@ -725,7 +721,10 @@ const PartnerDashboard = ({ navigation }) => {
                         style={[styles.statCard, { borderLeftColor: card.color }]}
                         onPress={card.onPress}
                       >
-                        <View style={styles.statIcon}>{card.icon}</View>
+                        <View style={styles.statIcon}>
+                          {/* Use the custom image icon */}
+                          {card.icon}
+                        </View>
                         <Text style={styles.statValue}>{card.value}</Text>
                         <Text style={styles.statLabel}>{card.title}</Text>
                       </TouchableOpacity>
@@ -1055,6 +1054,14 @@ const styles = StyleSheet.create({
   statIcon: {
     marginBottom: 8,
   },
+  // --- NEW STYLE for Custom Stat Icons ---
+  customStatIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline in the component to maintain specific colors
+  },
+  // --- END NEW STYLE ---
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',

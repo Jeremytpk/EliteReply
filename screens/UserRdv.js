@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Dimensions, Platform, Image } from 'react-native'; // Import Image
 import { useNavigation } from '@react-navigation/native';
 import { db, auth } from '../firebase'; // Adjust path if necessary
 import { collectionGroup, query, where, getDocs, orderBy } from 'firebase/firestore'; // Use collectionGroup
@@ -7,6 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg'; // Keep if QR codes are generated for appointments
 
 const { width } = Dimensions.get('window');
+
+// --- NEW: Import your custom icon ---
+const APPOINTMENT_ICON_PNG = require('../assets/icons/appointment.png');
+// --- END NEW IMPORTS ---
 
 const UserRdv = () => {
   const navigation = useNavigation();
@@ -131,7 +135,9 @@ const UserRdv = () => {
               onPress={() => openAppointmentModal(appointmentData)}
             >
               <View style={styles.appointmentIconContainer}>
-                <Ionicons name="calendar" size={30} color="#FF9500" />
+                {/* --- MODIFIED: Use custom image for calendar icon --- */}
+                <Image source={APPOINTMENT_ICON_PNG} style={[styles.customAppointmentIcon, { tintColor: '#FF9500' }]} />
+                {/* --- END MODIFIED --- */}
               </View>
               <View style={styles.appointmentDetails}>
                 <Text style={styles.appointmentPartnerName}>{appointmentData.partnerNom || 'Partenaire Inconnu'}</Text> {/* Using partnerNom */}
@@ -342,6 +348,14 @@ const styles = StyleSheet.create({
   appointmentIconContainer: {
     marginRight: 15,
   },
+  // --- NEW STYLE for Custom Appointment Icon ---
+  customAppointmentIcon: {
+    width: 30, // Match Ionicons size
+    height: 30, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline to maintain specific color
+  },
+  // --- END NEW STYLE ---
   appointmentDetails: {
     flex: 1,
   },
