@@ -8,7 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Image,
+  Image, // Make sure Image is imported
   ActivityIndicator,
   Alert,
   Linking, // Import Linking for opening URLs
@@ -25,7 +25,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep Ionicons for other uses if any
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep Ionicons/MaterialIcons if still used elsewhere
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -35,11 +35,8 @@ import { useNavigation } from '@react-navigation/native';
 const ATTACH_ICON = require('../../assets/icons/attach.png');
 const IMAGE_ICON = require('../../assets/icons/image.png');
 const SEND_ICON = require('../../assets/icons/send.png');
-// NOTE: You mentioned 'file.png' in the previous request, but the attach icon is usually for files.
-// I'll assume 'attach.png' is for the paperclip/file attachment.
-// The 'download icon: cloud_download.png' is already handled by MaterialIcons in your original code,
-// and it's generally good practice to keep vector icons for system/utility actions if they fit the theme.
-// If you want to replace MaterialIcons.cloud-download with a custom PNG, let me know its name.
+const CLOUD_DOWNLOAD_ICON = require('../../assets/icons/cloud_download.png'); // New: Download icon
+const DOC_FILE_ICON = require('../../assets/icons/doc.png'); // New: Document file icon
 // --- END NEW IMPORTS ---
 
 const UnifiedChat = ({ route }) => {
@@ -63,8 +60,7 @@ const UnifiedChat = ({ route }) => {
     myUserName = supportTeamName;
   }
 
-  const theirUserId = userType === 'partner' ? supportTeamId : partnerName; // Corrected: theirUserId should be the actual user ID, not name
-  // Corrected theirUserName to be based on the actual partnerName for support, or supportTeamName for partner
+  const theirUserId = userType === 'partner' ? supportTeamId : partnerId;
   const theirUserName = userType === 'partner' ? supportTeamName : partnerName;
 
 
@@ -267,7 +263,7 @@ const UnifiedChat = ({ route }) => {
 
       await setDoc(conversationRef, updateData, { merge: true });
 
-      if (userType !== 'partner' && userType !== 'support') {
+      if (auth.currentUser?.uid) { // Ensure current user is defined
         const userConversationStateRef = doc(
           db,
           'users',
@@ -336,7 +332,7 @@ const UnifiedChat = ({ route }) => {
 
       await setDoc(conversationRef, updateData, { merge: true });
 
-      if (userType !== 'partner' && userType !== 'support') {
+      if (auth.currentUser?.uid) { // Ensure current user is defined
         const userConversationStateRef = doc(
           db,
           'users',
@@ -388,17 +384,23 @@ const UnifiedChat = ({ route }) => {
             <Image source={{ uri: item.content }} style={styles.chatImage} />
             {/* Download icon overlay for images */}
             <View style={styles.downloadIconOverlay}>
-                <MaterialIcons name="cloud-download" size={24} color="white" />
+                {/* --- MODIFIED: Use custom image for Cloud Download --- */}
+                <Image source={CLOUD_DOWNLOAD_ICON} style={styles.customDownloadIcon} />
+                {/* --- END MODIFIED --- */}
             </View>
           </TouchableOpacity>
         ) : item.type === 'file' ? (
           <TouchableOpacity onPress={() => Linking.openURL(item.content)} style={styles.fileMessage}>
-            <Ionicons name="document-text" size={24} color={isMyMessage ? '#FFF' : '#1E293B'} />
+            {/* --- MODIFIED: Use custom image for Document File --- */}
+            <Image source={DOC_FILE_ICON} style={[styles.customFileIcon, { tintColor: isMyMessage ? '#FFF' : '#1E293B' }]} />
+            {/* --- END MODIFIED --- */}
             <Text style={isMyMessage ? styles.myMessageText : styles.theirMessageText}>
               {item.fileName || 'Fichier'}
             </Text>
             {/* Download icon for files */}
-            <MaterialIcons name="cloud-download" size={20} color={isMyMessage ? '#FFF' : '#1E293B'} style={styles.fileDownloadIcon} />
+            {/* --- MODIFIED: Use custom image for Cloud Download --- */}
+            <Image source={CLOUD_DOWNLOAD_ICON} style={[styles.customDownloadIcon, { tintColor: isMyMessage ? '#FFF' : '#1E293B' }]} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         ) : (
           <Text
@@ -484,7 +486,7 @@ const UnifiedChat = ({ route }) => {
             <ActivityIndicator color="#FFF" size="small" />
           ) : (
             // --- MODIFIED: Use custom image for Send icon ---
-            <Image source={SEND_ICON} style={styles.customSendIcon} />
+            <Image source={SEND_ICON} style={[styles.customSendIcon, { tintColor: '#FFF' }]} />
             // --- END MODIFIED ---
           )}
         </TouchableOpacity>
@@ -580,12 +582,28 @@ const styles = StyleSheet.create({
       borderRadius: 15,
       padding: 5,
   },
+  // --- NEW STYLE for custom download icon (used in overlay) ---
+  customDownloadIcon: {
+    width: 24, // Match original MaterialIcons size
+    height: 24, // Match original MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Original MaterialIcons color was white
+  },
+  // --- END NEW STYLE ---
   fileMessage: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  fileDownloadIcon: {
+  // --- NEW STYLE for custom file icon ---
+  customFileIcon: {
+    width: 24, // Match original Ionicons size
+    height: 24, // Match original Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline based on isMyMessage
+  },
+  // --- END NEW STYLE ---
+  fileDownloadIcon: { // Original MaterialIcons style (kept for reference, but not used for custom icons)
       marginLeft: 'auto', // Push to the right
   },
   inputArea: {
@@ -609,10 +627,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   customSendIcon: {
-    width: 20, // Match original Ionicons size
-    height: 20, // Match original Ionicons size
+    width: 24, // Increased size for better visibility
+    height: 24, // Increased size for better visibility
     resizeMode: 'contain',
-    tintColor: '#FFF', // Match original Ionicons color
+    tintColor: '#FFF', // Ensure it's white
   },
   // --- END NEW STYLE ---
   textInput: {

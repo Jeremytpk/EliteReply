@@ -14,11 +14,12 @@ import {
   Platform,
   Linking,
   PermissionsAndroid,
-  ScrollView
+  ScrollView,
+  Image // Import Image
 } from 'react-native';
 import {
-  Ionicons,
-  MaterialIcons
+  Ionicons, // Keep if still used elsewhere
+  MaterialIcons // Keep if still used elsewhere
 } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -46,6 +47,18 @@ import {
 } from 'firebase/storage';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+// --- NEW: Import your custom icons ---
+const BACK_CIRCLE_ICON = require('../../assets/icons/back_circle.png');
+const ADD_CIRCLE_ICON = require('../../assets/icons/add_circle.png');
+const CREDIT_CARD_ICON_DOC = require('../../assets/icons/credit_card.png'); // Renamed to avoid conflict
+const DOC_ICON_EMPTY = require('../../assets/icons/doc.png'); // For empty file icon in document card
+const DOWNLOAD_ICON = require('../../assets/icons/cloud_download.png'); // Assuming this is the download icon
+const DELETE_ICON_DOC = require('../../assets/icons/delete.png'); // For delete document button
+const RECEIPT_OUTLINE_ICON = require('../../assets/icons/receipt.png'); // For payment receipt picker
+const CALENDAR_OUTLINE_ICON = require('../../assets/icons/appointment.png'); // For date pickers
+const ATTACH_ICON_DOC = require('../../assets/icons/attach.png'); // For document picker
+// --- END NEW IMPORTS ---
 
 const PartnerDoc = ({ navigation, route }) => {
   const { partnerId: currentPartnerId, partnerName: currentPartnerName, isAdmin } = route.params;
@@ -494,10 +507,14 @@ const PartnerDoc = ({ navigation, route }) => {
   const renderDocumentItem = ({ item }) => (
     <View style={styles.documentCard}>
       <View style={styles.documentHeader}>
-        <Ionicons name="document-text-outline" size={24} color="#4a6bff" />
+        {/* --- MODIFIED: Use custom image for empty file icon --- */}
+        <Image source={DOC_ICON_EMPTY} style={[styles.customDocumentIcon, { tintColor: '#4a6bff' }]} />
+        {/* --- END MODIFIED --- */}
         <Text style={styles.documentTitle}>{item.title}</Text>
         <TouchableOpacity onPress={() => deleteDocument(item.id, item.storagePath)} style={styles.deleteDocumentButton}>
-          <MaterialIcons name="delete" size={24} color="#EF4444" />
+          {/* --- MODIFIED: Use custom image for delete icon --- */}
+          <Image source={DELETE_ICON_DOC} style={styles.customDeleteDocumentIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
       </View>
       <Text style={styles.documentFilename}>{item.filename}</Text>
@@ -514,7 +531,9 @@ const PartnerDoc = ({ navigation, route }) => {
         style={styles.downloadButton}
         onPress={() => downloadDocument(item.downloadURL, item.filename)}
       >
-        <Ionicons name="download-outline" size={20} color="white" />
+        {/* --- MODIFIED: Use custom image for download icon --- */}
+        <Image source={DOWNLOAD_ICON} style={styles.customDownloadButtonIcon} />
+        {/* --- END MODIFIED --- */}
         <Text style={styles.downloadButtonText}>Télécharger</Text>
       </TouchableOpacity>
     </View>
@@ -530,12 +549,16 @@ const PartnerDoc = ({ navigation, route }) => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#2D3748" />
+          {/* --- MODIFIED: Use custom image for back arrow --- */}
+          <Image source={BACK_CIRCLE_ICON} style={styles.customHeaderIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mes Documents</Text>
         <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addDocumentButton}>
-                <Ionicons name="add-circle-outline" size={30} color="#4a6bff" />
+                {/* --- MODIFIED: Use custom image for Add icon --- */}
+                <Image source={ADD_CIRCLE_ICON} style={[styles.customHeaderIcon, { tintColor: '#4a6bff' }]} />
+                {/* --- END MODIFIED --- */}
             </TouchableOpacity>
         </View>
       </View>
@@ -547,7 +570,9 @@ const PartnerDoc = ({ navigation, route }) => {
         </View>
       ) : documents.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="document-outline" size={50} color="#ccc" />
+          {/* --- MODIFIED: Use custom image for empty document icon --- */}
+          <Image source={DOC_ICON_EMPTY} style={styles.customEmptyDocumentIcon} />
+          {/* --- END MODIFIED --- */}
           <Text style={styles.emptyText}>Aucun document disponible.</Text>
           <Text style={styles.emptySubText}>Cliquez sur le bouton '+' pour en ajouter un.</Text>
         </View>
@@ -565,7 +590,9 @@ const PartnerDoc = ({ navigation, route }) => {
               style={styles.fabButton} 
               onPress={() => setRecordPaymentModalVisible(true)}
           >
-              <MaterialIcons name="payment" size={28} color="#FFFFFF" />
+              {/* --- MODIFIED: Use custom image for Credit Card icon --- */}
+              <Image source={CREDIT_CARD_ICON_DOC} style={styles.customFabIcon} />
+              {/* --- END MODIFIED --- */}
           </TouchableOpacity>
       {/* --- END Floating Action Button --- */}
 
@@ -608,7 +635,9 @@ const PartnerDoc = ({ navigation, route }) => {
             />
 
             <TouchableOpacity style={styles.pickFileButton} onPress={pickDocument}>
-              <Ionicons name="attach" size={20} color="#4a6bff" />
+              {/* --- MODIFIED: Use custom image for Attach icon in modal --- */}
+              <Image source={ATTACH_ICON_DOC} style={styles.customPickFileIcon} />
+              {/* --- END MODIFIED --- */}
               <Text style={styles.pickFileButtonText}>
                 {selectedFile ? selectedFile.name : "Sélectionner un document"}
               </Text>
@@ -677,12 +706,16 @@ const PartnerDoc = ({ navigation, route }) => {
               <Text style={styles.modalLabel}>Période de paiement:</Text>
               <View style={styles.datePickerContainer}>
                 <TouchableOpacity onPress={() => setShowPaymentFromDatePicker(true)} style={styles.datePickerButton}>
-                  <Ionicons name="calendar-outline" size={20} color="#2D3748" />
+                  {/* --- MODIFIED: Use custom image for calendar icon --- */}
+                  <Image source={CALENDAR_OUTLINE_ICON} style={styles.customDatePickerIcon} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.datePickerText}>{formatDate(paymentFromDate)}</Text>
                 </TouchableOpacity>
                 <Text style={styles.dateSeparator}>au</Text>
                 <TouchableOpacity onPress={() => setShowPaymentToDatePicker(true)} style={styles.datePickerButton}>
-                  <Ionicons name="calendar-outline" size={20} color="#2D3748" />
+                  {/* --- MODIFIED: Use custom image for calendar icon --- */}
+                  <Image source={CALENDAR_OUTLINE_ICON} style={styles.customDatePickerIcon} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.datePickerText}>{formatDate(paymentToDate)}</Text>
                 </TouchableOpacity>
               </View>
@@ -714,7 +747,9 @@ const PartnerDoc = ({ navigation, route }) => {
               />
 
               <TouchableOpacity style={styles.pickFileButton} onPress={pickPaymentReceipt}>
-                <Ionicons name="receipt-outline" size={20} color="#4a6bff" />
+                {/* --- MODIFIED: Use custom image for receipt icon --- */}
+                <Image source={RECEIPT_OUTLINE_ICON} style={styles.customPickFileIcon} />
+                {/* --- END MODIFIED --- */}
                 <Text style={styles.pickFileButtonText}>
                   {paymentReceipt ? paymentReceipt.name : "Télécharger le reçu (Obligatoire)"}
                 </Text>
@@ -774,6 +809,14 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  // --- NEW STYLE for custom header icons (back arrow, add document) ---
+  customHeaderIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#2D3748', // Default color for back arrow
+  },
+  // --- END NEW STYLE ---
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -817,6 +860,14 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: 'center',
   },
+  // --- NEW STYLE for custom empty document icon ---
+  customEmptyDocumentIcon: {
+    width: 50, // Match Ionicons size
+    height: 50, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#ccc', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   listContentContainer: {
     padding: 15,
     paddingBottom: 20,
@@ -839,6 +890,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  // --- NEW STYLE for custom document icon in card ---
+  customDocumentIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- NEW STYLE for custom delete document icon ---
+  customDeleteDocumentIcon: {
+    width: 24, // Match MaterialIcons size
+    height: 24, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: '#EF4444', // Match MaterialIcons color
+  },
+  // --- END NEW STYLE ---
   documentTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -867,6 +933,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 10,
   },
+  // --- NEW STYLE for custom download button icon ---
+  customDownloadButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Match Ionicons color
+    marginRight: 5,
+  },
+  // --- END NEW STYLE ---
   downloadButtonText: {
     color: 'white',
     fontSize: 14,
@@ -931,6 +1006,15 @@ const styles = StyleSheet.create({
     borderColor: '#4a6bff',
     marginBottom: 20,
   },
+  // --- NEW STYLE for custom pick file icon (attach/receipt) ---
+  customPickFileIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#4a6bff', // Match Ionicons color
+    marginRight: 10,
+  },
+  // --- END NEW STYLE ---
   pickFileButtonText: {
     color: '#4a6bff',
     fontSize: 16,
@@ -992,6 +1076,14 @@ const styles = StyleSheet.create({
     padding: 12,
     flex: 1,
   },
+  // --- NEW STYLE for custom date picker icon ---
+  customDatePickerIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#2D3748', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   datePickerText: {
     marginLeft: 10,
     fontSize: 16,
@@ -1020,6 +1112,14 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     zIndex: 10, // Ensure it floats above other content
   },
+  // --- NEW STYLE for custom FAB icon ---
+  customFabIcon: {
+    width: 28, // Match MaterialIcons size
+    height: 28, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: '#FFFFFF', // Match MaterialIcons color
+  },
+  // --- END NEW STYLE ---
 });
 
 export default PartnerDoc;
