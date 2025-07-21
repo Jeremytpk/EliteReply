@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, SafeAreaView, Platform, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, SafeAreaView, Platform, Alert, Image } from 'react-native'; // Import Image
 import { db, auth } from '../../firebase';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore'; // Added addDoc for push notification
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, orderBy } from 'firebase/firestore'; // Added addDoc for push notification
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep if still used elsewhere
+
+// --- NEW: Import your custom icons ---
+const BACK_CIRCLE_ICON = require('../../assets/icons/back_circle.png'); // From PartnerDoc
+const CLIPBOARD_OUTLINE_ICON = require('../../assets/icons/clipboard.png'); // For survey item
+const CALENDAR_OUTLINE_ICON_SURVEY = require('../../assets/icons/appointment.png'); // For RDV item (renamed to avoid conflict)
+const CHECKMARK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/checkmark_circle.png'); // For confirm button
+const INFORMATION_CIRCLE_OUTLINE_ICON = require('../../assets/icons/infos.png'); // For no data card
+const STATS_CHART_OUTLINE_ICON = require('../../assets/icons/stats_chart.png'); // For section header
+const CALENDAR_NUMBER_OUTLINE_ICON = require('../../assets/icons/date_apt.png'); // For section header
+// --- END NEW IMPORTS ---
+
+const COMMISSION_RATE = 0.13; // 13% commission rate
 
 const PartnerSurvey = () => {
     const [surveys, setSurveys] = useState([]);
@@ -225,7 +237,9 @@ const PartnerSurvey = () => {
             onPress={() => navigation.navigate('PartnerSurveyDetail', { surveyId: item.id })}
         >
             <View style={styles.itemHeader}>
-                <Ionicons name="clipboard-outline" size={24} color={styles.surveyAccentColor.backgroundColor} />
+                {/* --- MODIFIED: Use custom image for clipboard icon --- */}
+                <Image source={CLIPBOARD_OUTLINE_ICON} style={[styles.customItemIcon, { tintColor: styles.surveyAccentColor.backgroundColor }]} />
+                {/* --- END MODIFIED --- */}
                 <Text style={styles.surveyItemTitle}>{item.title}</Text>
             </View>
             <Text style={styles.surveyItemDescription}>{item.description}</Text>
@@ -250,7 +264,9 @@ const PartnerSurvey = () => {
                 onPress={() => navigation.navigate('PartnerRdvDetail', { rdvId: item.id, partnerId: item.partnerId })}
             >
                 <View style={styles.itemHeader}>
-                    <Ionicons name="calendar-outline" size={24} color={styles.rdvAccentColor.backgroundColor} />
+                    {/* --- MODIFIED: Use custom image for calendar icon --- */}
+                    <Image source={CALENDAR_OUTLINE_ICON_SURVEY} style={[styles.customItemIcon, { tintColor: styles.rdvAccentColor.backgroundColor }]} />
+                    {/* --- END MODIFIED --- */}
                     <Text style={styles.rdvItemTitle}>Rendez-vous avec {item.clientNames?.join(', ') || 'un client'}</Text>
                 </View>
                 <Text style={styles.rdvItemDetails}>Description: {item.description || 'Non spécifié'}</Text>
@@ -277,7 +293,9 @@ const PartnerSurvey = () => {
                         style={styles.confirmButton}
                         onPress={() => confirmRdv(item.id, item.partnerId)}
                     >
-                        <Ionicons name="checkmark-circle-outline" size={20} color="white" style={{ marginRight: 5 }} />
+                        {/* --- MODIFIED: Use custom image for checkmark icon --- */}
+                        <Image source={CHECKMARK_CIRCLE_OUTLINE_ICON} style={styles.customConfirmButtonIcon} />
+                        {/* --- END MODIFIED --- */}
                         <Text style={styles.confirmButtonText}>Confirmer le RDV</Text>
                     </TouchableOpacity>
                 )}
@@ -301,7 +319,9 @@ const PartnerSurvey = () => {
 
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionTitleRow}>
-                        <Ionicons name="stats-chart-outline" size={28} color="#2D3748" />
+                        {/* --- MODIFIED: Use custom image for stats chart icon --- */}
+                        <Image source={STATS_CHART_OUTLINE_ICON} style={[styles.customSectionHeaderIcon, { tintColor: '#2D3748' }]} />
+                        {/* --- END MODIFIED --- */}
                         <Text style={styles.sectionHeader}>Mes Enquêtes</Text>
                     </View>
                     {surveys.length > 0 ? (
@@ -314,7 +334,9 @@ const PartnerSurvey = () => {
                         />
                     ) : (
                         <View style={styles.noDataCard}>
-                            <Ionicons name="information-circle-outline" size={30} color="#6B7280" />
+                            {/* --- MODIFIED: Use custom image for information circle icon --- */}
+                            <Image source={INFORMATION_CIRCLE_OUTLINE_ICON} style={[styles.customNoDataIcon, { tintColor: '#6B7280' }]} />
+                            {/* --- END MODIFIED --- */}
                             <Text style={styles.noDataText}>Aucune enquête disponible pour le moment.</Text>
                         </View>
                     )}
@@ -324,7 +346,9 @@ const PartnerSurvey = () => {
 
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionTitleRow}>
-                        <Ionicons name="calendar-number-outline" size={28} color="#2D3748" />
+                        {/* --- MODIFIED: Use custom image for calendar number icon --- */}
+                        <Image source={CALENDAR_NUMBER_OUTLINE_ICON} style={[styles.customSectionHeaderIcon, { tintColor: '#2D3748' }]} />
+                        {/* --- END MODIFIED --- */}
                         <Text style={styles.sectionHeader}>Mes Rendez-vous</Text>
                     </View>
                     {rdvs.length > 0 ? (
@@ -337,7 +361,9 @@ const PartnerSurvey = () => {
                         />
                     ) : (
                         <View style={styles.noDataCard}>
-                            <Ionicons name="information-circle-outline" size={30} color="#6B7280" />
+                            {/* --- MODIFIED: Use custom image for information circle icon --- */}
+                            <Image source={INFORMATION_CIRCLE_OUTLINE_ICON} style={[styles.customNoDataIcon, { tintColor: '#6B7280' }]} />
+                            {/* --- END MODIFIED --- */}
                             <Text style={styles.noDataText}>Aucun rendez-vous planifié pour le moment.</Text>
                         </View>
                     )}
@@ -389,6 +415,14 @@ const styles = StyleSheet.create({
         borderBottomColor: '#E2E8F0',
         paddingBottom: 8,
     },
+    // --- NEW STYLE for custom section header icons ---
+    customSectionHeaderIcon: {
+        width: 28, // Match Ionicons size
+        height: 28, // Match Ionicons size
+        resizeMode: 'contain',
+        // tintColor is applied inline
+    },
+    // --- END NEW STYLE ---
     sectionHeader: {
         fontSize: 24,
         fontWeight: '700',
@@ -411,6 +445,19 @@ const styles = StyleSheet.create({
         borderLeftWidth: 8,
         borderColor: '#0a8fdf',
     },
+    itemHeader: { // Reused for both survey and RDV items
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    // --- NEW STYLE for custom item icons (clipboard, calendar) ---
+    customItemIcon: {
+        width: 24, // Match Ionicons size
+        height: 24, // Match Ionicons size
+        resizeMode: 'contain',
+        // tintColor is applied inline
+    },
+    // --- END NEW STYLE ---
     surveyItemTitle: {
         fontSize: 19,
         fontWeight: '700',
@@ -495,6 +542,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
     },
+    // --- NEW STYLE for custom confirm button icon ---
+    customConfirmButtonIcon: {
+        width: 20, // Match Ionicons size
+        height: 20, // Match Ionicons size
+        resizeMode: 'contain',
+        tintColor: 'white', // Match Ionicons color
+        marginRight: 5,
+    },
+    // --- END NEW STYLE ---
     confirmButtonText: {
         color: 'white',
         fontWeight: '600',
@@ -529,6 +585,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
+    // --- NEW STYLE for custom no data icon ---
+    customNoDataIcon: {
+        width: 30, // Match Ionicons size
+        height: 30, // Match Ionicons size
+        resizeMode: 'contain',
+        // tintColor is applied inline
+    },
+    // --- END NEW STYLE ---
     noDataText: {
         textAlign: 'center',
         color: '#6B7280',

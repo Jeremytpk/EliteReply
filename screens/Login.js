@@ -7,17 +7,22 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Image,
+  Image, // Import Image
   ActivityIndicator,
   ScrollView,
   Alert,
   Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore'; // Removed updateDoc here
+import { doc, getDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
+
+// --- NEW: Import your custom icons ---
+const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png'); // For open eye
+const EYE_HIDE_ICON = require('../assets/icons/eye_hide.png'); // For hide eye
+// --- END NEW IMPORTS ---
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -159,11 +164,12 @@ const Login = () => {
               onPress={toggleSecureEntry}
               disabled={loading}
             >
-              <Ionicons
-                name={secureTextEntry ? 'eye-off' : 'eye'}
-                size={20}
-                color="#64748b"
+              {/* --- MODIFIED: Use custom image for eye icon --- */}
+              <Image
+                source={secureTextEntry ? EYE_HIDE_ICON : EYE_OUTLINE_ICON}
+                style={styles.customEyeIcon}
               />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
           </View>
         </View>
@@ -281,6 +287,14 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 16,
   },
+  // --- NEW STYLE for custom eye icons ---
+  customEyeIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#64748b', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   loginButton: {
     backgroundColor: '#0A8FDF',
     padding: 16,

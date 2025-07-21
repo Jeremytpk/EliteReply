@@ -583,7 +583,7 @@ const PartnerDashboard = ({ navigation }) => {
       title: "Revenus",
       value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#FBBC05",
-      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/revenue screen
+      onPress: () => navigation.navigate('Revenus') // This should probably navigate to a payments/revenue screen
     },
     {
       icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#9C27B0' }]} />,

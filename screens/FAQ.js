@@ -6,9 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Linking,
-  Image
+  Image // Import Image
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 
 // --- Import your actual image files here ---
 import TelecomIcon from '../assets/images/telecom_icon.png';
@@ -20,6 +20,13 @@ import CommerceIcon from '../assets/images/commerce_icon.png';
 import PMEIcon from '../assets/images/pme_icon.png';
 import IndustryIcon from '../assets/images/industrie_icon.png';
 import SecurityIcon from '../assets/images/securite_icon.png';
+
+// --- NEW: Import your custom icons ---
+const ARROW_UP_SHORT_ICON = require('../assets/icons/arrow_upShort.png');
+const ARROW_DOWN_SHORT_ICON = require('../assets/icons/arrow_downShort.png');
+const CHECK_FULL_ICON = require('../assets/icons/check_full.png');
+const MAIL_ICON = require('../assets/icons/mail.png');
+// --- END NEW IMPORTS ---
 
 const FAQ = () => {
   const [expandedSections, setExpandedSections] = useState({});
@@ -193,11 +200,12 @@ const FAQ = () => {
               onPress={() => toggleSection(section.id)}
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Ionicons
-                name={expandedSections[section.id] ? 'chevron-up' : 'chevron-down'}
-                size={22}
-                color="#347afc"
+              {/* --- MODIFIED: Use custom image for chevron icons --- */}
+              <Image
+                source={expandedSections[section.id] ? ARROW_UP_SHORT_ICON : ARROW_DOWN_SHORT_ICON}
+                style={styles.customChevronIcon}
               />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
 
             {expandedSections[section.id] && (
@@ -220,11 +228,15 @@ const FAQ = () => {
         <View style={styles.whyContainer}>
           <Text style={styles.whyTitle}>📌 Pourquoi EliteReply ?</Text>
           <View style={styles.benefitItem}>
-            <Ionicons name="checkmark-circle" size={18} color="#347afc" />
+            {/* --- MODIFIED: Use custom image for checkmark icon --- */}
+            <Image source={CHECK_FULL_ICON} style={styles.customBenefitCheckIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.benefitText}>Secteur-Spécifique : Agents formés à votre domaine</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="checkmark-circle" size={18} color="#347afc" />
+            {/* --- MODIFIED: Use custom image for checkmark icon --- */}
+            <Image source={CHECK_FULL_ICON} style={styles.customBenefitCheckIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.benefitText}>Hybride Humain/IA : Efficacité maximisée</Text>
           </View>
         </View>
@@ -234,7 +246,9 @@ const FAQ = () => {
           <Text style={styles.ctaText}>Vous avez d'autres questions ?</Text>
           <Text style={styles.ctaSubText}>Contactez-nous pour en savoir plus sur EliteReply !</Text>
           <TouchableOpacity style={styles.contactButton} onPress={openContact}>
-            <Ionicons name="mail" size={20} color="white" style={styles.buttonIcon} />
+            {/* --- MODIFIED: Use custom image for mail icon --- */}
+            <Image source={MAIL_ICON} style={styles.customButtonIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.contactButtonText}>Nous Contacter par Email</Text>
           </TouchableOpacity>
           {/*
@@ -311,6 +325,14 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
+  // --- NEW STYLE for custom chevron icons ---
+  customChevronIcon: {
+    width: 22, // Match Ionicons size
+    height: 22, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#347afc', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   questionsContainer: {
     padding: 20, // Consistent padding
   },
@@ -371,10 +393,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12, // More space between benefits
   },
+  // --- NEW STYLE for custom benefit checkmark icon ---
+  customBenefitCheckIcon: {
+    width: 18, // Match Ionicons size
+    height: 18, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#347afc', // Match original Ionicons color
+    marginRight: 10, // Space between icon and text
+  },
+  // --- END NEW STYLE ---
   benefitText: {
     fontSize: 15,
     color: '#111', // Darker text
-    marginLeft: 10,
+    marginLeft: 10, // This will be duplicated if also in customBenefitCheckIcon, might adjust
     flex: 1,
     lineHeight: 22,
   },
@@ -419,7 +450,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '700',
-    marginLeft: 10,
+    marginLeft: 10, // This will be duplicated if also in customButtonIcon, might adjust
   },
   whatsappButton: {
     backgroundColor: '#25D366', // WhatsApp's brand green
@@ -437,9 +468,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 10,
   },
-  buttonIcon: {
+  // --- NEW STYLE for custom button icon (mail) ---
+  customButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Match original Ionicons color
     marginRight: 8,
   },
+  // --- END NEW STYLE ---
 });
 
 export default FAQ;

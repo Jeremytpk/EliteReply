@@ -9,13 +9,19 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Image
+  Image // Import Image
 } from 'react-native';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import * as Location from 'expo-location';
+
+// --- NEW: Import your custom icons ---
+const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png'); // For open eye
+const EYE_HIDE_ICON = require('../assets/icons/eye_hide.png'); // For hide eye
+const BACK_CIRCLE_ICON = require('../assets/icons/back_circle.png'); // For back button
+// --- END NEW IMPORTS ---
 
 const Signup = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -158,7 +164,9 @@ const Signup = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#2C2C2C" />
+          {/* --- MODIFIED: Use custom image for back arrow --- */}
+          <Image source={BACK_CIRCLE_ICON} style={styles.customBackButtonIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         <View>
@@ -202,11 +210,12 @@ const Signup = ({ navigation }) => {
             style={styles.eyeIcon}
             onPress={() => setShowPassword(!showPassword)} // Toggle showPassword state
           >
-            <Ionicons
-              name={showPassword ? 'eye-off' : 'eye'} // Change icon based on state
-              size={24}
-              color="#6B7280"
+            {/* --- MODIFIED: Use custom image for password eye icon --- */}
+            <Image
+              source={showPassword ? EYE_HIDE_ICON : EYE_OUTLINE_ICON} // Change icon based on state
+              style={styles.customEyeIcon}
             />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
 
@@ -224,11 +233,12 @@ const Signup = ({ navigation }) => {
             style={styles.eyeIcon}
             onPress={() => setShowConfirmPassword(!showConfirmPassword)} // Toggle showConfirmPassword state
           >
-            <Ionicons
-              name={showConfirmPassword ? 'eye-off' : 'eye'} // Change icon based on state
-              size={24}
-              color="#6B7280"
+            {/* --- MODIFIED: Use custom image for confirm password eye icon --- */}
+            <Image
+              source={showConfirmPassword ? EYE_HIDE_ICON : EYE_OUTLINE_ICON} // Change icon based on state
+              style={styles.customEyeIcon}
             />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
 
@@ -275,6 +285,14 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 1,
   },
+  // --- NEW STYLE for custom back button icon ---
+  customBackButtonIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#2C2C2C', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -309,6 +327,13 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 5,
+  },
+  // --- NEW STYLE for custom eye icons ---
+  customEyeIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#6B7280', // Match original Ionicons color
   },
   // End new password styles
   button: {

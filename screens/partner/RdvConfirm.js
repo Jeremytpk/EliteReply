@@ -14,10 +14,11 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   ScrollView,
+  Image // Import Image
 } from 'react-native';
 import {
-  Ionicons,
-  MaterialIcons
+  Ionicons, // Keep Ionicons if still used elsewhere
+  MaterialIcons // Keep MaterialIcons if still used elsewhere
 } from '@expo/vector-icons';
 import { db, auth } from '../../firebase';
 import {
@@ -33,6 +34,16 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
+import moment from 'moment'; // Ensure moment is imported if used for formatting
+
+// --- NEW: Import your custom icons ---
+const BACK_CIRCLE_ICON = require('../../assets/icons/back_circle.png'); // From PartnerDoc
+const CALENDAR_OUTLINE_ICON = require('../../assets/icons/appointment.png'); // From PartnerDoc
+const PAYMENT_ICON = require('../../assets/icons/money_bill.png'); // For the pay button
+const EYE_OUTLINE_ICON = require('../../assets/icons/eye_outline.png'); // For view details button
+const CHECK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/checked_apt.png'); // For empty state
+const STAR_ICON_RATING = require('../../assets/icons/rate.png'); // For the star in "Demander évaluation"
+// --- END NEW IMPORTS ---
 
 const COMMISSION_RATE = 0.13; // 13% commission rate
 
@@ -256,7 +267,9 @@ const RdvConfirm = () => {
     return (
       <View style={styles.rdvCard}>
         <View style={styles.rdvCardHeader}>
-          <Ionicons name="calendar-outline" size={24} color="#16a085" />
+          {/* --- MODIFIED: Use custom image for calendar icon --- */}
+          <Image source={CALENDAR_OUTLINE_ICON} style={[styles.customRdvCardIcon, { tintColor: '#16a085' }]} />
+          {/* --- END MODIFIED --- */}
           {/* Changed from 'item.clientNames' for consistency if clientNames is an array */}
           <Text style={styles.rdvCardTitle}>Rendez-vous avec {Array.isArray(item.clientNames) ? item.clientNames.join(', ') : item.clientNames || 'un client'}</Text>
         </View>
@@ -273,7 +286,9 @@ const RdvConfirm = () => {
             style={styles.payButton}
             onPress={() => openPaymentModal(item)}
           >
-            <MaterialIcons name="payment" size={20} color="white" style={{ marginRight: 5 }} />
+            {/* --- MODIFIED: Use custom image for payment icon --- */}
+            <Image source={PAYMENT_ICON} style={styles.customPayButtonIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.payButtonText}>Enregistrer le Paiement</Text>
           </TouchableOpacity>
         ) : (
@@ -281,7 +296,9 @@ const RdvConfirm = () => {
             style={styles.viewDetailsButton}
             onPress={() => openPaymentDetailsModal(item)}
           >
-            <Ionicons name="eye-outline" size={20} color="#4a6bff" style={{ marginRight: 5 }} />
+            {/* --- MODIFIED: Use custom image for eye icon --- */}
+            <Image source={EYE_OUTLINE_ICON} style={[styles.customViewDetailsIcon, { tintColor: '#4a6bff' }]} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.viewDetailsButtonText}>Voir les Détails</Text>
           </TouchableOpacity>
         )}
@@ -302,7 +319,9 @@ const RdvConfirm = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#2D3748" />
+          {/* --- MODIFIED: Use custom image for back arrow --- */}
+          <Image source={BACK_CIRCLE_ICON} style={styles.customHeaderIconRdv} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rendez-vous Confirmés</Text>
         <View style={{ width: 24 }} />
@@ -320,7 +339,9 @@ const RdvConfirm = () => {
       >
         {rdvs.length === 0 ? (
           <View style={styles.emptyCard}>
-            <MaterialIcons name="check-circle-outline" size={50} color="#ccc" />
+            {/* --- MODIFIED: Use custom image for empty state icon --- */}
+            <Image source={CHECK_CIRCLE_OUTLINE_ICON} style={styles.customEmptyCardIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.emptyCardText}>Aucun rendez-vous confirmé ou complété.</Text>
             <Text style={styles.emptyCardSubText}>Les rendez-vous confirmés s'afficheront ici pour paiement.</Text>
           </View>
@@ -431,7 +452,9 @@ const RdvConfirm = () => {
                     loggedInPartnerName // Using the partner's 'nom' here
                   )}
                 >
-                  <Ionicons name="star" size={20} color="white" style={{ marginRight: 5 }} />
+                  {/* --- MODIFIED: Use custom image for star icon --- */}
+                  <Image source={STAR_ICON_RATING} style={styles.customRateClientIcon} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.rateClientButtonText}>Demander évaluation au client</Text>
                 </TouchableOpacity>
 
@@ -469,6 +492,14 @@ const styles = StyleSheet.create({
       backButton: {
         padding: 8,
       },
+      // --- NEW STYLE for custom header icon (back arrow) ---
+      customHeaderIconRdv: {
+        width: 24, // Match Ionicons size
+        height: 24, // Match Ionicons size
+        resizeMode: 'contain',
+        tintColor: '#2D3748', // Match Ionicons color
+      },
+      // --- END NEW STYLE ---
       headerTitle: {
         fontSize: 20,
         fontWeight: '700',
@@ -510,6 +541,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 10,
       },
+      // --- NEW STYLE for custom RDV card icon (calendar) ---
+      customRdvCardIcon: {
+        width: 24, // Match Ionicons size
+        height: 24, // Match Ionicons size
+        resizeMode: 'contain',
+        // tintColor is applied inline
+      },
+      // --- END NEW STYLE ---
       rdvCardTitle: {
         fontSize: 19,
         fontWeight: '700',
@@ -537,6 +576,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
       },
+      // --- NEW STYLE for custom pay button icon ---
+      customPayButtonIcon: {
+        width: 20, // Match MaterialIcons size
+        height: 20, // Match MaterialIcons size
+        resizeMode: 'contain',
+        tintColor: 'white', // Match MaterialIcons color
+        marginRight: 5,
+      },
+      // --- END NEW STYLE ---
       payButtonText: {
         color: 'white',
         fontWeight: '600',
@@ -555,6 +603,15 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#4a6bff',
       },
+      // --- NEW STYLE for custom view details icon ---
+      customViewDetailsIcon: {
+        width: 20, // Match Ionicons size
+        height: 20, // Match Ionicons size
+        resizeMode: 'contain',
+        // tintColor is applied inline
+        marginRight: 5,
+      },
+      // --- END NEW STYLE ---
       viewDetailsButtonText: {
         color: '#4a6bff',
         fontWeight: '600',
@@ -576,6 +633,14 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
         minHeight: 180,
       },
+      // --- NEW STYLE for custom empty card icon ---
+      customEmptyCardIcon: {
+        width: 50, // Match MaterialIcons size
+        height: 50, // Match MaterialIcons size
+        resizeMode: 'contain',
+        tintColor: '#ccc', // Match MaterialIcons color
+      },
+      // --- END NEW STYLE ---
       emptyCardText: {
         fontSize: 16,
         color: '#6B7280',
@@ -701,6 +766,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
       },
+      // --- NEW STYLE for custom rate client icon ---
+      customRateClientIcon: {
+        width: 20, // Match Ionicons size
+        height: 20, // Match Ionicons size
+        resizeMode: 'contain',
+        tintColor: 'white', // Match Ionicons color
+        marginRight: 5,
+      },
+      // --- END NEW STYLE ---
       rateClientButtonText: {
         color: 'white',
         fontWeight: '600',
