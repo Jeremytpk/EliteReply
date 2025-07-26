@@ -68,6 +68,7 @@ import PartnerEdit from './screens/partner/PartnerEdit';
 import AppointmentFormModal from './components/AppointmentFormModal';
 import AppointmentListScreen from './screens/AppointmentListScreen';
 import NewsDetail from './screens/NewsDetail';
+import Deconnection from './screens/Deconnection';
 
 
 const Stack = createNativeStackNavigator();
@@ -588,6 +589,11 @@ export default function App() {
           name="Settings"
           component={Settings}
           options={{ headerShown: true, title: 'Parametres', headerTitleAlign: 'center' }}
+        />
+        <Stack.Screen
+          name="Deconnection"
+          component={Deconnection}
+          options={{ headerShown: true, title: 'A Bientot !', headerTitleAlign: 'center' }}
         />
         <Stack.Screen
           name="EditProfile"

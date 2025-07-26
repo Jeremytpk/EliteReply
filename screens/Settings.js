@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, signOut } from 'firebase/auth'; // Import signOut
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth'; // Removed signOut from here
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -24,7 +24,7 @@ const USER_ICON = require('../assets/icons/user.png');
 const DISCOUNT_ICON = require('../assets/icons/discount.png');
 const APPOINTMENT_ICON = require('../assets/icons/appointment.png');
 const LOCK_ICON = require('../assets/icons/lock.png');
-const LOGOUT_ICON = require('../assets/icons/logout.png'); // NEW: Import logout icon
+const LOGOUT_ICON = require('../assets/icons/logout.png');
 const RIGHT_ENTER_ICON = require('../assets/icons/right_enter.png');
 // --- END NEW IMPORTS ---
 
@@ -78,39 +78,8 @@ const Paramètres = () => {
     }
   }, [isFocused]);
 
-  // --- NEW: Handle Logout ---
-  const handleLogout = async () => {
-    Alert.alert(
-      "Déconnexion",
-      "Êtes-vous sûr de vouloir vous déconnecter ?",
-      [
-        {
-          text: "Annuler",
-          style: "cancel"
-        },
-        {
-          text: "Déconnexion",
-          onPress: async () => {
-            try {
-              await signOut(auth);
-              console.log("User signed out!");
-              // Reset navigation stack to prevent going back to protected screens
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
-            } catch (error) {
-              console.error("Error signing out:", error);
-              Alert.alert("Erreur", "Impossible de se déconnecter. Veuillez réessayer.");
-            }
-          },
-          style: "destructive"
-        }
-      ],
-      { cancelable: false }
-    );
-  };
-  // --- END NEW: Handle Logout ---
+  // --- Removed handleLogout from here, as it's now handled by navigating to Deconnection.js ---
+  // const handleLogout = async () => { ... };
 
   // --- Handle Password Change ---
   const handleChangePassword = async () => {
@@ -266,18 +235,18 @@ const Paramètres = () => {
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
         </TouchableOpacity>
 
-        {/* --- NEW: Déconnexion Button --- */}
+        {/* --- MODIFIED: Déconnexion Button now navigates to Deconnection screen --- */}
         <TouchableOpacity
-          style={[styles.settingItem, styles.logoutButton]} // Apply logout specific styling
-          onPress={handleLogout}
+          style={[styles.settingItem, styles.logoutButton]}
+          onPress={() => navigation.navigate('Deconnection')} 
         >
           <View style={styles.settingItemContent}>
-            <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} /> {/* Red tint for logout */}
+            <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} />
             <Text style={[styles.settingText, styles.logoutText]}>Déconnexion</Text>
           </View>
           {/* No right arrow needed for logout as it performs an action directly */}
         </TouchableOpacity>
-        {/* --- END NEW --- */}
+        {/* --- END MODIFIED --- */}
       </View>
 
       <Text style={styles.version}>Version 1.0.0</Text>
@@ -495,16 +464,14 @@ const styles = StyleSheet.create({
     color: '#4A5568',
     fontWeight: '500',
   },
-  // --- NEW STYLES for Logout button ---
   logoutButton: {
-    borderBottomWidth: 0, // No border at the bottom for the last item
+    borderBottomWidth: 0,
     marginTop: 5,
   },
   logoutText: {
-    color: '#EF4444', // Red color for logout text
+    color: '#EF4444',
     fontWeight: '600',
   },
-  // --- END NEW STYLES ---
   version: {
     textAlign: 'center',
     color: '#A0AEC0',
@@ -512,8 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 20,
   },
-
-  // --- Styles for Change Password Modal ---
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -583,7 +548,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // --- END Styles for Change Password Modal ---
 });
 
 export default Paramètres;
