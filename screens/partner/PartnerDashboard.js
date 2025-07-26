@@ -144,11 +144,11 @@ const PartnerDashboard = ({ navigation }) => {
     return 'rocket';
   };
 
-  // Pulse animation effect (no changes)
+  // Pulse animation effect (updated dependency to `estPromu`)
   useEffect(() => {
     const daysLeft = getPromotionDaysLeft();
 
-    if (daysLeft > 0 && daysLeft <= 7) { // Only animate if promotion is active and nearing end
+    if (daysLeft > 0 && daysLeft <= 7 && partnerData?.estPromu) { // Only animate if promotion is active and nearing end
       const pulseDuration = daysLeft <= 1 ? 800 :
                           daysLeft <= 3 ? 1200 :
                           1500;
@@ -177,7 +177,7 @@ const PartnerDashboard = ({ navigation }) => {
     return () => {
       pulseAnim.stopAnimation();
     };
-  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Added isPromoted to dependencies
+  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Changed isPromoted to estPromu
 
   // Fetch reviews (no changes, but ensure evaluations collection exists and partnerId is correct)
   const fetchReviews = useCallback(async (partnerId) => {
@@ -264,7 +264,7 @@ const PartnerDashboard = ({ navigation }) => {
 
       if (partnerSnap.exists()) {
         const data = { id: partnerSnap.id, ...partnerSnap.data() };
-        setPartnerData(data);
+        setPartnerData(data); // <--- This sets the partnerData state with 'estPromu' directly
         const avgRating = data.averageRating || 0;
         setDashboardData(prev => ({ ...prev, partnerRating: avgRating }));
       } else {
@@ -654,7 +654,7 @@ const PartnerDashboard = ({ navigation }) => {
             />
             <View>
               <Text style={styles.userName}>{loggedInUserBusinessName || 'Mon Entreprise'}</Text>
-              {partnerData?.isPromoted && (
+              {partnerData?.estPromu && ( 
                 <Text style={styles.userRole}>Partenaire Premium</Text>
               )}
             </View>
@@ -665,7 +665,7 @@ const PartnerDashboard = ({ navigation }) => {
           />
         </View>
 
-        {partnerData?.isPromoted && activeTab !== 'chat' && activeTab !== 'reviews' && (
+        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && ( 
           <Animated.View
             style={[
               styles.promotionBanner,
@@ -953,6 +953,12 @@ const PartnerDashboard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#f8f9fa',
   },
   header: {

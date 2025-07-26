@@ -10,10 +10,20 @@ import {
   Modal,
   ScrollView,
   Dimensions,
+  Image // Import Image
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Added MaterialCommunityIcons for checkbox
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Keep Ionicons/MaterialCommunityIcons if still used elsewhere
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore'; // Added writeBatch
+
+// --- NEW: Import your custom icons ---
+const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png'); // For see stats button
+const CHECKBOX_MARKED_CIRCLE_ICON = require('../assets/icons/check_box_full.png'); // For selected checkbox
+const CHECKBOX_BLANK_CIRCLE_OUTLINE_ICON = require('../assets/icons/check_box_empty.png'); // For unselected checkbox
+const TRASH_OUTLINE_ICON = require('../assets/icons/delete.png'); // For delete button
+const TRASH_ICON = require('../assets/icons/trash.png'); // For bulk delete button
+const CLOSE_ICON = require('../assets/icons/close_circle.png'); // For modal close button
+// --- END NEW IMPORTS ---
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -295,11 +305,12 @@ const TerminatedTickets = ({ navigation }) => {
       >
         {isSelectMode && (
           <TouchableOpacity onPress={() => toggleSelectTicket(item.id)} style={styles.checkboxContainer}>
-            <MaterialCommunityIcons
-              name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-              size={24}
-              color={isSelected ? '#0a8fdf' : '#ccc'}
+            {/* --- MODIFIED: Use custom image for checkbox --- */}
+            <Image
+              source={isSelected ? CHECKBOX_MARKED_CIRCLE_ICON : CHECKBOX_BLANK_CIRCLE_OUTLINE_ICON}
+              style={[styles.customCheckboxIcon, { tintColor: isSelected ? '#0a8fdf' : '#ccc' }]}
             />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         )}
         <View style={styles.ticketContent}>
@@ -337,7 +348,9 @@ const TerminatedTickets = ({ navigation }) => {
             style={styles.deleteButton}
             onPress={() => handleDeleteTicket(item.id, item.source)}
           >
-            <Ionicons name="trash-outline" size={20} color="#fff" />
+            {/* --- MODIFIED: Use custom image for trash icon --- */}
+            <Image source={TRASH_OUTLINE_ICON} style={styles.customDeleteButtonIcon} />
+            {/* --- END MODIFIED --- */}
             <Text style={styles.buttonText}>Delete</Text>
           </TouchableOpacity>
         )}
@@ -379,7 +392,9 @@ const TerminatedTickets = ({ navigation }) => {
             onPress={() => setShowCurrentTicketsOverviewModal(true)}
             style={styles.seeStatsButton}
           >
-            <Ionicons name="eye-outline" size={24} color="#0a8fdf" />
+            {/* --- MODIFIED: Use custom image for eye icon --- */}
+            <Image source={EYE_OUTLINE_ICON} style={styles.customSeeStatsIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         )}
       </View>
@@ -423,11 +438,12 @@ const TerminatedTickets = ({ navigation }) => {
             {isSelectMode && (
                 <>
                     <TouchableOpacity onPress={handleSelectAll} style={styles.selectAllButton}>
-                        <MaterialCommunityIcons
-                            name={allSelected ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                            size={22}
-                            color={allSelected ? '#0a8fdf' : '#666'}
+                        {/* --- MODIFIED: Use custom image for select all checkbox --- */}
+                        <Image
+                            source={allSelected ? CHECKBOX_MARKED_CIRCLE_ICON : CHECKBOX_BLANK_CIRCLE_OUTLINE_ICON}
+                            style={[styles.customCheckboxIcon, { tintColor: allSelected ? '#0a8fdf' : '#666' }]}
                         />
+                        {/* --- END MODIFIED --- */}
                         <Text style={styles.selectAllText}>
                             {allSelected ? 'Deselect All' : 'Select All'}
                         </Text>
@@ -438,7 +454,7 @@ const TerminatedTickets = ({ navigation }) => {
                         style={[styles.bulkDeleteButton, !hasSelected && styles.disabledBulkDeleteButton]}
                         disabled={!hasSelected}
                     >
-                        <Ionicons name="trash" size={20} color="#fff" />
+                        {/* --- REMOVED: Image component for bulk delete icon --- */}
                         <Text style={styles.bulkDeleteButtonText}>
                             Delete ({selectedTickets.size})
                         </Text>
@@ -476,7 +492,9 @@ const TerminatedTickets = ({ navigation }) => {
                 setShowCurrentTicketsOverviewModal(false);
                 setModalCurrentPageIndex(0);
               }}>
-                <Ionicons name="close" size={28} color="#333" />
+                {/* --- MODIFIED: Use custom image for modal close icon --- */}
+                <Image source={CLOSE_ICON} style={styles.customModalCloseIcon} />
+                {/* --- END MODIFIED --- */}
               </TouchableOpacity>
             </View>
 
@@ -634,6 +652,14 @@ const styles = StyleSheet.create({
   seeStatsButton: {
     padding: 5,
   },
+  // --- NEW STYLE for custom see stats icon ---
+  customSeeStatsIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   toggleButtonsContainer: {
     flexDirection: 'row',
     marginBottom: 20,
@@ -692,6 +718,14 @@ const styles = StyleSheet.create({
     marginRight: 10,
     padding: 5, // Make it easier to tap
   },
+  // --- NEW STYLE for custom checkbox icons ---
+  customCheckboxIcon: {
+    width: 24, // Match MaterialCommunityIcons size
+    height: 24, // Match MaterialCommunityIcons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   ticketContent: {
     flex: 1, // Allow content to take remaining space
   },
@@ -771,6 +805,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignSelf: 'flex-end', // Align to the right
   },
+  // --- NEW STYLE for custom delete button icon ---
+  customDeleteButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   buttonText: {
     color: '#fff',
     marginLeft: 5,
@@ -809,6 +851,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  // --- NEW STYLE for custom modal close icon ---
+  customModalCloseIcon: {
+    width: 28, // Match Ionicons size
+    height: 28, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#333', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -948,14 +998,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#dc3545',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 8,   // Adjusted to match selectAllButton
+    paddingHorizontal: 10, // Adjusted to match selectAllButton
     borderRadius: 5,
   },
   bulkDeleteButtonText: {
     color: '#fff',
-    marginLeft: 5,
+    // Removed marginLeft as there's no icon now
     fontWeight: '600',
+    fontSize: 14, // Keep this font size
   },
   disabledBulkDeleteButton: {
     backgroundColor: '#adb5bd',

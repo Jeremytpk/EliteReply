@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Image } from 'react-native'; // ADDED: Image
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, Image } from 'react-native'; // ADDED: Image
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
 import { useNavigation } from '@react-navigation/native';
 import { db, auth } from '../../firebase';
 import {
@@ -14,6 +14,21 @@ import {
   getDoc
 } from 'firebase/firestore';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+// --- NEW: Import your custom icons ---
+const REFRESH_ICON = require('../../assets/icons/refresh.png'); // For refresh button
+const ADD_ICON_PARTNER = require('../../assets/icons/add_circle.png'); // For add partner button
+const SEARCH_ICON = require('../../assets/icons/search.png'); // For search input
+const BUSINESS_OUTLINE_ICON = require('../../assets/icons/business_outline.png'); // For partner icon container
+const ROCKET_ICON = require('../../assets/icons/rocket.png'); // For promote button
+const PERSON_REMOVE_ICON = require('../../assets/icons/remove_user.png'); // For unassign button
+const PERSON_ADD_ICON = require('../../assets/icons/add_user.png'); // For assign button
+const ARROW_BACK_ICON = require('../../assets/icons/back_circle.png'); // For modal back button
+const INFORMATION_CIRCLE_OUTLINE_ICON = require('../../assets/icons/infos.png'); // For promotion status
+const CLOSE_CIRCLE_OUTLINE_ICON = require('../../assets/icons/close_circle.png'); // For promotion status
+const TIME_OUTLINE_ICON = require('../../assets/icons/sablier.png'); // For promotion status
+const CHECKMARK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/check_full.png'); // For promotion status
+// --- END NEW IMPORTS ---
 
 const Partners = () => {
   const navigation = useNavigation();
@@ -34,7 +49,7 @@ const Partners = () => {
   const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
     const message = {
       to: expoPushToken,
-      sound: 'ERNotification',
+      sound: 'er_notification',
       title,
       body,
       data,
@@ -342,14 +357,15 @@ const Partners = () => {
         {userLoading && isAssignedToCurrent ? (
           <ActivityIndicator size="small" color="#0a8fdf" />
         ) : (
-          <Ionicons
-            name={isAssignedToCurrent ? "person-remove" : "person-add"}
-            size={20}
-            color={
-              isAssignedToCurrent ? "#FF3B30" :
-              isAssignedElsewhere ? "#ccc" : "#0a8fdf"
-            }
+          // --- MODIFIED: Use custom image for person-add/remove icons ---
+          <Image
+            source={isAssignedToCurrent ? PERSON_REMOVE_ICON : PERSON_ADD_ICON}
+            style={[
+              styles.customUserActionIcon,
+              { tintColor: isAssignedToCurrent ? "#FF3B30" : isAssignedElsewhere ? "#ccc" : "#0a8fdf" }
+            ]}
           />
+          // --- END MODIFIED ---
         )}
       </TouchableOpacity>
     );
@@ -390,7 +406,9 @@ const Partners = () => {
             {item.assignedUserPhotoURL ? ( // Conditional rendering for assigned user photo
                 <Image source={{ uri: item.assignedUserPhotoURL }} style={styles.partnerLogo} />
             ) : (
-                <Ionicons name="business-outline" size={30} color="#0a8fdf" />
+                // --- MODIFIED: Use custom image for business icon ---
+                <Image source={BUSINESS_OUTLINE_ICON} style={styles.customPartnerIcon} />
+                // --- END MODIFIED ---
             )}
         </View>
 
@@ -408,7 +426,17 @@ const Partners = () => {
           )}
           {item.estPromu && (
             <Text style={[styles.promotionDelayText, { color: promotionStatus.color }]}>
-              <Ionicons name={promotionStatus.iconName} size={12} color={promotionStatus.color} />
+              {/* --- MODIFIED: Use custom image for promotion status icon --- */}
+              <Image
+                source={
+                  promotionStatus.iconName === 'information-circle-outline' ? INFORMATION_CIRCLE_OUTLINE_ICON :
+                  promotionStatus.iconName === 'close-circle-outline' ? CLOSE_CIRCLE_OUTLINE_ICON :
+                  promotionStatus.iconName === 'time-outline' ? TIME_OUTLINE_ICON :
+                  CHECKMARK_CIRCLE_OUTLINE_ICON // Default to checkmark
+                }
+                style={[styles.customPromotionStatusIcon, { tintColor: promotionStatus.iconColor }]}
+              />
+              {/* --- END MODIFIED --- */}
               {' '}
               {promotionStatus.text}
             </Text>
@@ -426,7 +454,9 @@ const Partners = () => {
             }}
             accessibilityLabel={`Promouvoir ${item.nom}`}
           >
-            <Ionicons name="rocket" size={20} color="#fff" />
+            {/* --- MODIFIED: Use custom image for rocket icon --- */}
+            <Image source={ROCKET_ICON} style={styles.customActionButtonIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, item.assignedUserId ? styles.unassignButton : styles.assignButton]}
@@ -445,11 +475,12 @@ const Partners = () => {
             }}
             accessibilityLabel={item.assignedUserId ? `Désaffecter ${item.assignedUserName} de ${item.nom}` : `Assigner un utilisateur à ${item.nom}`}
           >
-            <Ionicons
-              name={item.assignedUserId ? "person-remove" : "person-add"}
-              size={20}
-              color="#fff"
+            {/* --- MODIFIED: Use custom image for person-add/remove icons --- */}
+            <Image
+              source={item.assignedUserId ? PERSON_REMOVE_ICON : PERSON_ADD_ICON}
+              style={styles.customActionButtonIcon}
             />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -483,7 +514,7 @@ const Partners = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          Gestion des Partenaires ({filteredPartners.length})
+          Partenaires ({filteredPartners.length})
         </Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
@@ -491,20 +522,26 @@ const Partners = () => {
             onPress={fetchData}
             accessibilityLabel="Actualiser la liste des partenaires"
           >
-            <Ionicons name="refresh" size={24} color="#0a8fdf" />
+            {/* --- MODIFIED: Use custom image for refresh icon --- */}
+            <Image source={REFRESH_ICON} style={styles.customHeaderButtonIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate("AddPartner")}
             accessibilityLabel="Ajouter un nouveau partenaire"
           >
-            <Ionicons name="add" size={24} color="#fff" />
+            {/* --- MODIFIED: Use custom image for add icon --- */}
+            <Image source={ADD_ICON_PARTNER} style={styles.customAddPartnerButtonIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#999" />
+        {/* --- MODIFIED: Use custom image for search icon --- */}
+        <Image source={SEARCH_ICON} style={styles.customSearchIcon} />
+        {/* --- END MODIFIED --- */}
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher des partenaires..."
@@ -536,7 +573,9 @@ const Partners = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={closeModals} accessibilityLabel="Retourner à la liste des partenaires">
-              <Ionicons name="arrow-back" size={24} color="#0a8fdf" />
+              {/* --- MODIFIED: Use custom image for back arrow --- */}
+              <Image source={ARROW_BACK_ICON} style={styles.customModalBackIcon} />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
               {currentPartner?.nom || 'Assigner un Partenaire'}
@@ -545,7 +584,9 @@ const Partners = () => {
           </View>
 
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#999" />
+            {/* --- MODIFIED: Use custom image for search icon --- */}
+            <Image source={SEARCH_ICON} style={styles.customSearchIcon} />
+            {/* --- END MODIFIED --- */}
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher des utilisateurs..."
@@ -706,6 +747,14 @@ const styles = StyleSheet.create({
     marginRight: 10,
     padding: 5,
   },
+  // --- NEW STYLE for custom refresh button icon ---
+  customHeaderButtonIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   addButton: {
     backgroundColor: '#0a8fdf',
     width: 40,
@@ -714,6 +763,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // --- NEW STYLE for custom add partner button icon ---
+  customAddPartnerButtonIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -723,6 +780,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 16,
   },
+  // --- NEW STYLE for custom search icon ---
+  customSearchIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#999', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   searchInput: {
     flex: 1,
     marginLeft: 8,
@@ -756,6 +821,14 @@ const styles = StyleSheet.create({
     borderColor: '#0a8fdf',
     overflow: 'hidden', // Crucial to clip the image to the rounded border
   },
+  // --- NEW STYLE for custom partner icon (business-outline) ---
+  customPartnerIcon: {
+    width: 30, // Match Ionicons size
+    height: 30, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   // NEW STYLE: For the partner's logo (assigned user's photo)
   partnerLogo: {
     width: '100%',
@@ -792,6 +865,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 4,
   },
+  // --- NEW STYLE for custom promotion status icons ---
+  customPromotionStatusIcon: {
+    width: 12, // Match Ionicons size
+    height: 12, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -809,6 +890,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+  // --- NEW STYLE for custom action button icons (rocket, person-add/remove) ---
+  customActionButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   promoteButton: {
     backgroundColor: '#FF9500',
   },
@@ -902,6 +991,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontStyle: 'italic',
   },
+  // --- NEW STYLE for custom user action icons (person-add/remove in modal) ---
+  customUserActionIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    // tintColor is applied inline
+  },
+  // --- END NEW STYLE ---
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',

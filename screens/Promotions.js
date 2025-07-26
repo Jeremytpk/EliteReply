@@ -1,40 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  Image,
-  ScrollView,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
-  Modal,
-  TextInput,
+  TouchableOpacity,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  ScrollView,
+  Dimensions,
+  Image // Import Image
 } from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { getFirestore, collection, doc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { app } from '../firebase';
+import { Ionicons, Feather } from '@expo/vector-icons'; // Keep Ionicons/Feather if still used elsewhere
+// --- MODIFIED: Import db and storage directly from your firebase.js ---
+import { db, storage } from '../firebase'; // Assuming 'db' and 'storage' are exported from firebase.js
+// --- END MODIFIED ---
+import { collection, getDocs, deleteDoc, doc, query, where, writeBatch, addDoc, onSnapshot, getDoc } from 'firebase/firestore'; // Added getDoc for handleDeletePromotion
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
-const Promotions = () => {
+// --- NEW: Import your custom icons ---
+const TRASH_2_ICON = require('../assets/icons/delete.png'); // For delete promotion button
+const IMAGE_EMPTY_STATE_ICON = require('../assets/icons/promos.png'); // For empty state image
+const ADD_ICON_PROMO = require('../assets/icons/add_circle.png'); // For add button
+const CLOSE_ICON = require('../assets/icons/close_circle.png'); // For modal close button
+const IMAGE_PICKER_ICON = require('../assets/icons/image.png'); // For image picker button
+// --- END NEW IMPORTS ---
+
+// --- MODIFIED: Add 'navigation' as a prop ---
+const Promotions = ({ navigation }) => {
+// --- END MODIFIED ---
   const [promotions, setPromotions] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   
-  // UPDATED: Changed 'poster' back to 'image'
   const [newPromotion, setNewPromotion] = useState({
     title: '',
     description: '',
     moreInformation: '', 
-    image: null,        // Changed from 'poster' to 'image' for local URI
+    image: null,
   });
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const db = getFirestore(app);
-  const storage = getStorage(app);
   // Using 'news' collection as per your previous implementation for Promotions (if promotions are stored there)
   const promotionsCollectionRef = collection(db, 'news'); 
 
@@ -43,11 +52,9 @@ const Promotions = () => {
       const promotionsList = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        // Ensure createdAt is a Date object for sorting
         const createdAt = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date();
         promotionsList.push({ id: doc.id, ...data, createdAt });
       });
-      // Sort by newest first
       promotionsList.sort((a, b) => b.createdAt - a.createdAt); 
       setPromotions(promotionsList);
     });
@@ -55,7 +62,6 @@ const Promotions = () => {
     return () => unsubscribe();
   }, []);
 
-  // UPDATED: Function name changed back to pickImage
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -71,18 +77,15 @@ const Promotions = () => {
     });
 
     if (!result.canceled) {
-      // UPDATED: Storing URI in 'image' field
       setNewPromotion({...newPromotion, image: result.assets[0].uri});
     }
   };
 
-  // UPDATED: Renamed back to uploadImage
   const uploadImage = async (uri) => {
     setUploading(true);
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      // UPDATED: Changed storage path to 'promotions_images' for clarity
       const storageRef = ref(storage, `promotions_images/${Date.now()}`); 
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
@@ -103,8 +106,7 @@ const Promotions = () => {
 
     setLoading(true);
     try {
-      let imageUrl = ''; // UPDATED: Changed from posterUrl to imageUrl
-      // UPDATED: Uploading 'image' if it exists
+      let imageUrl = '';
       if (newPromotion.image) {
         imageUrl = await uploadImage(newPromotion.image);
       }
@@ -113,18 +115,17 @@ const Promotions = () => {
         title: newPromotion.title,
         description: newPromotion.description,
         moreInformation: newPromotion.moreInformation, 
-        imageUrl: imageUrl, // UPDATED: Changed from posterUrl to imageUrl
+        imageUrl: imageUrl,
         createdAt: new Date(), 
         type: 'promotion'
       });
 
       setModalVisible(false);
-      // UPDATED: Resetting newPromotion state with new fields
       setNewPromotion({
         title: '',
         description: '',
         moreInformation: '',
-        image: null // UPDATED: Changed from poster to image
+        image: null
       });
     } catch (error) {
       console.error('Error adding promotion:', error);
@@ -145,8 +146,22 @@ const Promotions = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Ensure you are deleting from the correct collection (e.g., 'news' or 'promotions')
-              await deleteDoc(doc(db, 'news', id)); 
+              const promoDocRef = doc(db, 'news', id);
+              const promoDocSnap = await getDoc(promoDocRef);
+              const promoData = promoDocSnap.data();
+
+              await deleteDoc(promoDocRef);
+
+              if (promoData?.imageUrl) {
+                try {
+                  const fileRef = ref(storage, promoData.imageUrl);
+                  await deleteObject(fileRef);
+                  console.log("Image deleted from Storage successfully!");
+                } catch (storageError) {
+                  console.warn("Could not delete image from Storage (might not exist or path mismatch):", storageError);
+                }
+              }
+              Alert.alert('Success', 'Promotion deleted successfully');
             } catch (error) {
               console.error('Error deleting promotion:', error);
               Alert.alert('Error', 'Failed to delete promotion');
@@ -158,8 +173,11 @@ const Promotions = () => {
   };
 
   const renderPromotionItem = ({ item }) => (
-    <View style={styles.promotionCard}>
-      {/* UPDATED: Using 'imageUrl' for image source */}
+    <TouchableOpacity
+      style={styles.promotionCard}
+      onPress={() => navigation.navigate('NewsDetail', { newsItem: item })}
+      activeOpacity={0.8}
+    >
       {item.imageUrl && (
         <Image 
           source={{ uri: item.imageUrl }} 
@@ -188,11 +206,11 @@ const Promotions = () => {
             onPress={() => handleDeletePromotion(item.id)}
             style={styles.deleteButton}
           >
-            <Feather name="trash-2" size={20} color="#ff4444" />
+            <Image source={TRASH_2_ICON} style={styles.customDeletePromotionIcon} />
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -204,7 +222,7 @@ const Promotions = () => {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="image" size={48} color="#cccccc" />
+            <Image source={IMAGE_EMPTY_STATE_ICON} style={styles.customEmptyStateIcon} />
             <Text style={styles.emptyText}>No promotions available</Text>
           </View>
         }
@@ -213,16 +231,16 @@ const Promotions = () => {
       <TouchableOpacity 
         style={styles.addButton}
         onPress={() => {
-          setNewPromotion({ // Reset state when opening modal
+          setNewPromotion({
             title: '',
             description: '',
             moreInformation: '',
-            image: null, // UPDATED: Changed from poster to image
+            image: null,
           });
           setModalVisible(true);
         }}
       >
-        <Ionicons name="add" size={28} color="white" />
+        <Image source={ADD_ICON_PROMO} style={styles.customAddButtonIcon} />
       </TouchableOpacity>
 
       <Modal
@@ -235,7 +253,7 @@ const Promotions = () => {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add New Promotion</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Ionicons name="close" size={24} color="#333" />
+              <Image source={CLOSE_ICON} style={styles.customModalCloseIcon} />
             </TouchableOpacity>
           </View>
 
@@ -274,20 +292,20 @@ const Promotions = () => {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Image</Text> {/* UPDATED: Label changed */}
+            <Text style={styles.label}>Image</Text>
             <TouchableOpacity 
               style={styles.imagePickerButton}
               onPress={pickImage} 
             >
-              {newPromotion.image ? ( /* UPDATED: uses newPromotion.image */
+              {newPromotion.image ? (
                 <Image 
                   source={{ uri: newPromotion.image }} 
                   style={styles.imagePreview}
                 />
               ) : (
                 <View style={styles.imagePlaceholder}>
-                  <Feather name="image" size={32} color="#666" />
-                  <Text style={styles.imagePlaceholderText}>Select an image</Text> {/* UPDATED: Text changed */}
+                  <Image source={IMAGE_PICKER_ICON} style={styles.customImagePickerIcon} />
+                  <Text style={styles.imagePlaceholderText}>Select an image</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -376,6 +394,14 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 6,
   },
+  // --- NEW STYLE for custom delete promotion icon ---
+  customDeletePromotionIcon: {
+    width: 20, // Match Feather size
+    height: 20, // Match Feather size
+    resizeMode: 'contain',
+    tintColor: '#ff4444', // Match Feather color
+  },
+  // --- END NEW STYLE ---
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -386,6 +412,14 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
+  // --- NEW STYLE for custom empty state icon ---
+  customEmptyStateIcon: {
+    width: 48, // Match Feather size
+    height: 48, // Match Feather size
+    resizeMode: 'contain',
+    tintColor: '#cccccc', // Match Feather color
+  },
+  // --- END NEW STYLE ---
   addButton: {
     position: 'absolute',
     right: 24,
@@ -402,6 +436,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
+  // --- NEW STYLE for custom add button icon ---
+  customAddButtonIcon: {
+    width: 28, // Match Ionicons size
+    height: 28, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   modalContainer: {
     flex: 1,
     backgroundColor: 'white',
@@ -419,6 +461,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  // --- NEW STYLE for custom modal close icon ---
+  customModalCloseIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#333', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   formGroup: {
     marginBottom: 20,
   },
@@ -455,6 +505,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#666',
   },
+  // --- NEW STYLE for custom image picker icon ---
+  customImagePickerIcon: {
+    width: 32, // Match Feather size
+    height: 32, // Match Feather size
+    resizeMode: 'contain',
+    tintColor: '#666', // Match Feather color
+  },
+  // --- END NEW STYLE ---
   imagePreview: {
     width: '100%',
     height: '100%',

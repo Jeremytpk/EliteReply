@@ -2,25 +2,38 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Linking,
+  Image, // Import Image
   TextInput,
-  Image,
   Alert,
   ActivityIndicator,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Modal, // NEW: Import Modal
   FlatList, // NEW: Import FlatList for modal content
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // NEW: Import MaterialIcons for category icons
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep Ionicons/MaterialIcons if still used elsewhere
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { db, storage } from '../../firebase';
-import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebase'; // Ensure storage is imported
+import { collection, doc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore'; // Removed getFirestore
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Removed getStorage
 import { APP_CATEGORIES } from '../../constants/APP_CATEGORIES'; // NEW: Import categories
+
+// --- NEW: Import your custom icons ---
+const ARROW_BACK_ICON = require('../../assets/icons/back_circle.png'); // For back button
+const IMAGE_OUTLINE_ICON = require('../../assets/icons/business_outline.png'); // For partner logo placeholder
+const CAMERA_ICON = require('../../assets/icons/camera.png'); // For camera overlay icon
+const ARROW_DROP_DOWN_ICON = require('../../assets/icons/arrow_downShort.png'); // For category dropdown arrow
+const CHECK_CIRCLE_ICON = require('../../assets/icons/check_full.png'); // For modal checkmark
+const CLOSE_ICON = require('../../assets/icons/close_circle.png'); 
+// --- Category icons (from APP_CATEGORIES) are already handled by MaterialIcons.
+// If you have custom PNGs for them, you'll need to map them here and use them in the FlatList.
+// For now, I'll assume MaterialIcons will continue to be used for categories within the modal.
+// --- END NEW IMPORTS ---
 
 const AddPartner = () => {
   const navigation = useNavigation();
@@ -150,7 +163,9 @@ const AddPartner = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color="#2D3748" />
+            {/* --- MODIFIED: Use custom image for back arrow --- */}
+            <Image source={ARROW_BACK_ICON} style={styles.customHeaderIcon} />
+            {/* --- END MODIFIED --- */}
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Ajouter un nouveau partenaire</Text>
           <View style={{ width: 28 }} />
@@ -162,11 +177,15 @@ const AddPartner = () => {
               <Image source={{ uri: logoURL }} style={styles.partnerLogo} />
             ) : (
               <View style={styles.partnerLogoPlaceholder}>
-                <Ionicons name="image-outline" size={50} color="#E0F2F7" />
+                {/* --- MODIFIED: Use custom image for partner logo placeholder --- */}
+                <Image source={IMAGE_OUTLINE_ICON} style={styles.customPartnerLogoPlaceholderIcon} />
+                {/* --- END MODIFIED --- */}
               </View>
             )}
             <View style={styles.cameraIconOverlay}>
-              <Ionicons name="camera" size={24} color="#FFFFFF" />
+              {/* --- MODIFIED: Use custom image for camera icon --- */}
+              <Image source={CAMERA_ICON} style={styles.customCameraIcon} />
+              {/* --- END MODIFIED --- */}
             </View>
           </TouchableOpacity>
           <Text style={styles.imagePickerText}>Ajouter un logo de partenaire</Text>
@@ -208,7 +227,9 @@ const AddPartner = () => {
               <Text style={[styles.categorySelectText, !category && styles.categorySelectPlaceholder]}>
                 {selectedCategoryInfo.name}
               </Text>
-              <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+              {/* --- MODIFIED: Use custom image for dropdown arrow --- */}
+              <Image source={ARROW_DROP_DOWN_ICON} style={styles.customDropdownIcon} />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
           </View>
 
@@ -308,7 +329,9 @@ const AddPartner = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Sélectionnez une Catégorie</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color="#6B7280" />
+                {/* --- MODIFIED: Use custom image for modal close icon --- */}
+                <Image source={CLOSE_ICON} style={styles.customModalCloseIcon} />
+                {/* --- END MODIFIED --- */}
               </TouchableOpacity>
             </View>
             <FlatList
@@ -325,7 +348,7 @@ const AddPartner = () => {
                   <MaterialIcons name={item.icon} size={24} color="#0a8fdf" style={styles.modalCategoryIcon} />
                   <Text style={styles.modalCategoryText}>{item.name}</Text>
                   {category === item.id && (
-                    <MaterialIcons name="check-circle" size={20} color="#0a8fdf" style={styles.modalCheckIcon} />
+                    <Image source={CHECK_CIRCLE_ICON} style={styles.customModalCheckIcon} />
                   )}
                 </TouchableOpacity>
               )}
@@ -357,6 +380,14 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 5,
   },
+  // --- NEW STYLE for custom header icon (back arrow) ---
+  customHeaderIcon: {
+    width: 28, // Match Ionicons size
+    height: 28, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#2D3748', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
@@ -383,6 +414,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 8,
+    overflow: 'hidden', // Ensure image is clipped to border radius
   },
   partnerLogo: {
     width: '100%',
@@ -398,6 +430,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // --- NEW STYLE for custom partner logo placeholder icon ---
+  customPartnerLogoPlaceholderIcon: {
+    width: 50, // Match Ionicons size
+    height: 50, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#E0F2F7', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   cameraIconOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -408,6 +448,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
+  // --- NEW STYLE for custom camera icon ---
+  customCameraIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#FFFFFF', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   imagePickerText: {
     marginTop: 10,
     fontSize: 15,
@@ -499,6 +547,14 @@ const styles = StyleSheet.create({
   categorySelectPlaceholder: {
     color: '#9CA3AF',
   },
+  // --- NEW STYLE for custom dropdown icon ---
+  customDropdownIcon: {
+    width: 24, // Match MaterialIcons size
+    height: 24, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: '#6B7280', // Match MaterialIcons color
+  },
+  // --- END NEW STYLE ---
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -529,6 +585,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2D3748',
   },
+  // --- NEW STYLE for custom modal close icon ---
+  customModalCloseIcon: {
+    width: 24, // Match MaterialIcons size
+    height: 24, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: '#6B7280', // Match MaterialIcons color
+  },
+  // --- END NEW STYLE ---
   modalCategoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -544,10 +608,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2D3748',
   },
-  modalCheckIcon: {
-    marginLeft: 'auto',
-    color: '#0a8fdf', // Checkmark color
+  // --- NEW STYLE for custom modal check icon ---
+  customModalCheckIcon: {
+    width: 20, // Match MaterialIcons size
+    height: 20, // Match MaterialIcons size
+    resizeMode: 'contain',
+    tintColor: '#0a8fdf', // Match MaterialIcons color
+    marginLeft: 'auto', // Push to the right
   },
+  // --- END NEW STYLE ---
   separator: {
     height: 1,
     backgroundColor: '#F3F4F6',
