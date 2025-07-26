@@ -8,14 +8,14 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  Modal, // Import Modal
-  TextInput, // Import TextInput
-  KeyboardAvoidingView, // Import KeyboardAvoidingView
-  Platform // Import Platform
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
+import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth'; // Import updatePassword and reauthenticateWithCredential, EmailAuthProvider
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, signOut } from 'firebase/auth'; // Import signOut
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -24,17 +24,17 @@ const USER_ICON = require('../assets/icons/user.png');
 const DISCOUNT_ICON = require('../assets/icons/discount.png');
 const APPOINTMENT_ICON = require('../assets/icons/appointment.png');
 const LOCK_ICON = require('../assets/icons/lock.png');
-const LOGOUT_ICON = require('../assets/icons/logout.png');
-const RIGHT_ENTER_ICON = require('../assets/icons/right_enter.png'); // New: Import the right arrow icon
+const LOGOUT_ICON = require('../assets/icons/logout.png'); // NEW: Import logout icon
+const RIGHT_ENTER_ICON = require('../assets/icons/right_enter.png');
 // --- END NEW IMPORTS ---
 
-const Paramètres = () => { // This component is likely named 'Settings' in your navigation
+const Paramètres = () => {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- NEW: States for Change Password Modal ---
+  // --- States for Change Password Modal ---
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -78,92 +78,41 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
     }
   }, [isFocused]);
 
+  // --- NEW: Handle Logout ---
   const handleLogout = async () => {
-  Alert.alert(
-    'Déconnexion',
-    'Êtes-vous sûr de vouloir vous déconnecter ?',
-    [
-      {
-        text: 'Annuler',
-        style: 'cancel',
-      },
-      {
-        text: 'Oui',
-        onPress: async () => {
-          try {
-            // Log Firebase Auth instance and current user BEFORE signOut
-            console.log("--- Logout Attempt ---");
-            console.log("auth instance:", auth);
-            console.log("auth.currentUser BEFORE signOut:", auth.currentUser ? auth.currentUser.uid : "No user");
-
-            if (!auth || !auth.currentUser) {
-                console.warn("Auth object or current user is null/undefined before signOut. Cannot proceed.");
-                Alert.alert("Erreur de Déconnexion", "Aucun utilisateur n'est actuellement connecté.");
-                return; // Exit if no user to sign out
-            }
-
-            await signOut(auth); // This is the crucial line
-            console.log("signOut(auth) call completed."); // This will log if signOut doesn't throw an error immediately
-
-            // Give a very brief moment for Auth state to propagate (might not be needed, but good for race conditions)
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Check auth.currentUser AFTER signOut
-            if (!auth.currentUser) {
-              console.log("auth.currentUser is now null. Logout successful from Firebase perspective.");
-            } else {
-              console.warn("auth.currentUser is STILL present after signOut!", auth.currentUser.uid);
-              Alert.alert("Erreur de Déconnexion", "La déconnexion Firebase a échoué localement. Veuillez réessayer.");
-            }
-
-            Alert.alert(
-              'Déconnexion réussie',
-              'Vous avez été déconnecté avec succès',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    console.log("Attempting navigation.reset to Login screen.");
-                    navigation.reset({
-                      index: 0,
-                      routes: [{ name: 'Login' }],
-                    });
-                    console.log("navigation.reset called.");
-                  },
-                },
-              ],
-              { cancelable: false }
-            );
-
-          } catch (error) {
-            console.error("Déconnexion error caught:", error.code, error.message, error);
-            if (error.code === 'auth/network-request-failed') {
-                Alert.alert(
-                    'Erreur de Déconnexion',
-                    'Problème réseau lors de la déconnexion. Veuillez vérifier votre connexion internet.'
-                );
-            } else if (error.code) { // Specific Firebase Auth error
-                Alert.alert(
-                    'Erreur de Déconnexion',
-                    `Firebase Auth Error: ${error.code} - ${error.message}`
-                );
-            } else { // Generic error
-                Alert.alert(
-                    'Erreur de Déconnexion',
-                    `Une erreur inattendue est survenue: ${error.message}`
-                );
-            }
-          } finally {
-              console.log("--- Logout Attempt Finished ---");
-          }
+    Alert.alert(
+      "Déconnexion",
+      "Êtes-vous sûr de vouloir vous déconnecter ?",
+      [
+        {
+          text: "Annuler",
+          style: "cancel"
         },
-      },
-    ],
-    { cancelable: true }
-  );
-};
+        {
+          text: "Déconnexion",
+          onPress: async () => {
+            try {
+              await signOut(auth);
+              console.log("User signed out!");
+              // Reset navigation stack to prevent going back to protected screens
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            } catch (error) {
+              console.error("Error signing out:", error);
+              Alert.alert("Erreur", "Impossible de se déconnecter. Veuillez réessayer.");
+            }
+          },
+          style: "destructive"
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+  // --- END NEW: Handle Logout ---
 
-  // --- NEW: Handle Password Change ---
+  // --- Handle Password Change ---
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       Alert.alert('Champs requis', 'Veuillez remplir tous les champs de mot de passe.');
@@ -216,7 +165,7 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
       setIsPasswordChanging(false);
     }
   };
-  // --- END NEW: Handle Password Change ---
+  // --- END Handle Password Change ---
 
   if (loading) {
     return (
@@ -272,46 +221,32 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
           onPress={() => navigation.navigate('EditProfile', { userData: userData })}
         >
           <View style={styles.settingItemContent}>
-            {/* --- MODIFIED: Use custom image for Modifier le profil --- */}
             <Image source={USER_ICON} style={[styles.settingIconCustom, { tintColor: '#0a8fdf' }]} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Modifier le profil</Text>
           </View>
-          {/* --- MODIFIED: Use custom image for right arrow --- */}
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
-        {/* Mes Coupons Button */}
         <TouchableOpacity
           style={styles.settingItem}
           onPress={() => navigation.navigate('UserCoupons')}
         >
           <View style={styles.settingItemContent}>
-            {/* --- MODIFIED: Use custom image for Mes Coupons --- */}
             <Image source={DISCOUNT_ICON} style={[styles.settingIconCustom, { tintColor: '#28a745' }]} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Mes Coupons</Text>
           </View>
-          {/* --- MODIFIED: Use custom image for right arrow --- */}
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
-        {/* Mes Rendez-vous Button */}
         <TouchableOpacity
           style={styles.settingItem}
           onPress={() => navigation.navigate('UserRdv')}
         >
           <View style={styles.settingItemContent}>
-            {/* --- MODIFIED: Use custom image for Mes Rendez-vous --- */}
             <Image source={APPOINTMENT_ICON} style={[styles.settingIconCustom, { tintColor: '#FF9500' }]} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.settingText}>Mes Rendez-vous</Text>
           </View>
-          {/* --- MODIFIED: Use custom image for right arrow --- */}
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
       </View>
@@ -320,37 +255,34 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
       <View style={styles.settingsSection}>
         <Text style={styles.sectionTitle}>Sécurité</Text>
 
-        {/* --- NEW: Changer Mot de Passe Button --- */}
         <TouchableOpacity
           style={styles.settingItem}
           onPress={() => setShowPasswordModal(true)}
         >
           <View style={styles.settingItemContent}>
-            <Image source={LOCK_ICON} style={[styles.settingIconCustom, { tintColor: '#0a8fdf' }]} /> {/* Use tintColor matching default icon */}
+            <Image source={LOCK_ICON} style={[styles.settingIconCustom, { tintColor: '#0a8fdf' }]} />
             <Text style={styles.settingText}>Changer Mot de Passe</Text>
           </View>
-          {/* --- MODIFIED: Use custom image for right arrow --- */}
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
-        {/* --- END NEW --- */}
 
+        {/* --- NEW: Déconnexion Button --- */}
         <TouchableOpacity
-          style={[styles.settingItem, styles.logoutButton]}
+          style={[styles.settingItem, styles.logoutButton]} // Apply logout specific styling
           onPress={handleLogout}
         >
           <View style={styles.settingItemContent}>
-            {/* --- MODIFIED: Use custom image for Déconnexion --- */}
-            <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} />
-            {/* --- END MODIFIED --- */}
+            <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} /> {/* Red tint for logout */}
             <Text style={[styles.settingText, styles.logoutText]}>Déconnexion</Text>
           </View>
+          {/* No right arrow needed for logout as it performs an action directly */}
         </TouchableOpacity>
+        {/* --- END NEW --- */}
       </View>
 
       <Text style={styles.version}>Version 1.0.0</Text>
 
-      {/* --- NEW: Change Password Modal --- */}
+      {/* --- Change Password Modal --- */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -420,7 +352,7 @@ const Paramètres = () => { // This component is likely named 'Settings' in your
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      {/* --- END NEW: Change Password Modal --- */}
+      {/* --- END Change Password Modal --- */}
     </ScrollView>
   );
 };
@@ -543,38 +475,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  settingIcon: { // Original Ionicons style (kept for reference, but not used for custom icons)
+  settingIcon: {
     marginRight: 18,
   },
-  // --- NEW STYLE for Custom PNG Icons in Settings ---
   settingIconCustom: {
-    width: 22, // Match Ionicons size
-    height: 22, // Match Ionicons size
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
     marginRight: 18,
-    // tintColor is applied inline in the component to maintain specific colors
   },
-  // --- NEW STYLE for Custom Arrow Icon ---
   customArrowIcon: {
-    width: 20, // Match Ionicons size for chevron
-    height: 20, // Match Ionicons size for chevron
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#A0AEC0', // Match original Ionicons color
+    tintColor: '#A0AEC0',
   },
-  // --- END NEW STYLE ---
   settingText: {
     fontSize: 17,
     color: '#4A5568',
     fontWeight: '500',
   },
+  // --- NEW STYLES for Logout button ---
   logoutButton: {
-    borderBottomWidth: 0,
+    borderBottomWidth: 0, // No border at the bottom for the last item
     marginTop: 5,
   },
   logoutText: {
-    color: '#EF4444',
+    color: '#EF4444', // Red color for logout text
     fontWeight: '600',
   },
+  // --- END NEW STYLES ---
   version: {
     textAlign: 'center',
     color: '#A0AEC0',
@@ -583,7 +513,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // --- NEW: Styles for Change Password Modal ---
+  // --- Styles for Change Password Modal ---
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -646,14 +576,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modalSubmitButton: {
-    backgroundColor: '#0a8fdf', // Primary blue color
+    backgroundColor: '#0a8fdf',
   },
   modalSubmitButtonText: {
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
   },
-  // --- END NEW: Styles for Change Password Modal ---
+  // --- END Styles for Change Password Modal ---
 });
 
 export default Paramètres;
