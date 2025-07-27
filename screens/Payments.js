@@ -1,40 +1,51 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   ActivityIndicator,
   Linking, // Import Linking for opening files
-  Alert, 
-  Modal, 
+  Alert,
+  Modal,
   RefreshControl,
-  Platform, 
+  Platform,
   PermissionsAndroid,
   FlatList,
-  TextInput // Import TextInput
+  TextInput, // Import TextInput
+  Image // Import Image for custom icons
 } from 'react-native';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  query, 
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  query,
   where,
   collectionGroup,
-  getDoc 
+  getDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons'; 
-import * as FileSystem from 'expo-file-system'; 
-import * as MediaLibrary from 'expo-media-library'; 
+// No longer need MaterialIcons or Ionicons directly if replacing them all with custom images
+// import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing'; // NEW: Import Expo Sharing
+
+// --- NEW: Import your custom icons ---
+const SEARCH_ICON = require('../assets/icons/search.png'); // For search input
+const WALLET_OUTLINE_ICON = require('../assets/icons/wallet_outline.png'); // For payment item card
+const CHEVRON_FORWARD_ICON = require('../assets/icons/arrow_rightShort.png'); // For partner card
+const CLOSE_CIRCLE_OUTLINE_ICON = require('../assets/icons/close_circle.png'); // For modal close button
+const OPEN_OUTLINE_ICON = require('../assets/icons/open_outline.png'); // For open receipt button
+const DOWNLOAD_OUTLINE_ICON = require('../assets/icons/download_outline.png'); // For download receipt button
 
 const PaymentsScreen = () => {
   const [partnersFinancials, setPartnersFinancials] = useState([]);
-  const [paymentsList, setPaymentsList] = useState([]); 
+  const [paymentsList, setPaymentsList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); 
+  const [refreshing, setRefreshing] = useState(false);
 
   const [globalStats, setGlobalStats] = useState({
     totalAmountReceived: 0,
@@ -47,7 +58,7 @@ const PaymentsScreen = () => {
 
   const [paymentDetailsModalVisible, setPaymentDetailsModalVisible] = useState(false);
   const [selectedPaymentDetails, setSelectedPaymentDetails] = useState(null);
-  
+
   const [searchQuery, setSearchQuery] = useState(''); // State for search query
 
   const notifiedFinancialUpdatePartners = useRef(new Set());
@@ -62,7 +73,7 @@ const PaymentsScreen = () => {
     };
 
     try {
-      await fetch('https://exp.host/--/api/v2/push/send', { 
+      await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -109,8 +120,8 @@ const PaymentsScreen = () => {
     }
   };
 
-  const fetchGlobalStatsAndPartners = useCallback(async () => { 
-    setLoading(true); 
+  const fetchGlobalStatsAndPartners = useCallback(async () => {
+    setLoading(true);
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) {
@@ -119,11 +130,11 @@ const PaymentsScreen = () => {
         setRefreshing(false);
         return;
       }
-      
+
       let currentTotalAmountReceived = 0;
       let currentTotalCommissionAmount = 0;
-      const partnersFinancialsList = []; 
-      const partnerDataMap = new Map(); 
+      const partnersFinancialsList = [];
+      const partnerDataMap = new Map();
 
       const partnersQuerySnapshot = await getDocs(collection(db, 'partners'));
       partnersQuerySnapshot.forEach(doc => {
@@ -143,14 +154,14 @@ const PaymentsScreen = () => {
       });
 
       const revenueTransactionsQuerySnapshot = await getDocs(collectionGroup(db, 'revenue_transactions'));
-      
+
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const currentYearStart = new Date(now.getFullYear(), 0, 1);
 
-      for (const docSnapshot of revenueTransactionsQuerySnapshot.docs) { 
+      for (const docSnapshot of revenueTransactionsQuerySnapshot.docs) {
         const transaction = docSnapshot.data();
-        const partnerId = docSnapshot.ref.parent.parent.id; 
+        const partnerId = docSnapshot.ref.parent.parent.id;
         const transactionDate = transaction.transactionDate?.toDate();
 
         if (typeof transaction.amountReceived === 'number' && typeof transaction.commissionAmount === 'number') {
@@ -176,11 +187,11 @@ const PaymentsScreen = () => {
                 partner.latestTransactionDate = transactionDate;
                 partner.latestAmount = netAmount;
 
-                if (currentUser.uid !== partnerId) { 
+                if (currentUser.uid !== partnerId) {
                     const isNewTransaction = !prevLatestTransactionDate || transactionDate > prevLatestTransactionDate;
                     if (isNewTransaction && !notifiedFinancialUpdatePartners.current.has(partnerId)) {
                         console.log(`NEW FINANCIAL UPDATE DETECTED for partner: ${partner.nom}`); // Changed to nom
-                        const adminDocSnap = await getDoc(doc(db, 'users', currentUser.uid)); 
+                        const adminDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
                         if (adminDocSnap.exists() && adminDocSnap.data().expoPushToken) {
                             sendPushNotification(
                                 adminDocSnap.data().expoPushToken,
@@ -188,14 +199,14 @@ const PaymentsScreen = () => {
                                 `Nouvelle transaction enregistrée pour ${partner.nom}.`, // Changed to nom
                                 { type: 'partner_payment_update', partnerId: partner.id }
                             );
-                            notifiedFinancialUpdatePartners.current.add(partnerId); 
+                            notifiedFinancialUpdatePartners.current.add(partnerId);
                         }
                     }
                 }
             }
           }
         }
-      } 
+      }
 
       partnerDataMap.forEach(partner => partnersFinancialsList.push(partner));
       partnersFinancialsList.sort((a, b) => a.nom.localeCompare(b.nom)); // Sorted by nom
@@ -213,15 +224,15 @@ const PaymentsScreen = () => {
           recordedAt: doc.data().recordedAt?.toDate(),
           paymentFromDate: doc.data().paymentFromDate?.toDate(),
           paymentToDate: doc.data().paymentToDate?.toDate(),
-      })).sort((a, b) => b.recordedAt - a.recordedAt); 
+      })).sort((a, b) => b.recordedAt - a.recordedAt);
       setPaymentsList(fetchedPayments);
 
     } catch (error) {
       console.error("Error fetching global stats and partners:", error);
       Alert.alert("Erreur", "Impossible de charger les données financières. Vérifiez votre connexion ou les index Firestore.");
-      setPartnersFinancials([]); 
-      setGlobalStats({ totalAmountReceived: 0, totalCommissionAmount: 0 }); 
-      setPaymentsList([]); 
+      setPartnersFinancials([]);
+      setGlobalStats({ totalAmountReceived: 0, totalCommissionAmount: 0 });
+      setPaymentsList([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -239,8 +250,8 @@ const PaymentsScreen = () => {
 
       let monthlyNet = 0;
       let yearlyNet = 0;
-      let monthlyCommission = 0; 
-      let yearlyCommission = 0;  
+      let monthlyCommission = 0;
+      let yearlyCommission = 0;
       let confirmedAppointments = 0;
       let scheduledAppointments = 0;
 
@@ -261,11 +272,11 @@ const PaymentsScreen = () => {
           const netAmount = transaction.amountReceived - transaction.commissionAmount;
           if (transactionDate >= currentMonthStart) {
             monthlyNet += netAmount;
-            monthlyCommission += transaction.commissionAmount; 
+            monthlyCommission += transaction.commissionAmount;
           }
           if (transactionDate >= currentYearStart) {
             yearlyNet += netAmount;
-            yearlyCommission += transaction.commissionAmount; 
+            yearlyCommission += transaction.commissionAmount;
           }
         }
       });
@@ -290,8 +301,8 @@ const PaymentsScreen = () => {
         name: partnerName, // This 'name' is derived from 'nom' for the modal
         monthlyNet,
         yearlyNet,
-        monthlyCommission, 
-        yearlyCommission,  
+        monthlyCommission,
+        yearlyCommission,
         confirmedAppointments,
         scheduledAppointments,
       });
@@ -315,114 +326,98 @@ const PaymentsScreen = () => {
   }, [fetchGlobalStatsAndPartners]);
 
   const downloadDocument = async (url, filename) => {
-    Alert.alert("Téléchargement", "Téléchargement du document en cours...", [{ text: "OK" }]); 
+    Alert.alert("Téléchargement", "Téléchargement du document en cours...", [{ text: "OK" }]);
     console.log("Attempting to download:", filename, "from:", url);
 
     try {
-        const temporaryLocalUri = `${FileSystem.cacheDirectory}${Date.now()}_${filename}`;
+      const temporaryLocalUri = `${FileSystem.cacheDirectory}${Date.now()}_${filename}`;
 
-        console.log("Downloading to temporary URI:", temporaryLocalUri);
-        const { uri: downloadedFileUri } = await FileSystem.downloadAsync(url, temporaryLocalUri);
-        console.log("Download complete, temporary URI:", downloadedFileUri);
+      console.log("Downloading to temporary URI:", temporaryLocalUri);
+      const { uri: downloadedFileUri } = await FileSystem.downloadAsync(url, temporaryLocalUri);
+      console.log("Download complete, temporary URI:", downloadedFileUri);
 
-        if (Platform.OS === 'android') {
-            console.log("Platform is Android. Requesting permissions...");
-            const permissionStatus = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-                {
-                    title: "Permission de stockage",
-                    message: "L'application a besoin d'accéder à votre stockage pour télécharger des fichiers.",
-                    buttonNeutral: "Demander plus tard",
-                    buttonNegative: "Annuler",
-                    buttonPositive: "OK"
-                }
-            );
+      if (Platform.OS === 'android') {
+        console.log("Platform is Android. Requesting MediaLibrary permissions for potential save...");
+        const { status: mediaLibStatus } = await MediaLibrary.requestPermissionsAsync();
 
-            if (permissionStatus === PermissionsAndroid.RESULTS.GRANTED) {
-                console.log("Storage permission granted.");
-                try {
-                    const albumName = 'EliteReply'; 
-
-                    const { status: mediaLibStatus } = await MediaLibrary.requestPermissionsAsync();
-                    if (mediaLibStatus !== 'granted') {
-                        Alert.alert("Permission requise", "Pour sauvegarder dans un dossier spécifique, veuillez accorder l'accès à la médiathèque.");
-                        console.log("MediaLibrary permission denied. Trying to open directly.");
-                        await Linking.openURL(downloadedFileUri);
-                        return;
-                    }
-                    console.log("MediaLibrary permission granted.");
-
-                    const asset = await MediaLibrary.createAssetAsync(downloadedFileUri);
-                    console.log("Asset created:", asset.uri);
-
-                    let album = await MediaLibrary.getAlbumAsync(albumName);
-                    console.log("Album (EliteReply) status:", album ? 'exists' : 'does not exist');
-
-                    if (album) {
-                        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-                        console.log("Added asset to existing album.");
-                    } else {
-                        album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
-                        console.log("Created new album and added asset.");
-                    }
-
-                    if (album) {
-                        Alert.alert(
-                            "Succès",
-                            `Document téléchargé dans votre dossier "Téléchargements/${albumName}".`
-                        );
-                        await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
-                        console.log("Temporary file deleted.");
-                    } else {
-                        Alert.alert("Erreur", "Impossible de créer ou ajouter au dossier EliteReply. Le document peut être dans les téléchargements généraux.");
-                        await Linking.openURL(downloadedFileUri);
-                    }
-
-                } catch (saveError) {
-                    console.error("Android: Error saving to EliteReply folder:", saveError);
-                    Alert.alert(
-                        "Erreur de sauvegarde",
-                        "Impossible de sauvegarder le document dans le dossier 'EliteReply'. Il a peut-être été enregistré temporairement dans le cache de l'application."
-                    );
-                    await Linking.openURL(downloadedFileUri);
-                }
-            } else {
-                Alert.alert(
-                    "Permission refusée",
-                    "Impossible de sauvegarder le document dans le dossier de téléchargements sans permission de stockage. Le fichier sera ouvert directement si possible."
-                );
-                await Linking.openURL(downloadedFileUri);
-            }
-
-        } else if (Platform.OS === 'ios') {
-            console.log("Platform is iOS.");
-            
-            const destinationFileUri = `${FileSystem.documentDirectory}${filename}`;
-            console.log("Copying to iOS document directory:", destinationFileUri);
-            await FileSystem.copyAsync({
-                from: downloadedFileUri,
-                to: destinationFileUri,
-            });
-            console.log("Copied to iOS document directory.");
-
-            const { status: mediaLibStatus } = await MediaLibrary.requestPermissionsAsync();
-            if (mediaLibStatus === 'granted') {
-            }
+        if (mediaLibStatus === 'granted') {
+          try {
+            // Attempt to save to MediaLibrary. This usually places it in a default accessible folder (e.g., Downloads/Pictures).
+            // Direct creation of custom named folders within MediaLibrary via createAlbumAsync
+            // with a downloaded file from cache can be problematic and is often not the intended use case for MediaLibrary.
+            const asset = await MediaLibrary.createAssetAsync(downloadedFileUri);
 
             Alert.alert(
-                "Succès",
-                "Document téléchargé. Vous pouvez l'ouvrir ou le sauvegarder dans Fichiers."
+              "Succès",
+              `Document téléchargé et disponible dans votre galerie ou dossier de téléchargements.`
             );
-            console.log("Opening file on iOS via Linking.openURL:", destinationFileUri);
-            await Linking.openURL(destinationFileUri);
+            // Delete the temporary file after it's been handled by MediaLibrary
             await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
-            console.log("Temporary file deleted.");
+            console.log("Temporary file deleted after MediaLibrary save.");
 
+            // Offer to share/open the file immediately after successful save
+            if (await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(asset.uri); // Use the asset's content URI for sharing
+            } else {
+              Alert.alert("Partage non disponible", "Le partage de fichiers n'est pas pris en charge sur cet appareil.");
+            }
+
+          } catch (saveError) {
+            console.error("Android: Error saving to MediaLibrary (falling back to Sharing):", saveError);
+            Alert.alert(
+              "Erreur de sauvegarde",
+              "Impossible de sauvegarder le document directement. Il sera ouvert pour que vous puissiez le gérer."
+            );
+            // If MediaLibrary save fails, fall back to sharing
+            if (await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(downloadedFileUri); // Expo Sharing handles FileProvider correctly
+            } else {
+              Alert.alert("Erreur", "Le partage de fichiers n'est pas pris en charge sur cet appareil et la sauvegarde a échoué.");
+            }
+          }
         } else {
-            console.log("Platform is neither Android nor iOS.");
-            Alert.alert("Téléchargé", `Document sauvegardé temporairement. Vous pouvez le trouver ici: ${downloadedFileUri}`);
-            await Linking.openURL(downloadedFileUri);
+          // MediaLibrary permission denied. Fall back to sharing directly.
+          Alert.alert(
+            "Permission refusée",
+            "Impossible de sauvegarder le document directement. Le fichier sera ouvert pour que vous puissiez le gérer."
+          );
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadedFileUri); // Expo Sharing handles FileProvider correctly
+          } else {
+            Alert.alert("Erreur", "Le partage de fichiers n'est pas pris en charge sur cet appareil.");
+          }
         }
+
+      } else if (Platform.OS === 'ios') {
+        console.log("Platform is iOS. Copying to document directory and then sharing.");
+
+        const destinationFileUri = `${FileSystem.documentDirectory}${filename}`;
+        await FileSystem.copyAsync({
+          from: downloadedFileUri,
+          to: destinationFileUri,
+        });
+        console.log("Copied to iOS document directory:", destinationFileUri);
+
+        Alert.alert(
+          "Succès",
+          "Document téléchargé. Vous pouvez l'ouvrir ou le sauvegarder dans Fichiers."
+        );
+
+        // Use Expo Sharing on iOS, which provides the "Save to Files" option.
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(destinationFileUri);
+        } else {
+          Alert.alert("Partage non disponible", "Le partage de fichiers n'est pas pris en charge sur cet appareil.");
+        }
+
+        await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
+        console.log("Temporary file deleted on iOS.");
+
+      } else {
+        console.log("Platform is neither Android nor iOS. Attempting direct open.");
+        Alert.alert("Téléchargé", `Document sauvegardé temporairement. Vous pouvez le trouver ici: ${downloadedFileUri}`);
+        await Linking.openURL(downloadedFileUri);
+      }
 
     } catch (error) {
       console.error("Error during downloadDocument:", error);
@@ -430,8 +425,9 @@ const PaymentsScreen = () => {
     }
   };
 
+
   const renderPaymentItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.paymentItemCard}
       onPress={() => {
         setSelectedPaymentDetails(item);
@@ -439,7 +435,9 @@ const PaymentsScreen = () => {
       }}
     >
       <View style={styles.paymentItemHeader}>
-        <Ionicons name="wallet-outline" size={20} color="#34C759" />
+        {/* --- MODIFIED: Using custom wallet outline icon --- */}
+        <Image source={WALLET_OUTLINE_ICON} style={[styles.customIcon, { tintColor: '#34C759' }]} />
+        {/* --- END MODIFIED --- */}
         <Text style={styles.paymentItemPartnerName}>{item.partnerName}</Text>
         <Text style={styles.paymentItemAmount}>
           {(item.paymentAmount ?? 0).toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
@@ -469,7 +467,7 @@ const PaymentsScreen = () => {
   // --- END NEW ---
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -477,16 +475,16 @@ const PaymentsScreen = () => {
           onRefresh={onRefresh}
           colors={['#0a8fdf']}
           tintColor="#0a8fdf"
-          title="Tirer pour actualiser" 
+          title="Tirer pour actualiser"
           titleColor="#0a8fdf"
         />
       }
     >
       <Text style={styles.title}>Statistiques Financières Partenaires</Text>
-      
+
       {/* Global Financial Summary */}
       <View style={styles.globalSummaryCard}>
-        <Text style={styles.globalSummaryTitle}>Vue d'ensemble financière globale</Text>
+        <Text style={styles.globalSummaryTitle}>Vue d'overview financière globale</Text>
         <View style={styles.globalSummaryRow}>
           <View style={styles.globalSummaryItem}>
             <Text style={styles.globalSummaryLabel}>Revenus Totaux (EliteReply)</Text>
@@ -504,10 +502,12 @@ const PaymentsScreen = () => {
       </View>
 
       <Text style={styles.sectionTitle}>Revenus par Partenaire</Text>
-      
+
       {/* NEW: Search Bar */}
       <View style={styles.searchBarContainer}>
-        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        {/* --- MODIFIED: Using custom search icon --- */}
+        <Image source={SEARCH_ICON} style={styles.customIcon} />
+        {/* --- END MODIFIED --- */}
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un partenaire par nom..." // Updated placeholder
@@ -522,14 +522,16 @@ const PaymentsScreen = () => {
         <Text style={styles.noData}>Aucun partenaire correspondant à la recherche ou aucune donnée financière à afficher.</Text>
       ) : (
         filteredPartnersFinancials.map(partner => ( // Use filteredPartnersFinancials here
-          <TouchableOpacity 
-            key={partner.id} 
+          <TouchableOpacity
+            key={partner.id}
             style={styles.partnerCard}
             onPress={() => fetchSelectedPartnerDetails(partner.id)}
           >
             <View style={styles.partnerHeader}>
               <Text style={styles.partnerName}>{partner.nom}</Text> {/* Changed to nom */}
-              <Ionicons name="chevron-forward" size={20} color="#666" />
+              {/* --- MODIFIED: Using custom chevron forward icon --- */}
+              <Image source={CHEVRON_FORWARD_ICON} style={[styles.customIcon, { tintColor: '#666' }]} />
+              {/* --- END MODIFIED --- */}
             </View>
             <Text style={styles.partnerCategory}>{partner.categorie}</Text> {/* Changed to categorie */}
             {partner.latestTransactionDate && (
@@ -569,11 +571,13 @@ const PaymentsScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity 
-              style={styles.modalCloseButton} 
+            <TouchableOpacity
+              style={styles.modalCloseButton}
               onPress={() => setIsPartnerModalVisible(false)}
             >
-              <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
+              {/* --- MODIFIED: Using custom close circle outline icon --- */}
+              <Image source={CLOSE_CIRCLE_OUTLINE_ICON} style={styles.customModalCloseIcon} />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
 
             {partnerModalLoading ? (
@@ -640,11 +644,13 @@ const PaymentsScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity 
-              style={styles.modalCloseButton} 
+            <TouchableOpacity
+              style={styles.modalCloseButton}
               onPress={() => setPaymentDetailsModalVisible(false)}
             >
-              <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
+              {/* --- MODIFIED: Using custom close circle outline icon --- */}
+              <Image source={CLOSE_CIRCLE_OUTLINE_ICON} style={styles.customModalCloseIcon} />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
 
             {selectedPaymentDetails && (
@@ -683,18 +689,22 @@ const PaymentsScreen = () => {
                 {selectedPaymentDetails.receiptURL ? (
                   <View style={styles.receiptActionsContainer}>
                     <Text style={styles.modalStatLabel}>Reçu:</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.receiptButton, styles.openReceiptButton]}
                       onPress={() => Linking.openURL(selectedPaymentDetails.receiptURL)}
                     >
-                      <Ionicons name="open-outline" size={20} color="white" />
+                      {/* --- MODIFIED: Using custom open outline icon --- */}
+                      <Image source={OPEN_OUTLINE_ICON} style={styles.customReceiptButtonIcon} />
+                      {/* --- END MODIFIED --- */}
                       <Text style={styles.receiptButtonText}>Ouvrir le reçu</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.receiptButton, styles.downloadReceiptButton]}
                       onPress={() => downloadDocument(selectedPaymentDetails.receiptURL, `reçu_${selectedPaymentDetails.partnerName}_${selectedPaymentDetails.id}.pdf`)}
                     >
-                      <Ionicons name="download-outline" size={20} color="white" />
+                      {/* --- MODIFIED: Using custom download outline icon --- */}
+                      <Image source={DOWNLOAD_OUTLINE_ICON} style={styles.customReceiptButtonIcon} />
+                      {/* --- END MODIFIED --- */}
                       <Text style={styles.receiptButtonText}>Télécharger le reçu</Text>
                     </TouchableOpacity>
                   </View>
@@ -742,7 +752,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   globalSummaryCard: {
-    backgroundColor: '#E3F2FD', 
+    backgroundColor: '#E3F2FD',
     borderRadius: 10,
     padding: 20,
     marginBottom: 20,
@@ -752,7 +762,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderLeftWidth: 5,
-    borderColor: '#0a8fdf', 
+    borderColor: '#0a8fdf',
   },
   globalSummaryTitle: {
     fontSize: 20,
@@ -769,7 +779,7 @@ const styles = StyleSheet.create({
   globalSummaryItem: {
     alignItems: 'center',
     marginBottom: 10,
-    width: '48%', 
+    width: '48%',
   },
   globalSummaryLabel: {
     fontSize: 14,
@@ -796,9 +806,18 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  searchIcon: {
+  searchIcon: { // Original search icon style (now customIcon)
     marginRight: 10,
   },
+  // --- NEW STYLE for custom icons in general ---
+  customIcon: {
+    width: 20, // Match typical Ionicons size
+    height: 20, // Match typical Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#999', // Default tint, can be overridden inline
+    marginRight: 10, // Maintain spacing for search/wallet
+  },
+  // --- END NEW STYLE ---
   searchInput: {
     flex: 1,
     height: 45,
@@ -855,7 +874,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 25,
     width: '90%',
-    maxHeight: '80%', 
+    maxHeight: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.25,
@@ -868,14 +887,22 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1,
   },
+  // --- NEW STYLE for custom modal close icon ---
+  customModalCloseIcon: {
+    width: 30, // Match Ionicons size
+    height: 30, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#EF4444', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   modalLoadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 150, 
+    minHeight: 150,
   },
   modalScrollContent: {
-    paddingTop: 10, 
+    paddingTop: 10,
   },
   modalTitle: {
     fontSize: 22,
@@ -891,7 +918,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalStatCard: {
-    backgroundColor: '#F0F4F8', 
+    backgroundColor: '#F0F4F8',
     borderRadius: 10,
     padding: 15,
     marginBottom: 10,
@@ -899,19 +926,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderLeftWidth: 4,
-    borderColor: '#0a8fdf', 
+    borderColor: '#0a8fdf',
   },
   modalStatLabel: {
     fontSize: 16,
     color: '#444',
     fontWeight: '600',
-    flexShrink: 1, 
+    flexShrink: 1,
     marginRight: 10,
   },
   modalStatValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#0a8fdf', 
+    color: '#0a8fdf',
     textAlign: 'right',
   },
   paymentsListContainer: {
@@ -929,7 +956,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
     borderLeftWidth: 5,
-    borderColor: '#34C759', 
+    borderColor: '#34C759',
   },
   paymentItemHeader: {
     flexDirection: 'row',
@@ -962,7 +989,7 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',
-    alignItems: 'flex-start', 
+    alignItems: 'flex-start',
   },
   receiptButton: {
     flexDirection: 'row',
@@ -972,7 +999,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 8,
     marginTop: 10,
-    width: '100%', 
+    width: '100%',
   },
   openReceiptButton: {
     backgroundColor: '#0a8fdf',
@@ -986,6 +1013,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 10,
   },
+  // --- NEW STYLE for custom receipt button icons ---
+  customReceiptButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: 'white', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
 });
 
 export default PaymentsScreen;
