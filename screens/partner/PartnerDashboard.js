@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList, // Used for Dashboard and Reviews tabs
-  Image,
+  Image, // Import Image
   SafeAreaView,
   Alert,
   ActivityIndicator,
@@ -49,9 +49,14 @@ const RATE_HALF_ICON_NAV = require('../../assets/icons/rate_half.png');
 const RIGHT_ENTER_ICON_PARTNER = require('../../assets/icons/right_enter.png');
 const RATE_FULL_ICON = require('../../assets/icons/rate_full.png');
 const RATE_ICON_EMPTY = require('../../assets/icons/rate.png');
-
-// --- NEW IMPORT for this request (GIF) ---
 const REVIEW_ANIM_GIF = require('../../assets/gif/review_anim.gif');
+
+const INFOS_ICON = require('../../assets/icons/infos.png'); // For promotion status info icon
+const CLOSE_CIRCLE_OUTLINE_ICON = require('../../assets/icons/infos.png'); // From Partners
+const TIME_OUTLINE_ICON = require('../../assets/icons/sablier.png'); // From Partners
+const CHECKMARK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/check_full.png'); // From Partners
+
+const ARROW_RIGHT_SHORT_ICON = require('../../assets/icons/arrow_rightShort.png'); // New right arrow icon
 // --- END NEW IMPORTS ---
 
 // --- Jey's Addition: Import the new notification service ---
@@ -115,14 +120,12 @@ const PartnerDashboard = ({ navigation }) => {
     const diffTime = Math.abs(endDate - today);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    // Fix: `daysLeft` was not defined here. Assuming it means `diffDays`
-    const daysLeft = diffDays; // This was missing in your original snippet here
+    const daysLeft = diffDays;
 
     if (daysLeft <= 1) return '#FF0000'; // Very short time left, urgent red
     if (daysLeft <= 2) return '#FF3B30'; // Few days left, strong red
     if (daysLeft <= 5) return '#FF5E3A'; // Medium-short, orange-red
     if (daysLeft <= 7) return '#FF9500'; // Week left, orange
-    // If promotion duration is 14 or 30 days, it starts green and eventually goes to orange/red
     return '#25c15b'; // Default green for active/longer promotion
   };
 
@@ -131,24 +134,24 @@ const PartnerDashboard = ({ navigation }) => {
 
     const endDate = new Date(partnerData.promotionEndDate);
     const today = new Date();
-    const diffTime = endDate.getTime() - today.getTime(); // Use non-absolute for accurate "days left"
-    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24))); // Ensure no negative days
+    const diffTime = endDate.getTime() - today.getTime();
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
   };
 
   const getPromotionIcon = () => {
     const daysLeft = getPromotionDaysLeft();
 
-    if (daysLeft <= 1) return 'flash';
-    if (daysLeft <= 3) return 'alert-circle';
-    if (daysLeft <= 7) return 'timer';
-    return 'rocket';
+    if (daysLeft <= 1) return INFOS_ICON;
+    if (daysLeft <= 3) return CLOSE_CIRCLE_OUTLINE_ICON;
+    if (daysLeft <= 7) return TIME_OUTLINE_ICON;
+    return CHECKMARK_CIRCLE_OUTLINE_ICON;
   };
 
-  // Pulse animation effect (updated dependency to `estPromu`)
+  // Pulse animation effect (no changes)
   useEffect(() => {
     const daysLeft = getPromotionDaysLeft();
 
-    if (daysLeft > 0 && daysLeft <= 7 && partnerData?.estPromu) { // Only animate if promotion is active and nearing end
+    if (daysLeft > 0 && daysLeft <= 7) { // Only animate if promotion is active and nearing end
       const pulseDuration = daysLeft <= 1 ? 800 :
                           daysLeft <= 3 ? 1200 :
                           1500;
@@ -177,7 +180,7 @@ const PartnerDashboard = ({ navigation }) => {
     return () => {
       pulseAnim.stopAnimation();
     };
-  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Changed isPromoted to estPromu
+  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Added isPromoted to dependencies
 
   // Fetch reviews (no changes, but ensure evaluations collection exists and partnerId is correct)
   const fetchReviews = useCallback(async (partnerId) => {
@@ -264,7 +267,7 @@ const PartnerDashboard = ({ navigation }) => {
 
       if (partnerSnap.exists()) {
         const data = { id: partnerSnap.id, ...partnerSnap.data() };
-        setPartnerData(data); // <--- This sets the partnerData state with 'estPromu' directly
+        setPartnerData(data);
         const avgRating = data.averageRating || 0;
         setDashboardData(prev => ({ ...prev, partnerRating: avgRating }));
       } else {
@@ -583,7 +586,7 @@ const PartnerDashboard = ({ navigation }) => {
       title: "Revenus",
       value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#FBBC05",
-      onPress: () => navigation.navigate('Revenus') // This should probably navigate to a payments/revenue screen
+      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/revenue screen
     },
     {
       icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#9C27B0' }]} />,
@@ -654,7 +657,7 @@ const PartnerDashboard = ({ navigation }) => {
             />
             <View>
               <Text style={styles.userName}>{loggedInUserBusinessName || 'Mon Entreprise'}</Text>
-              {partnerData?.estPromu && ( 
+              {partnerData?.isPromoted && (
                 <Text style={styles.userRole}>Partenaire Premium</Text>
               )}
             </View>
@@ -665,7 +668,7 @@ const PartnerDashboard = ({ navigation }) => {
           />
         </View>
 
-        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && ( 
+        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && ( // Changed to estPromu
           <Animated.View
             style={[
               styles.promotionBanner,
@@ -677,11 +680,12 @@ const PartnerDashboard = ({ navigation }) => {
             ]}
           >
             <View style={styles.promotionBannerContent}>
-              <Ionicons
-                name={promotionIcon}
-                size={20}
-                color={promotionColor}
+              {/* --- MODIFIED: Use custom image for promotion status icon --- */}
+              <Image
+                source={promotionIcon} // promotionIcon is already the imported Image source
+                style={[styles.customPromotionStatusIcon, { tintColor: promotionColor }]}
               />
+              {/* --- END MODIFIED --- */}
               <View style={styles.promotionTextContainer}>
                 <Text style={[styles.promotionBannerText, { color: promotionColor }]}>
                   {daysLeft <= 1 ?
@@ -735,7 +739,9 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('PartnerSurvey')}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Rendez-vous & Vérifications</Text>
-                      <MaterialIcons name="arrow-forward-ios" size={18} color="white" style={{ marginLeft: 8 }} />
+                      {/* --- MODIFIED: Use custom image for right arrow --- */}
+                      <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
+                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
 
@@ -749,7 +755,9 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Documents</Text>
-                      <MaterialIcons name="arrow-forward-ios" size={18} color="white" style={{ marginLeft: 8 }} />
+                      {/* --- MODIFIED: Use custom image for right arrow --- */}
+                      <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
+                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
                 </>
@@ -955,12 +963,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1061,14 +1063,11 @@ const styles = StyleSheet.create({
   statIcon: {
     marginBottom: 8,
   },
-  // --- NEW STYLE for Custom Stat Icons (from previous request) ---
   customStatIcon: {
-    width: 24, // Match Ionicons size
-    height: 24, // Match Ionicons size
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
-    // tintColor is applied inline in the component to maintain specific colors
   },
-  // --- END NEW STYLE ---
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -1128,15 +1127,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textTransform: 'uppercase',
   },
-  // --- NEW STYLE for custom action arrow icon ---
   customActionArrowIcon: {
-    width: 18, // Match MaterialIcons size
-    height: 18, // Match MaterialIcons size
+    width: 18,
+    height: 18,
     resizeMode: 'contain',
-    tintColor: 'white', // Match original MaterialIcons color
+    tintColor: 'white',
     marginLeft: 8,
   },
-  // --- END NEW STYLE ---
   paymentSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1233,15 +1230,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
-  // --- NEW STYLE for custom review star icons ---
   customReviewStarIcon: {
-    width: 16, // Match Ionicons size
-    height: 16, // Match Ionicons size
+    width: 16,
+    height: 16,
     resizeMode: 'contain',
-    marginHorizontal: 1, // Adjust as needed
-    // tintColor is applied inline
+    marginHorizontal: 1,
   },
-  // --- END NEW STYLE ---
   ratingText: {
     fontSize: 14,
     color: '#666',
@@ -1291,14 +1285,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
-  // --- NEW STYLE for custom nav icons ---
   customNavIcon: {
-    width: 24, // Match MaterialIcons/Ionicons size
-    height: 24, // Match MaterialIcons/Ionicons size
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
-    // tintColor is applied inline
   },
-  // --- END NEW STYLE ---
   navButtonText: {
     fontSize: 12,
     marginTop: 4,
@@ -1341,14 +1332,10 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#f5f5f5',
   },
-  cancelButtonText: {
-    color: '#333',
-    fontWeight: '600',
-  },
   submitButton: {
     backgroundColor: '#4a6bff',
   },
-  submitButtonText: {
+  buttonText: {
     color: 'white',
     fontWeight: '600',
   },
@@ -1418,14 +1405,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     minHeight: 200,
   },
-  // --- NEW STYLE for custom empty reviews GIF ---
   customEmptyReviewsGif: {
-    width: 100, // Adjust size as needed
-    height: 100, // Adjust size as needed
+    width: 100,
+    height: 100,
     resizeMode: 'contain',
     marginBottom: 10,
   },
-  // --- END NEW STYLE ---
   emptyText: {
     marginTop: 16,
     color: '#666',
@@ -1437,6 +1422,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
+  },
+  customPromotionStatusIcon: {
+    width: 30,
+    height: 30,
+    resizeMode: 'contain',
   },
 });
 
