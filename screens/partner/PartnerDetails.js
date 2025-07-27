@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView, Modal, TextInput, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker'; // This import can be removed if pickImage/uploadImage are completely removed
+import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere for business placeholder
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../firebase';
 import { v4 as uuidv4 } from 'uuid'; // This import can be removed if pickImage/uploadImage are completely removed
 import { useNavigation } from '@react-navigation/native';
+
+// --- NEW: Import your custom icons ---
+const ARROW_FORWARD_ICON = require('../../assets/icons/arrow_forward.png'); // For products/documents/revenues buttons
+const FOLDER_ICON = require('../../assets/icons/folder.png'); // For documents button
+const GRAPHIC_ICON = require('../../assets/icons/graphic.png'); // For revenues button
+const CREATE_ICON = require('../../assets/icons/edit.png'); // For edit button
+const TRASH_ICON = require('../../assets/icons/trash.png'); // For delete button
+const CLOSE_CIRCLE_OUTLINE_ICON = require('../../assets/icons/close_circle.png'); // For modal close button
+const BUSINESS_ICON_PLACEHOLDER = require('../../assets/icons/business_outline.png'); // For logo placeholder
 
 // Helper function to check if a URL is a valid Firebase Storage URL
 const isFirebaseStorageUrl = (url) => {
@@ -199,7 +207,8 @@ const PartnerDetails = ({ route }) => {
           <Image source={{ uri: partner.logo }} style={styles.logo} />
         ) : (
           <View style={styles.uploadPlaceholder}>
-            <Ionicons name="business" size={40} color="#ccc" />
+            {/* --- MODIFIED: Using custom business icon for placeholder --- */}
+            <Image source={BUSINESS_ICON_PLACEHOLDER} style={styles.customLogoPlaceholderIcon} />
             <Text style={styles.uploadPlaceholderText}>Pas de logo</Text>
           </View>
         )}
@@ -244,7 +253,9 @@ const PartnerDetails = ({ route }) => {
           })}
         >
           <Text style={styles.productsButtonText}>Voir les Produits</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+          {/* --- MODIFIED: Using custom arrow forward icon --- */}
+          <Image source={ARROW_FORWARD_ICON} style={styles.customButtonIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -256,7 +267,9 @@ const PartnerDetails = ({ route }) => {
           })}
         >
           <Text style={styles.productsButtonText}>Documents</Text>
-          <Ionicons name="folder-open" size={20} color="#fff" style={styles.buttonIcon} />
+          {/* --- MODIFIED: Using custom folder icon --- */}
+          <Image source={FOLDER_ICON} style={styles.customButtonIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -264,14 +277,18 @@ const PartnerDetails = ({ route }) => {
           onPress={fetchPartnerRevenueDetails}
         >
           <Text style={styles.productsButtonText}>Revenus</Text>
-          <Ionicons name="stats-chart" size={20} color="#fff" style={styles.buttonIcon} />
+          {/* --- MODIFIED: Using custom graphic icon --- */}
+          <Image source={GRAPHIC_ICON} style={styles.customButtonIcon} />
+          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
       </View>
 
       {/* Edit and Delete Buttons */}
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity style={styles.editButton} onPress={handleEditPartner}>
-          <Ionicons name="create" size={20} color="#fff" />
+          {/* --- MODIFIED: Using custom create icon --- */}
+          <Image source={CREATE_ICON} style={styles.customActionButtonIcon} />
+          {/* --- END MODIFIED --- */}
           <Text style={styles.actionButtonText}>Modifier</Text>
         </TouchableOpacity>
 
@@ -279,7 +296,9 @@ const PartnerDetails = ({ route }) => {
           {uploading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="trash" size={20} color="#fff" />
+            // --- MODIFIED: Using custom trash icon ---
+            <Image source={TRASH_ICON} style={styles.customActionButtonIcon} />
+            // --- END MODIFIED ---
           )}
           <Text style={styles.actionButtonText}>Supprimer Compte</Text>
         </TouchableOpacity>
@@ -298,7 +317,9 @@ const PartnerDetails = ({ route }) => {
               style={styles.revenuesModalCloseButton}
               onPress={() => setIsRevenuesModalVisible(false)}
             >
-              <Ionicons name="close-circle-outline" size={30} color="#EF4444" />
+              {/* --- MODIFIED: Using custom close circle outline icon --- */}
+              <Image source={CLOSE_CIRCLE_OUTLINE_ICON} style={styles.customModalCloseIcon} />
+              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
 
             {revenuesModalLoading ? (
@@ -386,28 +407,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
+  // --- NEW STYLE for custom logo placeholder icon ---
+  customLogoPlaceholderIcon: {
+    width: 40, // Match Ionicons size
+    height: 40, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#ccc', // Match original Ionicons color
+  },
+  // --- END NEW STYLE ---
   uploadPlaceholderText: {
     fontSize: 14,
     color: '#999',
     marginTop: 5,
   },
-  // --- REMOVED: uploadIcon style as it's no longer used ---
-  // uploadIcon: {
-  //   position: 'absolute',
-  //   bottom: 10,
-  //   right: 10,
-  //   backgroundColor: '#0a8fdf',
-  //   width: 40,
-  //   height: 40,
-  //   borderRadius: 20,
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-  //   shadowColor: '#000',
-  //   shadowOffset: { width: 0, height: 2 },
-  //   shadowOpacity: 0.3,
-  //   shadowRadius: 3,
-  //   elevation: 5,
-  // },
   infoContainer: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -525,9 +537,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  buttonIcon: {
-    marginLeft: 10,
+  // --- NEW STYLE for custom button icons (arrow_forward, folder, graphic) ---
+  customButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+    marginLeft: 10, // Maintain spacing
   },
+  // --- END NEW STYLE ---
   actionButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -560,123 +578,19 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+  // --- NEW STYLE for custom action button icons (create, trash) ---
+  customActionButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
-  },
-  modalContainer: { // These modal styles were for the inline edit modal that has been removed
-    flex: 1,
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#f8f9fa',
-  },
-  modalHeader: { // These modal styles were for the inline edit modal that has been removed
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: { // These modal styles were for the inline edit modal that has been removed
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  formGroup: { // These modal styles were for the inline edit modal that has been removed
-    marginBottom: 15,
-  },
-  formLabel: { // These modal styles were for the inline edit modal that has been removed
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#555',
-  },
-  textInput: { // These modal styles were for the inline edit modal that has been removed
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 16,
-    backgroundColor: '#fff',
-  },
-  multilineTextInput: { // These modal styles were for the inline edit modal that has been removed
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  logoEditContainer: { // These modal styles were for the inline edit modal that has been removed
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  logoEdit: { // These modal styles were for the inline edit modal that has been removed
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 10,
-  },
-  uploadPlaceholderEdit: { // These modal styles were for the inline edit modal that has been removed
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    marginBottom: 10,
-  },
-  logoUploadIndicator: { // These modal styles were for the inline edit modal that has been removed
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -10,
-    marginTop: -10,
-  },
-  uploadText: { // These modal styles were for the inline edit modal that has been removed
-    marginTop: 5,
-    color: '#999',
-    fontSize: 14,
-  },
-  saveButton: { // These modal styles were for the inline edit modal that has been removed
-    backgroundColor: '#28a745',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  saveButtonText: { // These modal styles were for the inline edit modal that will be removed
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  cancelButton: { // These modal styles were for the inline edit modal that will be removed
-    backgroundColor: '#6c757d',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  cancelButtonText: { // These modal styles were for the inline edit modal that will be removed
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  disabledButton: { // These modal styles were for the inline edit modal that will be removed
-    opacity: 0.7,
   },
   revenuesModalOverlay: {
     flex: 1,
@@ -702,6 +616,14 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1,
   },
+  // --- NEW STYLE for custom modal close icon ---
+  customModalCloseIcon: {
+    width: 30, // Match Ionicons size
+    height: 30, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#EF4444', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   modalRevenuesTitle: {
     fontSize: 22,
     fontWeight: 'bold',

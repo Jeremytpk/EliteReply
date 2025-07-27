@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,19 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Platform
+  Platform,
+  Image // Import Image for custom icons
 } from 'react-native';
 import { collection, getDocs, query, where, onSnapshot, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // Keeping Ionicons import, though custom icons will replace most uses
 import { useFocusEffect } from '@react-navigation/native';
+
+// --- NEW: Import your custom icons ---
+const ADD_SURVEY_ICON = require('../../assets/icons/add_circle.png'); // For create new survey button
+const DOCUMENT_OUTLINE_ICON = require('../../assets/icons/doc.png'); // For empty state
+const TRASH_ICON = require('../../assets/icons/delete.png'); // For delete survey button
+const GIFT_ICON = require('../../assets/icons/gift.png'); // For reward icon
 
 const SurveyScreen = ({ navigation }) => {
   const [surveys, setSurveys] = useState([]);
@@ -155,14 +162,18 @@ const SurveyScreen = ({ navigation }) => {
           style={styles.createButton}
           onPress={() => navigation.navigate('CreateSurvey')}
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          {/* --- MODIFIED: Using custom add survey icon --- */}
+          <Image source={ADD_SURVEY_ICON} style={styles.customCreateButtonIcon} />
+          {/* --- END MODIFIED --- */}
           <Text style={styles.createButtonText}>Nouvelle enquête</Text>
         </TouchableOpacity>
       </View>
 
       {surveys.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="document-text-outline" size={60} color="#cbd5e1" />
+          {/* --- MODIFIED: Using custom document outline icon for empty state --- */}
+          <Image source={DOCUMENT_OUTLINE_ICON} style={styles.customEmptyIcon} />
+          {/* --- END MODIFIED --- */}
           <Text style={styles.noSurveys}>Aucune enquête disponible</Text>
           <Text style={styles.noSurveysSubtitle}>
             Créez une nouvelle enquête ou revenez plus tard
@@ -192,7 +203,9 @@ const SurveyScreen = ({ navigation }) => {
                   style={styles.deleteButton}
                   onPress={() => handleDeleteSurvey(survey.id, survey.title)}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  {/* --- MODIFIED: Using custom trash icon --- */}
+                  <Image source={TRASH_ICON} style={styles.customDeleteButtonIcon} />
+                  {/* --- END MODIFIED --- */}
                 </TouchableOpacity>
               </View>
               <Text style={styles.surveyStatus}>
@@ -208,7 +221,9 @@ const SurveyScreen = ({ navigation }) => {
               )}
               {survey.reward && (
                 <View style={styles.rewardContainer}>
-                  <Ionicons name="gift" size={16} color="#25c15b" />
+                  {/* --- MODIFIED: Using custom gift icon --- */}
+                  <Image source={GIFT_ICON} style={styles.customRewardIcon} />
+                  {/* --- END MODIFIED --- */}
                   <Text style={styles.surveyReward}>
                     Récompense: {survey.reward}
                   </Text>
@@ -277,6 +292,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 4,
   },
+  // --- NEW STYLE for custom create button icon ---
+  customCreateButtonIcon: {
+    width: 24, // Match Ionicons size
+    height: 24, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#fff', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   createButtonText: {
     color: '#fff',
     marginLeft: 5,
@@ -289,6 +312,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 60,
   },
+  // --- NEW STYLE for custom empty state icon ---
+  customEmptyIcon: {
+    width: 60, // Match Ionicons size
+    height: 60, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#cbd5e1', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   noSurveys: {
     textAlign: 'center',
     marginTop: 15,
@@ -353,6 +384,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#e2e8f0',
   },
+  // --- NEW STYLE for custom reward icon ---
+  customRewardIcon: {
+    width: 16, // Match Ionicons size
+    height: 16, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#25c15b', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
   surveyReward: {
     fontSize: 15,
     color: '#25c15b',
@@ -363,6 +402,14 @@ const styles = StyleSheet.create({
     padding: 5,
     marginLeft: 10,
   },
+  // --- NEW STYLE for custom delete button icon ---
+  customDeleteButtonIcon: {
+    width: 20, // Match Ionicons size
+    height: 20, // Match Ionicons size
+    resizeMode: 'contain',
+    tintColor: '#EF4444', // Match Ionicons color
+  },
+  // --- END NEW STYLE ---
 });
 
 export default SurveyScreen;
