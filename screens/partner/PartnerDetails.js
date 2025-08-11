@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView, Modal, TextInput, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere for business placeholder
+import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../firebase';
-import { v4 as uuidv4 } from 'uuid'; // This import can be removed if pickImage/uploadImage are completely removed
+import { v4 as uuidv4 } from 'uuid';
 import { useNavigation } from '@react-navigation/native';
 
 // --- NEW: Import your custom icons ---
@@ -26,14 +26,12 @@ const PartnerDetails = ({ route }) => {
   const navigation = useNavigation();
   const [partner, setPartner] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false); // For overall saving/uploading operations (e.g., delete partner)
+  const [uploading, setUploading] = useState(false);
 
-  // New state for Revenues Modal (kept as it was part of your provided code)
   const [isRevenuesModalVisible, setIsRevenuesModalVisible] = useState(false);
   const [partnerRevenueStats, setPartnerRevenueStats] = useState(null);
   const [revenuesModalLoading, setRevenuesModalLoading] = useState(false);
 
-  // Use useCallback for fetchData for optimization
   const fetchPartner = useCallback(async () => {
     setLoading(true);
     try {
@@ -57,27 +55,19 @@ const PartnerDetails = ({ route }) => {
   }, [partnerId, navigation]);
 
   useEffect(() => {
-    // This will fetch partner data initially and on any focus event, ensuring fresh data after edit
     const unsubscribeFocus = navigation.addListener('focus', () => {
       fetchPartner();
     });
 
-    // Also fetch data on component mount
     fetchPartner();
 
-    // Clean up the listener when the component unmounts
     return unsubscribeFocus;
-  }, [fetchPartner, navigation]); // Added navigation to dependency list
-
-  // --- REMOVED: requestImagePickerPermission, pickImage, uploadImage ---
-  // These functions are no longer needed in PartnerDetails.js as image handling is now in PartnerEdit.js
-  // and the logo is no longer directly editable from this screen.
-  // The 'uuidv4' import will also become unnecessary if no longer directly uploading.
+  }, [fetchPartner, navigation]);
 
   const handleDeletePartner = () => {
     Alert.alert(
       "Supprimer le Partenaire",
-      `Êtes-vous sûr de vouloir supprimer ${partner.nom} ? Cette action est irréversible.`, // French key
+      `Êtes-vous sûr de vouloir supprimer ${partner.nom} ? Cette action est irréversible.`,
       [
         { text: "Annuler", style: "cancel" },
         {
@@ -98,7 +88,7 @@ const PartnerDetails = ({ route }) => {
               }
 
               await deleteDoc(doc(db, 'partners', partnerId));
-              Alert.alert("Succès", `${partner.nom} a été supprimé.`); // French key
+              Alert.alert("Succès", `${partner.nom} a été supprimé.`);
               navigation.goBack();
             } catch (error) {
               console.error("Erreur lors de la suppression du partenaire:", error);
@@ -113,13 +103,10 @@ const PartnerDetails = ({ route }) => {
     );
   };
 
-  // --- MODIFIED: handleEditPartner now navigates to PartnerEdit.js ---
   const handleEditPartner = () => {
     navigation.navigate('PartnerEdit', { partnerId: partner.id });
   };
-  // --- END MODIFIED ---
 
-  // New: Function to fetch partner's revenue details for the modal
   const fetchPartnerRevenueDetails = useCallback(async () => {
     setRevenuesModalLoading(true);
     try {
@@ -132,7 +119,6 @@ const PartnerDetails = ({ route }) => {
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const currentYearStart = new Date(now.getFullYear(), 0, 1);
 
-      // Query the subcollection for revenue transactions
       const partnerRevenueTransactionsQuery = query(
         collection(db, 'partners', partnerId, 'revenue_transactions')
       );
@@ -140,7 +126,7 @@ const PartnerDetails = ({ route }) => {
 
       revenueTransactionsSnapshot.forEach(doc => {
         const transaction = doc.data();
-        const transactionDate = transaction.transactionDate?.toDate(); // Convert Firestore Timestamp to Date
+        const transactionDate = transaction.transactionDate?.toDate();
 
         if (typeof transaction.amountReceived === 'number' && typeof transaction.commissionAmount === 'number') {
           const netAmount = transaction.amountReceived - transaction.commissionAmount;
@@ -161,7 +147,7 @@ const PartnerDetails = ({ route }) => {
         monthlyCommission,
         yearlyCommission,
       });
-      setIsRevenuesModalVisible(true); // Show modal after data is fetched
+      setIsRevenuesModalVisible(true);
 
     } catch (error) {
       console.error("Erreur lors du chargement des détails des revenus du partenaire:", error);
@@ -169,9 +155,8 @@ const PartnerDetails = ({ route }) => {
     } finally {
       setRevenuesModalLoading(false);
     }
-  }, [partnerId]); // Dependency on partnerId ensures it refetches if partnerId changes
+  }, [partnerId]);
 
-  // Helper function to format date for display (e.g., in modal)
   const formatDateTimeForDisplay = (timestamp) => {
     if (!timestamp) return 'N/A';
     try {
@@ -203,19 +188,13 @@ const PartnerDetails = ({ route }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContainer}>
       <View style={styles.logoContainer}>
         {partner.logo ? (
-          // --- MODIFIED: Image is no longer touchable ---
           <Image source={{ uri: partner.logo }} style={styles.logo} />
         ) : (
           <View style={styles.uploadPlaceholder}>
-            {/* --- MODIFIED: Using custom business icon for placeholder --- */}
             <Image source={BUSINESS_ICON_PLACEHOLDER} style={styles.customLogoPlaceholderIcon} />
             <Text style={styles.uploadPlaceholderText}>Pas de logo</Text>
           </View>
         )}
-
-        {/* --- REMOVED: uploadIcon TouchableOpacity --- */}
-        {/* The photo upload icon is removed from here as per request. */}
-        {/* The functionality is now fully handled by PartnerEdit.js */}
       </View>
 
       <View style={styles.infoContainer}>
@@ -226,6 +205,12 @@ const PartnerDetails = ({ route }) => {
         {partner.adresse && <Text style={styles.infoText}>Adresse: {partner.adresse}</Text>}
         {partner.email && <Text style={styles.email} onPress={() => Linking.openURL(`mailto:${partner.email}`)}>Email: {partner.email}</Text>}
         {partner.numeroTelephone && <Text style={styles.phone} onPress={() => Linking.openURL(`tel:${partner.numeroTelephone}`)}>Téléphone: {partner.numeroTelephone}</Text>}
+        <Text
+          style={styles.website}
+          onPress={() => navigation.navigate('PartnerPage', { partnerId: partner.id })}
+        >
+          Page du Partenaire
+        </Text>
         {partner.siteWeb && <Text style={styles.website} onPress={() => Linking.openURL(partner.siteWeb)}>Site Web: {partner.siteWeb}</Text>}
         {partner.description && (
           <View style={styles.descriptionContainer}>
@@ -234,7 +219,7 @@ const PartnerDetails = ({ route }) => {
           </View>
         )}
 
-        {partner.promotion && ( // Assuming 'promotion' key is consistent
+        {partner.promotion && (
           <View style={styles.promotionContainer}>
             <Text style={styles.promotionLabel}>Promotion Actuelle:</Text>
             <Text style={styles.promotionText}>{partner.promotion}</Text>
@@ -242,20 +227,13 @@ const PartnerDetails = ({ route }) => {
         )}
       </View>
 
-      {/* Products, Documents, and Revenues Buttons */}
       <View style={styles.additionalButtonsContainer}>
         <TouchableOpacity
           style={styles.productsButton}
-          onPress={() => navigation.navigate('Products', {
-            partnerId: partner.id,
-            partnerName: partner.nom,
-            partnerLogo: partner.logo
-          })}
+          onPress={() => navigation.navigate('PartnerPage', { partnerId: partner.id })} // CHANGED HERE
         >
           <Text style={styles.productsButtonText}>Voir les Produits</Text>
-          {/* --- MODIFIED: Using custom arrow forward icon --- */}
           <Image source={ARROW_FORWARD_ICON} style={styles.customButtonIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -267,9 +245,7 @@ const PartnerDetails = ({ route }) => {
           })}
         >
           <Text style={styles.productsButtonText}>Documents</Text>
-          {/* --- MODIFIED: Using custom folder icon --- */}
           <Image source={FOLDER_ICON} style={styles.customButtonIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -277,18 +253,13 @@ const PartnerDetails = ({ route }) => {
           onPress={fetchPartnerRevenueDetails}
         >
           <Text style={styles.productsButtonText}>Revenus</Text>
-          {/* --- MODIFIED: Using custom graphic icon --- */}
           <Image source={GRAPHIC_ICON} style={styles.customButtonIcon} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
       </View>
 
-      {/* Edit and Delete Buttons */}
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity style={styles.editButton} onPress={handleEditPartner}>
-          {/* --- MODIFIED: Using custom create icon --- */}
           <Image source={CREATE_ICON} style={styles.customActionButtonIcon} />
-          {/* --- END MODIFIED --- */}
           <Text style={styles.actionButtonText}>Modifier</Text>
         </TouchableOpacity>
 
@@ -296,15 +267,12 @@ const PartnerDetails = ({ route }) => {
           {uploading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            // --- MODIFIED: Using custom trash icon ---
             <Image source={TRASH_ICON} style={styles.customActionButtonIcon} />
-            // --- END MODIFIED ---
           )}
           <Text style={styles.actionButtonText}>Supprimer Compte</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Revenues Modal */}
       <Modal
         visible={isRevenuesModalVisible}
         animationType="slide"
@@ -317,9 +285,7 @@ const PartnerDetails = ({ route }) => {
               style={styles.revenuesModalCloseButton}
               onPress={() => setIsRevenuesModalVisible(false)}
             >
-              {/* --- MODIFIED: Using custom close circle outline icon --- */}
               <Image source={CLOSE_CIRCLE_OUTLINE_ICON} style={styles.customModalCloseIcon} />
-              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
 
             {revenuesModalLoading ? (
@@ -389,7 +355,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     position: 'relative',
   },
-  logo: { // This is the image style
+  logo: {
     width: 150,
     height: 150,
     borderRadius: 75,
@@ -407,14 +373,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
-  // --- NEW STYLE for custom logo placeholder icon ---
   customLogoPlaceholderIcon: {
-    width: 40, // Match Ionicons size
-    height: 40, // Match Ionicons size
+    width: 40,
+    height: 40,
     resizeMode: 'contain',
-    tintColor: '#ccc', // Match original Ionicons color
+    tintColor: '#ccc',
   },
-  // --- END NEW STYLE ---
   uploadPlaceholderText: {
     fontSize: 14,
     color: '#999',
@@ -537,15 +501,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  // --- NEW STYLE for custom button icons (arrow_forward, folder, graphic) ---
   customButtonIcon: {
-    width: 20, // Match Ionicons size
-    height: 20, // Match Ionicons size
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match Ionicons color
-    marginLeft: 10, // Maintain spacing
+    tintColor: '#fff',
+    marginLeft: 10,
   },
-  // --- END NEW STYLE ---
   actionButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -578,14 +540,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  // --- NEW STYLE for custom action button icons (create, trash) ---
   customActionButtonIcon: {
-    width: 20, // Match Ionicons size
-    height: 20, // Match Ionicons size
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match Ionicons color
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
@@ -616,14 +576,12 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1,
   },
-  // --- NEW STYLE for custom modal close icon ---
   customModalCloseIcon: {
-    width: 30, // Match Ionicons size
-    height: 30, // Match Ionicons size
+    width: 30,
+    height: 30,
     resizeMode: 'contain',
-    tintColor: '#EF4444', // Match Ionicons color
+    tintColor: '#EF4444',
   },
-  // --- END NEW STYLE ---
   modalRevenuesTitle: {
     fontSize: 22,
     fontWeight: 'bold',

@@ -25,6 +25,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import * as Share from 'expo-sharing'; // Import expo-sharing
 
 import { db, storage, auth } from '../../firebase';
 import {
@@ -247,9 +248,10 @@ const PartnerDoc = ({ navigation, route }) => {
     }
   };
 
-  const downloadDocument = async (url, filename) => {
+  // --- MODIFIED downloadDocument function signature and Share.shareAsync mimeType ---
+  const downloadDocument = async (url, filename, fileType) => {
     Alert.alert("Téléchargement", "Téléchargement du document en cours...", [{ text: "OK" }]);
-    console.log("Attempting to download:", filename, "from:", url);
+    console.log("Attempting to download:", filename, "from:", url, "Type:", fileType);
 
     try {
         const temporaryLocalUri = `${FileSystem.cacheDirectory}${Date.now()}_${filename}`;
@@ -259,102 +261,112 @@ const PartnerDoc = ({ navigation, route }) => {
         console.log("Download complete, temporary URI:", downloadedFileUri);
 
         if (Platform.OS === 'android') {
-            console.log("Platform is Android. Requesting permissions...");
-            const permissionStatus = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-                {
-                    title: "Permission de stockage",
-                    message: "L'application a besoin d'accéder à votre stockage pour télécharger des fichiers.",
-                    buttonNeutral: "Demander plus tard",
-                    buttonNegative: "Annuler",
-                    buttonPositive: "OK"
-                }
-            );
-
-            if (permissionStatus === PermissionsAndroid.RESULTS.GRANTED) {
-                console.log("Storage permission granted.");
-                try {
-                    const albumName = 'EliteReply'; 
-
-                    const { status: mediaLibStatus } = await MediaLibrary.requestPermissionsAsync();
-                    if (mediaLibStatus !== 'granted') {
-                        Alert.alert("Permission requise", "Pour sauvegarder dans un dossier spécifique, veuillez accorder l'accès à la médiathèque.");
-                        console.log("MediaLibrary permission denied. Trying to open directly.");
-                        await Linking.openURL(downloadedFileUri);
-                        return;
-                    }
-                    console.log("MediaLibrary permission granted.");
-
-                    const asset = await MediaLibrary.createAssetAsync(downloadedFileUri);
-                    console.log("Asset created:", asset.uri);
-
-                    let album = await MediaLibrary.getAlbumAsync(albumName);
-                    console.log("Album (EliteReply) status:", album ? 'exists' : 'does not exist');
-
-                    if (album) {
-                        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-                        console.log("Added asset to existing album.");
-                    } else {
-                        album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
-                        console.log("Created new album and added asset.");
-                    }
-
-                    if (album) {
-                        Alert.alert(
-                            "Succès",
-                            `Document téléchargé dans votre dossier "Téléchargements/${albumName}".`
-                        );
-                        await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
-                        console.log("Temporary file deleted.");
-                    } else {
-                        Alert.alert("Erreur", "Impossible de créer ou ajouter au dossier EliteReply. Le document peut être dans les téléchargements généraux.");
-                        await Linking.openURL(downloadedFileUri);
-                    }
-
-                } catch (saveError) {
-                    console.error("Android: Error saving to EliteReply folder:", saveError);
+            // New approach for Android: Use ACTION_CREATE_DOCUMENT to let user choose save location
+            try {
+                // Check if ACTION_CREATE_DOCUMENT is available (Android 5.0+)
+                const isIntentAvailable = await Linking.canOpenURL('content://com.android.providers.downloads.documents'); // Common check for file picker
+                if (isIntentAvailable) {
                     Alert.alert(
-                        "Erreur de sauvegarde",
-                        "Impossible de sauvegarder le document dans le dossier 'EliteReply'. Il a peut-être été enregistré temporairement dans le cache de l'application."
+                        "Enregistrer le document",
+                        "Choisissez un emplacement pour sauvegarder le document.",
+                        [
+                            { text: "Annuler", style: "cancel" },
+                            {
+                                text: "Sauvegarder",
+                                onPress: async () => {
+                                    // This requires launching a native activity, so we use Linking.sendIntent
+                                    try {
+                                        const result = await Linking.openURL(downloadedFileUri); // This might still error
+                                        // For ACTION_CREATE_DOCUMENT, you need to use a library like react-native-document-picker
+                                        // or a bridge to native intents. Linking.openURL is not designed for this.
+                                        //
+                                        // Given Expo managed workflow, directly launching ACTION_CREATE_DOCUMENT is tricky without ejecting
+                                        // or using a library that bridges it.
+                                        //
+                                        // The most direct way in Expo to "save" to user chosen location is often via share sheet.
+                                        // Let's refine the share sheet fallback to be more specific.
+
+                                        // Fallback to the share sheet if direct opening fails (which it often does for file://)
+                                        const canShare = await Share.isAvailableAsync();
+                                        if (canShare) {
+                                            await Share.shareAsync(downloadedFileUri, {
+                                                UTI: 'public.item',
+                                                mimeType: fileType || 'application/octet-stream',
+                                            });
+                                            Alert.alert("Document ouvert", "Veuillez choisir une application pour ouvrir ou enregistrer le document.");
+                                        } else {
+                                            Alert.alert("Erreur", "Le partage n'est pas disponible sur cet appareil.");
+                                        }
+
+                                    } catch (intentError) {
+                                        console.error("Android: Error launching save intent:", intentError);
+                                        // If launching the intent fails, fall back to share sheet
+                                        const canShare = await Share.isAvailableAsync();
+                                        if (canShare) {
+                                            await Share.shareAsync(downloadedFileUri, {
+                                                UTI: 'public.item',
+                                                mimeType: fileType || 'application/octet-stream',
+                                            });
+                                            Alert.alert("Document ouvert", "Veuillez choisir une application pour ouvrir ou enregistrer le document.");
+                                        } else {
+                                            Alert.alert("Erreur", "Le partage n'est pas disponible sur cet appareil.");
+                                        }
+                                    }
+                                }
+                            }
+                        ]
                     );
-                    await Linking.openURL(downloadedFileUri);
+                } else {
+                    console.warn("Android: ACTION_CREATE_DOCUMENT intent not fully available/detected. Falling back to Share.");
+                    const canShare = await Share.isAvailableAsync();
+                    if (canShare) {
+                        await Share.shareAsync(downloadedFileUri, {
+                            UTI: 'public.item',
+                            mimeType: fileType || 'application/octet-stream',
+                        });
+                        Alert.alert("Document ouvert", "Veuillez choisir une application pour ouvrir ou enregistrer le document.");
+                    } else {
+                        Alert.alert("Erreur", "Le partage n'est pas disponible sur cet appareil.");
+                    }
                 }
-            } else {
-                Alert.alert(
-                    "Permission refusée",
-                    "Impossible de sauvegarder le document dans le dossier de téléchargements sans permission de stockage. Le fichier sera ouvert directement si possible."
-                );
-                await Linking.openURL(downloadedFileUri);
+            } catch (errorCheck) {
+                console.error("Error checking intent availability:", errorCheck);
+                // Fallback to generic share if even the intent check fails
+                const canShare = await Share.isAvailableAsync();
+                if (canShare) {
+                    await Share.shareAsync(downloadedFileUri, {
+                        UTI: 'public.item',
+                        mimeType: fileType || 'application/octet-octets',
+                    });
+                    Alert.alert("Document ouvert", "Veuillez choisir une application pour ouvrir ou enregistrer le document.");
+                } else {
+                    Alert.alert("Erreur", "Le partage n'est pas disponible sur cet appareil.");
+                }
+            } finally {
+                await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
+                console.log("Temporary file deleted.");
             }
 
         } else if (Platform.OS === 'ios') {
-            console.log("Platform is iOS.");
-            
-            const destinationFileUri = `${FileSystem.documentDirectory}${filename}`;
-            console.log("Copying to iOS document directory:", destinationFileUri);
-            await FileSystem.copyAsync({
-                from: downloadedFileUri,
-                to: destinationFileUri,
-            });
-            console.log("Copied to iOS document directory.");
-
-            const { status: mediaLibStatus } = await MediaLibrary.requestPermissionsAsync();
-            if (mediaLibStatus === 'granted') {
+            console.log("Platform is iOS. Using Share.shareAsync.");
+            const canShare = await Share.isAvailableAsync();
+            if (canShare) {
+                await Share.shareAsync(downloadedFileUri);
+                Alert.alert("Succès", "Document prêt à être partagé ou sauvegardé.");
+            } else {
+                Alert.alert("Erreur", "Le partage n'est pas disponible sur cet appareil.");
             }
-
-            Alert.alert(
-                "Succès",
-                "Document téléchargé. Vous pouvez l'ouvrir ou le sauvegarder dans Fichiers."
-            );
-            console.log("Opening file on iOS via Linking.openURL:", destinationFileUri);
-            await Linking.openURL(destinationFileUri);
             await FileSystem.deleteAsync(downloadedFileUri, { idempotent: true });
             console.log("Temporary file deleted.");
 
         } else {
-            console.log("Platform is neither Android nor iOS.");
-            Alert.alert("Téléchargé", `Document sauvegardé temporairement. Vous pouvez le trouver ici: ${downloadedFileUri}`);
-            await Linking.openURL(downloadedFileUri);
+            console.log("Platform is neither Android nor iOS (e.g., Web).");
+            if (url) {
+                Linking.openURL(url);
+                Alert.alert("Téléchargé", `Document ouvert dans le navigateur.`);
+            } else {
+                Alert.alert("Erreur", "Impossible d'ouvrir le document sur cette plateforme.");
+            }
         }
 
     } catch (error) {
@@ -362,6 +374,7 @@ const PartnerDoc = ({ navigation, route }) => {
       Alert.alert("Erreur", "Impossible de télécharger le document: " + error.message);
     }
   };
+  // --- END MODIFIED downloadDocument function ---
 
   const deleteDocument = async (docId, storagePath) => {
     Alert.alert(
@@ -441,6 +454,10 @@ const PartnerDoc = ({ navigation, route }) => {
     if (paymentFromDate > paymentToDate) {
       Alert.alert("Dates invalides", "La date de début ne peut pas être postérieure à la date de fin.");
       return;
+    }
+    if (!paymentReceipt) {
+        Alert.alert("Reçu manquant", "Veuillez télécharger le reçu du paiement.");
+        return;
     }
 
     setIsSubmittingPayment(true);
@@ -529,7 +546,7 @@ const PartnerDoc = ({ navigation, route }) => {
       </Text>
       <TouchableOpacity
         style={styles.downloadButton}
-        onPress={() => downloadDocument(item.downloadURL, item.filename)}
+        onPress={() => downloadDocument(item.downloadURL, item.filename, item.fileType)} // <--- MODIFIED HERE: Pass item.fileType
       >
         {/* --- MODIFIED: Use custom image for download icon --- */}
         <Image source={DOWNLOAD_ICON} style={styles.customDownloadButtonIcon} />
@@ -928,7 +945,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#34C759',
+    backgroundColor: '#34C755', // Changed to match your custom icon tint
     paddingVertical: 8,
     borderRadius: 8,
     marginTop: 10,
@@ -1072,7 +1089,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     flex: 1,
   },

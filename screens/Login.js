@@ -1,4 +1,3 @@
-// Login.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -7,22 +6,24 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Image, // Import Image
+  Image,
   ActivityIndicator,
   ScrollView,
   Alert,
   Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
-import { auth, db } from '../firebase';
+import { Ionicons } from '@expo/vector-icons';
+import { auth, db } from '../firebase'; // Assuming 'firebase.js' is your config file
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 
-// --- NEW: Import your custom icons ---
-const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png'); // For open eye
-const EYE_HIDE_ICON = require('../assets/icons/eye_hide.png'); // For hide eye
-// --- END NEW IMPORTS ---
+// --- Jey's Addition: Import analytics and logEvent ---
+import { analytics, logEvent } from '../firebase'; // Ensure these are exported from your firebase.js
+// --- End Jey's Addition ---
+
+const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png');
+const EYE_HIDE_ICON = require('../assets/icons/eye_hide.png');
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -39,23 +40,40 @@ const Login = () => {
         // User is already logged in, redirect to Loading page
         navigation.reset({
           index: 0,
-          routes: [{ name: 'Loading' }], // Navigate to Loading
+          routes: [{ name: 'Loading' }],
         });
+        // --- Jey's Addition: Log automatic redirect on already logged in ---
+        logEvent(analytics, 'auto_login_redirect', {
+            user_id: user.uid,
+            email: user.email // Be cautious with PII, but for internal analytics, often acceptable
+        });
+        // --- End Jey's Addition ---
       }
     });
     return unsubscribe;
   }, []);
 
-  // Removed the redirectUser function from here, it's now in Loading.js
-
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setError('Veuillez remplir tous les champs');
+      // --- Jey's Addition: Log validation error ---
+      logEvent(analytics, 'login_validation_error', {
+          error_type: 'missing_fields',
+          email_provided: !!email.trim(),
+          password_provided: !!password.trim()
+      });
+      // --- End Jey's Addition ---
       return;
     }
 
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
+      // --- Jey's Addition: Log validation error ---
+      logEvent(analytics, 'login_validation_error', {
+          error_type: 'invalid_email_format',
+          email_attempted: email
+      });
+      // --- End Jey's Addition ---
       return;
     }
 
@@ -69,6 +87,15 @@ const Login = () => {
         index: 0,
         routes: [{ name: 'Loading' }],
       });
+
+      // --- Jey's Addition: Log successful login event ---
+      logEvent(analytics, 'login', {
+          method: 'email_and_password',
+          user_id: userCredential.user.uid,
+          email: userCredential.user.email // Again, be cautious with PII
+      });
+      // --- End Jey's Addition ---
+
     } catch (err) {
       handleLoginError(err);
     } finally {
@@ -78,27 +105,46 @@ const Login = () => {
 
   const handleLoginError = (error) => {
     let errorMessage = 'Email ou mot de passe incorrect';
+    let errorType = 'unknown_error'; // Default error type for analytics
     switch (error.code) {
       case 'auth/invalid-email':
         errorMessage = 'Format d\'email invalide';
+        errorType = 'invalid_email';
         break;
       case 'auth/user-not-found':
         errorMessage = 'Aucun compte trouvé avec cet email';
+        errorType = 'user_not_found';
         break;
       case 'auth/wrong-password':
         errorMessage = 'Mot de passe incorrect';
+        errorType = 'wrong_password';
         break;
       case 'auth/too-many-requests':
         errorMessage = 'Trop de tentatives. Veuillez réessayer plus tard';
+        errorType = 'too_many_requests';
         break;
       case 'auth/network-request-failed':
         errorMessage = 'Problème de connexion internet';
+        errorType = 'network_issue';
         break;
       case 'auth/user-disabled':
         errorMessage = 'Ce compte a été désactivé';
+        errorType = 'user_disabled';
         break;
+      default:
+        errorType = error.code || 'unknown_firebase_error';
     }
     setError(errorMessage);
+
+    // --- Jey's Addition: Log login failure event ---
+    logEvent(analytics, 'login_failed', {
+        method: 'email_and_password',
+        error_code: error.code,
+        error_type: errorType,
+        error_message: errorMessage,
+        email_attempted: email // Log the attempted email (be mindful of PII policies)
+    });
+    // --- End Jey's Addition ---
   };
 
   const toggleSecureEntry = () => {
@@ -164,12 +210,10 @@ const Login = () => {
               onPress={toggleSecureEntry}
               disabled={loading}
             >
-              {/* --- MODIFIED: Use custom image for eye icon --- */}
               <Image
                 source={secureTextEntry ? EYE_HIDE_ICON : EYE_OUTLINE_ICON}
                 style={styles.customEyeIcon}
               />
-              {/* --- END MODIFIED --- */}
             </TouchableOpacity>
           </View>
         </View>
@@ -287,14 +331,12 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 16,
   },
-  // --- NEW STYLE for custom eye icons ---
   customEyeIcon: {
-    width: 20, // Match Ionicons size
-    height: 20, // Match Ionicons size
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#64748b', // Match original Ionicons color
+    tintColor: '#64748b',
   },
-  // --- END NEW STYLE ---
   loginButton: {
     backgroundColor: '#0A8FDF',
     padding: 16,

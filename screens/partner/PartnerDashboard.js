@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList, // Used for Dashboard and Reviews tabs
-  Image, // Import Image
+  FlatList,
+  Image,
   SafeAreaView,
   Alert,
   ActivityIndicator,
-  RefreshControl, // Import RefreshControl
+  RefreshControl,
   Animated,
   Easing,
-  ScrollView // Used for Payments tab
+  ScrollView
 } from 'react-native';
 import {
   Ionicons,
@@ -32,7 +32,7 @@ import {
   orderBy,
   limit,
   deleteDoc,
-  onSnapshot // Import onSnapshot for real-time listeners
+  onSnapshot
 } from 'firebase/firestore';
 
 // --- NEW: Import your custom icons ---
@@ -51,17 +51,18 @@ const RATE_FULL_ICON = require('../../assets/icons/rate_full.png');
 const RATE_ICON_EMPTY = require('../../assets/icons/rate.png');
 const REVIEW_ANIM_GIF = require('../../assets/gif/review_anim.gif');
 
-const INFOS_ICON = require('../../assets/icons/infos.png'); // For promotion status info icon
-const CLOSE_CIRCLE_OUTLINE_ICON = require('../../assets/icons/infos.png'); // From Partners
-const TIME_OUTLINE_ICON = require('../../assets/icons/sablier.png'); // From Partners
-const CHECKMARK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/check_full.png'); // From Partners
+const INFOS_ICON = require('../../assets/icons/infos.png');
+const CLOSE_CIRCLE_OUTLINE_ICON = require('../../assets/icons/infos.png');
+const TIME_OUTLINE_ICON = require('../../assets/icons/sablier.png');
+const CHECKMARK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/check_full.png');
 
-const ARROW_RIGHT_SHORT_ICON = require('../../assets/icons/arrow_rightShort.png'); // New right arrow icon
+const ARROW_RIGHT_SHORT_ICON = require('../../assets/icons/arrow_rightShort.png');
+
+// --- ADDED NEW ICON IMPORT ---
+const STORE_ICON = require('../../assets/icons/store.png');
 // --- END NEW IMPORTS ---
 
-// --- Jey's Addition: Import the new notification service ---
-import { sendPushNotification } from '../../services/notifications'; // ASSUMING this path is correct
-// --- END Jey's Addition ---
+import { sendPushNotification } from '../../services/notifications';
 
 // Custom Progress Bar Component
 const ProgressBar = ({ progress, color }) => {
@@ -82,7 +83,7 @@ const ProgressBar = ({ progress, color }) => {
 
 const PartnerDashboard = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // State for refresh indicator
+  const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [partnerData, setPartnerData] = useState(null);
   const [loggedInUserBusinessName, setLoggedInUserBusinessName] = useState('');
@@ -92,26 +93,20 @@ const PartnerDashboard = ({ navigation }) => {
     documentsCount: 0,
     confirmedBookings: 0,
     totalAppointments: 0,
-    revenueGenerated: 0, // This will now represent partner's net revenue
+    revenueGenerated: 0,
     commissionEarned: 0,
-    partnerRating: 0,
+    partnerRating: 0, // This will be updated from partnerRatings
     unpaidCommissions: 0,
     couponsCount: 0,
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // --- NEW REFS FOR NOTIFICATIONS ---
-  const notifiedMessages = useRef(new Set()); // To track messages already notified
-  const notifiedAppointments = useRef(new Set()); // To track appointments already notified
-  const notifiedSurveys = useRef(new Set()); // To track surveys already notified
-  const notifiedDocuments = useRef(new Set()); // To track documents already notified
-  // --- END NEW REFS ---
+  const notifiedMessages = useRef(new Set());
+  const notifiedAppointments = useRef(new Set());
+  const notifiedSurveys = useRef(new Set());
+  const notifiedDocuments = useRef(new Set());
 
-  // NOTE: The `sendPushNotification` function itself has been MOVED to services/notifications.js
-  // It is now imported above.
-
-  // Promotion functions (no changes)
   const getPromotionColor = () => {
     if (!partnerData?.estPromu || !partnerData.promotionEndDate) return '#34C759';
 
@@ -122,11 +117,11 @@ const PartnerDashboard = ({ navigation }) => {
 
     const daysLeft = diffDays;
 
-    if (daysLeft <= 1) return '#FF0000'; // Very short time left, urgent red
-    if (daysLeft <= 2) return '#FF3B30'; // Few days left, strong red
-    if (daysLeft <= 5) return '#FF5E3A'; // Medium-short, orange-red
-    if (daysLeft <= 7) return '#FF9500'; // Week left, orange
-    return '#25c15b'; // Default green for active/longer promotion
+    if (daysLeft <= 1) return '#FF0000';
+    if (daysLeft <= 2) return '#FF3B30';
+    if (daysLeft <= 5) return '#FF5E3A';
+    if (daysLeft <= 7) return '#FF9500';
+    return '#25c15b';
   };
 
   const getPromotionDaysLeft = () => {
@@ -147,11 +142,10 @@ const PartnerDashboard = ({ navigation }) => {
     return CHECKMARK_CIRCLE_OUTLINE_ICON;
   };
 
-  // Pulse animation effect (no changes)
   useEffect(() => {
     const daysLeft = getPromotionDaysLeft();
 
-    if (daysLeft > 0 && daysLeft <= 7) { // Only animate if promotion is active and nearing end
+    if (daysLeft > 0 && daysLeft <= 7) {
       const pulseDuration = daysLeft <= 1 ? 800 :
                           daysLeft <= 3 ? 1200 :
                           1500;
@@ -173,77 +167,73 @@ const PartnerDashboard = ({ navigation }) => {
         ])
       ).start();
     } else {
-      pulseAnim.stopAnimation(); // Stop animation if not promoted or not nearing end
-      pulseAnim.setValue(1); // Reset scale
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
     }
 
     return () => {
       pulseAnim.stopAnimation();
     };
-  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]); // Added isPromoted to dependencies
+  }, [partnerData?.promotionEndDate, partnerData?.estPromu, pulseAnim]);
 
-  // Fetch reviews (no changes, but ensure evaluations collection exists and partnerId is correct)
+  // --- MODIFIED fetchReviews function ---
   const fetchReviews = useCallback(async (partnerId) => {
+    console.log("Jey: Fetching reviews from 'partnerRatings' for partnerId:", partnerId);
     try {
-      const partnerReviewsQuery = query(
-        collection(db, 'partners', partnerId, 'evaluations'),
-        orderBy("dateCreation", "desc")
+      if (!partnerId) {
+        setReviews([]);
+        return;
+      }
+
+      const partnerRatingsQuery = query(
+        collection(db, 'partnerRatings'),
+        where("partnerId", "==", partnerId)
+        // Removed: orderBy("dateCreation", "desc") // <-- REMOVE THIS LINE
       );
-      const partnerReviewsSnapshot = await getDocs(partnerReviewsQuery);
+      const partnerRatingsSnapshot = await getDocs(partnerRatingsQuery);
 
-      const generalReviewsQuery = query(
-        collection(db, 'evaluations'),
-        where("partnerId", "==", partnerId),
-        orderBy("dateCreation", "desc")
-      );
-      const generalReviewsSnapshot = await getDocs(generalReviewsQuery);
+      const fetchedReviews = partnerRatingsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          nomUtilisateur: data.userName || data.nomUtilisateur,
+          rating: data.rating || data.note,
+          commentaire: data.comment || data.commentaire,
+          dateCreation: data.dateCreation?.toDate() || data.createdAt?.toDate() || new Date(data.timestamp),
+        };
+      });
 
-      const uniqueReviewIds = new Set();
-      const partnerReviews = partnerReviewsSnapshot.docs
-        .filter(doc => !uniqueReviewIds.has(doc.id))
-        .map(doc => {
-          uniqueReviewIds.add(doc.id);
-          return {
-            id: doc.id,
-            ...doc.data(),
-            dateCreation: doc.data().dateCreation?.toDate(),
-            isPartnerReview: true
-          };
-        });
+      // If you still need to sort, you would do it in JavaScript AFTER fetching all data
+      fetchedReviews.sort((a, b) => (b.dateCreation?.getTime() || 0) - (a.dateCreation?.getTime() || 0));
 
-      const generalReviews = generalReviewsSnapshot.docs
-        .filter(doc => !uniqueReviewIds.has(doc.id))
-        .map(doc => {
-          uniqueReviewIds.add(doc.id);
-          return {
-            id: doc.id,
-            ...doc.data(),
-            dateCreation: doc.data().dateCreation?.toDate(),
-            isPartnerReview: false
-          };
-        });
 
-      const combinedReviews = [
-        ...partnerReviews,
-        ...generalReviews
-      ].sort((a, b) => b.dateCreation - a.dateCreation);
+      const totalRating = fetchedReviews.reduce((sum, review) => sum + (review.rating || 0), 0);
+      const averageRating = fetchedReviews.length > 0 ? totalRating / fetchedReviews.length : 0;
 
-      setReviews(combinedReviews);
-    }
-    catch (error) {
-      console.error("Error fetching reviews:", error);
-      Alert.alert("Erreur", "Problème de chargement des avis");
+      setReviews(fetchedReviews);
+      setDashboardData(prev => ({ ...prev, partnerRating: averageRating }));
+
+      console.log(`Jey: Found ${fetchedReviews.length} reviews for partner ${partnerId}. Average rating: ${averageRating.toFixed(1)}`);
+
+    } catch (error) {
+      console.error("Jey: Error fetching reviews from 'partnerRatings':", error);
+      Alert.alert("Erreur", "Problème de chargement des avis.");
       setReviews([]);
+      setDashboardData(prev => ({ ...prev, partnerRating: 0 }));
     }
   }, []);
 
+  
   const fetchPartnerData = useCallback(async (userId) => {
+    console.log("Jey: fetchPartnerData called for userId:", userId);
     try {
       setLoading(true);
       const userRef = doc(db, 'users', userId);
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
+        console.warn("Jey: User document not found for userId:", userId);
         Alert.alert("Erreur", "Document utilisateur non trouvé");
         setPartnerData(null);
         setLoggedInUserBusinessName('');
@@ -251,12 +241,15 @@ const PartnerDashboard = ({ navigation }) => {
       }
 
       const userData = userSnap.data();
+      console.log("Jey: User data from Firestore:", userData);
       setLoggedInUserBusinessName(userData.partnerName || 'Mon Entreprise');
       setIsAdmin(userData.isAdmin || false);
 
       const partnerId = userData.partnerId;
+      console.log("Jey: Retrieved partnerId from user document:", partnerId);
 
       if (!partnerId) {
+        console.warn("Jey: No partnerId found for this user in user document.");
         Alert.alert("Erreur", "Aucun ID partenaire trouvé pour cet utilisateur. Assurez-vous que votre compte est lié à un partenaire.");
         setPartnerData(null);
         return;
@@ -267,16 +260,18 @@ const PartnerDashboard = ({ navigation }) => {
 
       if (partnerSnap.exists()) {
         const data = { id: partnerSnap.id, ...partnerSnap.data() };
+        console.log("Jey: Partner document data:", data);
         setPartnerData(data);
-        const avgRating = data.averageRating || 0;
-        setDashboardData(prev => ({ ...prev, partnerRating: avgRating }));
+        // Note: partnerRating is now set within fetchReviews for consistency
       } else {
+        console.warn("Jey: Partner document not found for ID:", partnerId);
         Alert.alert("Erreur", "Document partenaire non trouvé pour l'ID: " + partnerId);
         setPartnerData(null);
         return;
       }
 
-      await fetchReviews(partnerId);
+      // Call fetchReviews HERE after partnerId is confirmed
+      await fetchReviews(partnerId); // <-- This now fetches from 'partnerRatings' and updates dashboardData.partnerRating
 
       const allRdvsQuery = query(
         collection(db, 'appointments'),
@@ -287,13 +282,16 @@ const PartnerDashboard = ({ navigation }) => {
       let totalAppointments = 0;
       let confirmedBookings = 0;
 
+      console.log("Jey: Processing appointments for partnerId:", partnerId);
       allRdvQuerySnapshot.forEach(doc => {
           const rdvData = doc.data();
+          console.log(`Jey: Appointment ID: ${doc.id}, Status: ${rdvData.status}`);
           totalAppointments++;
           if (rdvData.status === 'confirmed' || rdvData.status === 'completed') {
               confirmedBookings++;
           }
       });
+      console.log("Jey: Calculated confirmedBookings:", confirmedBookings);
 
       const documentsQuery = query(
           collection(db, 'documents'),
@@ -302,7 +300,7 @@ const PartnerDashboard = ({ navigation }) => {
       const documentsSnapshot = await getDocs(documentsQuery);
       const documentsCount = documentsSnapshot.size;
 
-      let revenueGenerated = 0; // This will store the partner's net revenue
+      let revenueGenerated = 0;
       let commissionEarned = 0;
       const revenueTransactionsQuery = query(
           collection(db, 'partners', partnerId, 'revenue_transactions')
@@ -312,9 +310,9 @@ const PartnerDashboard = ({ navigation }) => {
       revenueTransactionsSnapshot.forEach(doc => {
           const transaction = doc.data();
           if (typeof transaction.amountReceived === 'number' && typeof transaction.commissionAmount === 'number') {
-              revenueGenerated += (transaction.amountReceived - transaction.commissionAmount); // Calculate net revenue
+              revenueGenerated += (transaction.amountReceived - transaction.commissionAmount);
               commissionEarned += transaction.commissionAmount;
-          } else if (typeof transaction.amountReceived === 'number') { // Fallback if commission is missing
+          } else if (typeof transaction.amountReceived === 'number') {
               revenueGenerated += transaction.amountReceived;
           }
       });
@@ -326,89 +324,84 @@ const PartnerDashboard = ({ navigation }) => {
         documentsCount: documentsCount,
         revenueGenerated: revenueGenerated,
         commissionEarned: commissionEarned,
-        requestsReceived: documentsCount, // This might be redundant if documentsCount is used directly
+        requestsReceived: documentsCount,
+        // partnerRating is now managed by fetchReviews
       }));
 
     } catch (error) {
-      console.error("Erreur lors de la récupération des données:", error);
+      console.error("Jey: Erreur lors de la récupération des données:", error);
       Alert.alert("Erreur", "Échec du chargement des données du partenaire: " + error.message);
       setPartnerData(null);
       setLoggedInUserBusinessName('');
     } finally {
       setLoading(false);
-      setRefreshing(false); // Stop the refreshing indicator
+      setRefreshing(false);
     }
-  }, [fetchReviews]);
+  }, [fetchReviews]); // Ensure fetchReviews is a dependency since it's called here
 
-  // Callback for pull-to-refresh
   const onRefresh = useCallback(() => {
-    setRefreshing(true); // Start the refreshing indicator
+    setRefreshing(true);
     if (currentUser) {
       fetchPartnerData(currentUser.uid);
     } else {
-      setRefreshing(false); // If no user, stop refreshing immediately
+      setRefreshing(false);
     }
   }, [currentUser, fetchPartnerData]);
 
   useEffect(() => {
-    let unsubscribes = []; // To store all unsubscribe functions for cleanup
+    let unsubscribes = [];
 
     const setupPartnerNotifications = async () => {
       const user = auth.currentUser;
       if (!user) {
-        console.warn("No authenticated user for PartnerDashboard notifications.");
+        console.warn("Jey: No authenticated user for PartnerDashboard notifications.");
         return;
       }
 
-      // Fetch the current user's (partner's) document to get their partnerId and ExpoPushToken
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (!userDocSnap.exists()) {
-        console.warn("Partner user document not found for notifications.");
+        console.warn("Jey: Partner user document not found for notifications.");
         return;
       }
       const partnerId = userDocSnap.data().partnerId;
       const partnerExpoPushToken = userDocSnap.data().expoPushToken;
       const currentUserName = userDocSnap.data().name || user.displayName || 'Partenaire';
 
+      console.log("Jey: Notifications setup - partnerId:", partnerId, "token:", partnerExpoPushToken);
+
 
       if (!partnerId || !partnerExpoPushToken) {
-        console.warn("Partner ID or ExpoPushToken missing for notifications.");
+        console.warn("Jey: Partner ID or ExpoPushToken missing for notifications. Skipping notification setup.");
         return;
       }
 
-      // Listener 1: New messages in partnerConversations (from Support/Client to Partner)
-      // Listen to the main partnerConversation document for lastMessage updates
-      const partnerConvoQuery = query(collection(db, 'partnerConversations'), where('id', '==', partnerId)); // Assuming partnerId is doc ID
+      const partnerConvoQuery = query(collection(db, 'partnerConversations'), where('id', '==', partnerId));
       const unsubscribeConvo = onSnapshot(partnerConvoQuery, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
               const convoData = change.doc.data();
               const convoId = change.doc.id;
-              // Trigger notification if a new message is from support/client and it's marked unread for partner
               if ((change.type === 'added' || change.type === 'modified') &&
-                  convoData.lastMessageSender !== partnerId && // Not sent by this partner
-                  convoData.unreadByPartner === true && // Marked unread for partner
+                  convoData.lastMessageSender !== partnerId &&
+                  convoData.unreadByPartner === true &&
                   !notifiedMessages.current.has(convoId)) {
 
-                  console.log(`[PartnerDashboard] NEW UNREAD MESSAGE for Partner: ${convoData.lastMessage}`);
-                  // --- Using imported sendPushNotification ---
+                  console.log(`Jey: [PartnerDashboard] NEW UNREAD MESSAGE for Partner: ${convoData.lastMessage}`);
                   sendPushNotification(
                       partnerExpoPushToken,
                       `Nouveau message de ${convoData.lastMessageSenderName || 'Support EliteReply'}!`,
                       convoData.lastMessage,
                       { type: 'partner_chat_message', partnerId: convoId }
                   );
-                  notifiedMessages.current.add(convoId); // Mark as notified
+                  notifiedMessages.current.add(convoId);
               } else if (change.type === 'modified' && convoData.unreadByPartner === false) {
-                  // If partner reads it, remove from notified set
                   notifiedMessages.current.delete(convoId);
               }
           });
-      }, (error) => console.error("Error listening to partner conversations for notifications:", error));
+      }, (error) => console.error("Jey: Error listening to partner conversations for notifications:", error));
       unsubscribes.push(unsubscribeConvo);
 
 
-      // Listener 2: New Rendez-vous or Status Changes
       const appointmentsQuery = query(collection(db, 'appointments'), where('partnerId', '==', partnerId));
       const unsubscribeAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
@@ -416,12 +409,10 @@ const PartnerDashboard = ({ navigation }) => {
               const apptId = change.doc.id;
               const apptStatus = apptData.status;
 
-              // Unique identifier for notification (ID + Status to notify on status changes)
               const notificationIdentifier = `${apptId}-${apptStatus}`;
 
-              // Notify if new appointment or a status change that is relevant
-              if ((change.type === 'added' && apptStatus === 'scheduled') || // New scheduled appointment
-                  (change.type === 'modified' && (apptStatus === 'rescheduled' || apptStatus === 'cancelled'))) { // Status change to rescheduled/cancelled
+              if ((change.type === 'added' && apptStatus === 'scheduled') ||
+                  (change.type === 'modified' && (apptStatus === 'rescheduled' || apptStatus === 'cancelled'))) {
 
                   if (!notifiedAppointments.current.has(notificationIdentifier)) {
                       let title = "";
@@ -444,102 +435,92 @@ const PartnerDashboard = ({ navigation }) => {
                           }
                       }
 
-                      console.log(`[PartnerDashboard] Notifying for Appointment: ${apptId}, Status: ${apptStatus}`);
-                      // --- Using imported sendPushNotification ---
+                      console.log(`Jey: [PartnerDashboard] Notifying for Appointment: ${apptId}, Status: ${apptStatus}`);
                       sendPushNotification(
                           partnerExpoPushToken,
                           title,
                           body,
                           { type: 'partner_appointment', apptId: apptId, apptType: apptType }
                       );
-                      notifiedAppointments.current.add(notificationIdentifier); // Mark as notified
+                      notifiedAppointments.current.add(notificationIdentifier);
                   }
               } else if (change.type === 'modified' && (apptStatus === 'confirmed' || apptStatus === 'completed')) {
-                  // If appointment is confirmed/completed, remove it from the notified set.
-                  // This prevents re-notifying if it goes back to scheduled later (though not ideal status flow)
                   notifiedAppointments.current.delete(`${apptId}-scheduled`);
                   notifiedAppointments.current.delete(`${apptId}-rescheduled`);
               } else if (change.type === 'removed') {
-                  // Clean up if appointment is deleted
                   notifiedAppointments.current.delete(notificationIdentifier);
               }
           });
-      }, (error) => console.error("Error listening to appointments for notifications:", error));
+      }, (error) => console.error("Jey: Error listening to appointments for notifications:", error));
       unsubscribes.push(unsubscribeAppointments);
 
 
-      // Listener 3: New Enquêtes (Surveys)
       const surveysQuery = query(collection(db, 'surveys'), where('couponDetails.sponsor', '==', partnerId));
       const unsubscribeSurveys = onSnapshot(surveysQuery, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
-              if (change.type === 'added') { // Only notify when a new survey is added for this partner
+              if (change.type === 'added') {
                   const surveyData = change.doc.data();
                   const surveyId = change.doc.id;
                   if (!notifiedSurveys.current.has(surveyId)) {
-                      console.log(`[PartnerDashboard] NEW SURVEY for Partner: ${surveyData.title}`);
-                      // --- Using imported sendPushNotification ---
+                      console.log(`Jey: [PartnerDashboard] NEW SURVEY for Partner: ${surveyData.title}`);
                       sendPushNotification(
                           partnerExpoPushToken,
                           "Nouvelle Enquête!",
                           `Une nouvelle enquête "${surveyData.title}" sponsorisée par vous est disponible.`,
                           { type: 'partner_survey', surveyId: surveyId }
                       );
-                      notifiedSurveys.current.add(surveyId); // Mark as notified
+                      notifiedSurveys.current.add(surveyId);
                   }
               }
           });
-      }, (error) => console.error("Error listening to surveys for notifications:", error));
+      }, (error) => console.error("Jey: Error listening to surveys for notifications:", error));
       unsubscribes.push(unsubscribeSurveys);
 
 
-      // Listener 4: New Documents
       const documentsQuery = query(collection(db, 'documents'), where('partnerId', '==', partnerId));
       const unsubscribeDocuments = onSnapshot(documentsQuery, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
-              if (change.type === 'added') { // Only notify when a new document is added for this partner
+              if (change.type === 'added') {
                   const docData = change.doc.data();
                   const docId = change.doc.id;
-                  // Ensure it's not a payment receipt as those might be handled differently or in a separate flow if needed
                   if (!docData.receiptURL && !notifiedDocuments.current.has(docId)) {
-                      console.log(`[PartnerDashboard] NEW DOCUMENT for Partner: ${docData.title}`);
-                      // --- Using imported sendPushNotification ---
+                      console.log(`Jey: [PartnerDashboard] NEW DOCUMENT for Partner: ${docData.title}`);
                       sendPushNotification(
                           partnerExpoPushToken,
                           "Nouveau Document!",
                           `Un nouveau document "${docData.title}" a été ajouté pour votre entreprise.`,
                           { type: 'partner_document', documentId: docId }
                       );
-                      notifiedDocuments.current.add(docId); // Mark as notified
+                      notifiedDocuments.current.add(docId);
                   }
               }
           });
-      }, (error) => console.error("Error listening to documents for notifications:", error));
+      }, (error) => console.error("Jey: Error listening to documents for notifications:", error));
       unsubscribes.push(unsubscribeDocuments);
 
     };
 
-    // This useEffect will now only fetch initial data once AND set up listeners.
-    // The listeners will then trigger `fetchData()` or specific UI updates as needed.
     const user = auth.currentUser;
     setCurrentUser(user);
     if (user) {
-      // Initial fetch of partner data to populate the dashboard and get partnerId/token
+      console.log("Jey: Authenticated user found, UID:", user.uid);
       fetchPartnerData(user.uid);
-      // Set up real-time listeners AFTER partner data is fetched and partnerId is available
       setupPartnerNotifications();
     } else {
+      console.log("Jey: No authenticated user found on component mount.");
       setLoading(false);
     }
 
-    // Cleanup function: unsubscribe from all listeners when the component unmounts
     return () => {
+      console.log("Jey: Unsubscribing all Firestore listeners.");
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [fetchPartnerData]); // Added fetchPartnerData to ensure it runs after partner data is available
+  }, [fetchPartnerData]);
 
   const renderReviewItem = ({ item }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
+        {/* Uses item.nomUtilisateur (or item.userName if normalized) */}
         <Text style={styles.reviewerName}>{item.nomUtilisateur || "Anonyme"}</Text>
       </View>
       <View style={styles.ratingContainer}>
@@ -550,11 +531,14 @@ const PartnerDashboard = ({ navigation }) => {
             style={[styles.customReviewStarIcon, { tintColor: '#FFD700' }]}
           />
         ))}
+        {/* Uses item.rating (or item.note if normalized) */}
         <Text style={styles.ratingText}>{(item.rating || item.note)?.toFixed(1)}</Text>
       </View>
+      {/* Uses item.commentaire (or item.comment if normalized) */}
       <Text style={styles.reviewText}>{item.commentaire || item.comment}</Text>
+      {/* Uses item.dateCreation (or item.createdAt/timestamp if normalized) */}
       <Text style={styles.reviewDate}>
-        {(item.dateCreation || item.createdAt)?.toLocaleDateString('fr-FR')}
+        {(item.dateCreation)?.toLocaleDateString('fr-FR')} 
       </Text>
     </View>
   );
@@ -579,21 +563,21 @@ const PartnerDashboard = ({ navigation }) => {
       title: "Rendez-vous",
       value: dashboardData.totalAppointments,
       color: "#FF7043",
-      onPress: () => navigation.navigate('PartnerSurvey') // This should probably navigate to a list of all appointments, not surveys
+      onPress: () => navigation.navigate('PartnerSurvey')
     },
     {
       icon: <Image source={MONEY_BILL_ICON} style={[styles.customStatIcon, { tintColor: '#FBBC05' }]} />,
       title: "Revenus",
       value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#FBBC05",
-      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/revenue screen
+      onPress: () => navigation.navigate('RdvConfirm')
     },
     {
       icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#9C27B0' }]} />,
       title: "Commission",
       value: `${dashboardData.commissionEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#9C27B0",
-      onPress: () => navigation.navigate('RdvConfirm') // This should probably navigate to a payments/commission screen
+      onPress: () => navigation.navigate('RdvConfirm')
     },
     {
       icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#EA4335' }]} />,
@@ -617,7 +601,7 @@ const PartnerDashboard = ({ navigation }) => {
   const promotionColor = getPromotionColor();
   const daysLeft = getPromotionDaysLeft();
   const promotionIcon = getPromotionIcon();
-  const uri = partnerData?.profileImage ? String(partnerData.profileImage) : undefined; // Unused variable 'uri'
+  const uri = partnerData?.profileImage ? String(partnerData.profileImage) : undefined;
 
   if (loading) {
     return (
@@ -662,13 +646,25 @@ const PartnerDashboard = ({ navigation }) => {
               )}
             </View>
           </TouchableOpacity>
-          <Image
-            source={require('../../assets/images/logoVide.png')}
-            style={styles.logo}
-          />
+          {/* --- NEW: Store Icon and Logo Container --- */}
+          <View style={styles.headerRight}>
+            {partnerData?.id && ( // Only show if partnerData is loaded
+              <TouchableOpacity
+                style={styles.storeIconContainer}
+                onPress={() => navigation.navigate('PartnerPage', { partnerId: partnerData.id })}
+              >
+                <Image source={STORE_ICON} style={styles.storeIcon} />
+              </TouchableOpacity>
+            )}
+            <Image
+              source={require('../../assets/images/logoVide.png')}
+              style={styles.logo}
+            />
+          </View>
+          {/* --- END NEW --- */}
         </View>
 
-        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && ( // Changed to estPromu
+        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && (
           <Animated.View
             style={[
               styles.promotionBanner,
@@ -680,12 +676,10 @@ const PartnerDashboard = ({ navigation }) => {
             ]}
           >
             <View style={styles.promotionBannerContent}>
-              {/* --- MODIFIED: Use custom image for promotion status icon --- */}
               <Image
-                source={promotionIcon} // promotionIcon is already the imported Image source
+                source={promotionIcon}
                 style={[styles.customPromotionStatusIcon, { tintColor: promotionColor }]}
               />
-              {/* --- END MODIFIED --- */}
               <View style={styles.promotionTextContainer}>
                 <Text style={[styles.promotionBannerText, { color: promotionColor }]}>
                   {daysLeft <= 1 ?
@@ -693,7 +687,7 @@ const PartnerDashboard = ({ navigation }) => {
                     `Promotion active • ${daysLeft} jours restants`
                   }
                 </Text>
-                {daysLeft > 0 && daysLeft <= 7 && ( // Ensure progress bar only shows for remaining days within 7
+                {daysLeft > 0 && daysLeft <= 7 && (
                   <ProgressBar
                     progress={daysLeft / 7}
                     color={promotionColor}
@@ -701,8 +695,8 @@ const PartnerDashboard = ({ navigation }) => {
                 )}
               </View>
             </View>
-          </Animated.View>
-        )}
+            </Animated.View>
+          )}
 
         <View style={{ flex: 1 }}>
           {activeTab === 'dashboard' && (
@@ -720,7 +714,6 @@ const PartnerDashboard = ({ navigation }) => {
                         onPress={card.onPress}
                       >
                         <View style={styles.statIcon}>
-                          {/* Use the custom image icon */}
                           {card.icon}
                         </View>
                         <Text style={styles.statValue}>{card.value}</Text>
@@ -739,9 +732,7 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('PartnerSurvey')}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Rendez-vous & Vérifications</Text>
-                      {/* --- MODIFIED: Use custom image for right arrow --- */}
                       <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
-                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
 
@@ -755,14 +746,11 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Documents</Text>
-                      {/* --- MODIFIED: Use custom image for right arrow --- */}
                       <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
-                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
                 </>
               }
-              // RefreshControl is correctly applied here for FlatList
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -776,7 +764,6 @@ const PartnerDashboard = ({ navigation }) => {
 
           {activeTab === 'payments' && (
             <ScrollView
-              // RefreshControl is correctly applied here for ScrollView
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -812,9 +799,7 @@ const PartnerDashboard = ({ navigation }) => {
                       onPress={() => navigation.navigate('RdvConfirm')}
                     >
                       <Text style={styles.actionButtonText}>Accéder aux Paiements RDV</Text>
-                      {/* --- MODIFIED: Use custom image for right arrow --- */}
                       <Image source={RIGHT_ENTER_ICON_PARTNER} style={styles.customActionArrowIcon} />
-                      {/* --- END MODIFIED --- */}
                     </TouchableOpacity>
                   </View>
             </ScrollView>
@@ -823,7 +808,7 @@ const PartnerDashboard = ({ navigation }) => {
           {activeTab === 'reviews' && (
             <FlatList
               data={reviews}
-              keyExtractor={(item) => `${item.id}_${item.isPartnerReview ? 'partner' : 'general'}`}
+              keyExtractor={(item) => item.id} // Simplified keyExtractor as reviews are now unique IDs from partnerRatings
               renderItem={renderReviewItem}
               ListHeaderComponent={
                 <View style={styles.reviewsHeader}>
@@ -849,13 +834,10 @@ const PartnerDashboard = ({ navigation }) => {
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  {/* --- MODIFIED: Use custom GIF for empty reviews icon --- */}
                   <Image source={REVIEW_ANIM_GIF} style={styles.customEmptyReviewsGif} />
-                  {/* --- END MODIFIED --- */}
                   <Text style={styles.emptyText}>Aucun avis pour le moment</Text>
                 </View>
               }
-              // RefreshControl is correctly applied here for FlatList
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -876,12 +858,10 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('dashboard')}
           >
-            {/* --- MODIFIED: Use custom image for Dashboard icon --- */}
             <Image
               source={DASHBOARD_ICON}
               style={[styles.customNavIcon, { tintColor: activeTab === 'dashboard' ? '#4a6bff' : '#666' }]}
             />
-            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'dashboard' ? '#4a6bff' : '#666' }
@@ -894,12 +874,10 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('payments')}
           >
-            {/* --- MODIFIED: Use custom image for Payments icon --- */}
             <Image
               source={CREDIT_CARD_ICON}
               style={[styles.customNavIcon, { tintColor: activeTab === 'payments' ? '#4a6bff' : '#666' }]}
             />
-            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'payments' ? '#4a6bff' : '#666' }
@@ -912,12 +890,10 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('reviews')}
           >
-            {/* --- MODIFIED: Use custom image for Reviews icon --- */}
             <Image
               source={RATE_HALF_ICON_NAV}
               style={[styles.customNavIcon, { tintColor: activeTab === 'reviews' ? '#4a6bff' : '#666' }]}
             />
-            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'reviews' ? '#4a6bff' : '#666' }
@@ -940,12 +916,10 @@ const PartnerDashboard = ({ navigation }) => {
               }
             }}
           >
-            {/* --- MODIFIED: Use custom image for Support icon --- */}
             <Image
               source={SUPPORT_ER_ICON}
               style={[styles.customNavIcon, { tintColor: activeTab === 'chat' ? '#4a6bff' : '#666' }]}
             />
-            {/* --- END MODIFIED --- */}
             <Text style={[
               styles.navButtonText,
               { color: activeTab === 'chat' ? '#4a6bff' : '#666' }
@@ -993,6 +967,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  // --- NEW STYLES ---
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  storeIconContainer: {
+    marginRight: 15, // Space between store icon and logo
+    padding: 5, // Make it easier to tap
+  },
+  storeIcon: {
+    width: 28, // Adjust size as needed
+    height: 28, // Adjust size as needed
+    resizeMode: 'contain',
+    tintColor: '#4a6bff', // Example tint color
+  },
+  // --- END NEW STYLES ---
   logo: {
     width: 70,
     height: 50,

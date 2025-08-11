@@ -1,21 +1,25 @@
+// Jey's Refactored Dashboard.js with Loop Fix
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
+  FlatList,
   TouchableOpacity,
-  Image, // Make sure Image is imported
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  SafeAreaView,
+  Platform,
+  Alert,
+  Image,
   RefreshControl,
   Animated,
   Easing,
   Dimensions,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
-  Platform
+  Switch
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Swiper from 'react-native-swiper';
@@ -24,9 +28,6 @@ import { collection, query, where, onSnapshot, doc, getDoc, serverTimestamp, upd
 import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
 import *as Animatable from 'react-native-animatable';
-
-// Import the custom NotificationBanner component
-//import NotificationBanner from './NotificationBanner'; // Make sure this path is correct
 
 const { width } = Dimensions.get('window');
 
@@ -44,30 +45,29 @@ const Dashboard = () => {
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const auth = getAuth();
 
-  // --- UPDATED: STATES FOR CUSTOM NOTIFICATION BANNER ---
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState('');
-  const [notificationMessage, setNotificationMessage] = useState(''); // Corrected
+  const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState(null);
-  const [notificationSenderName, setNotificationSenderName] = useState(''); // Corrected
+  const [notificationSenderName, setNotificationSenderName] = useState('');
   const [notificationTargetId, setNotificationTargetId] = useState(null);
-  // --- END STATES ---
 
-  // --- MODIFIED: STATES FOR RATING MODAL ---
   const [showRatePartnerModal, setShowRatePartnerModal] = useState(false);
   const [partnerToRateId, setPartnerToRateId] = useState(null);
-  const [rdvIdForRating, setRdvIdForRating] = useState(null);
-  const [rating, setRating] = useState(0); // 0-5 stars
+  const [codeDataForRating, setCodeDataForRating] = useState(null);
+  const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  const [partnerToRateName, setPartnerToRateName] = useState(''); // To display in modal
-  // --- END STATES FOR RATING MODAL ---
+  const [partnerToRateName, setPartnerToRateName] = useState('');
+  const [isAnonymousRating, setIsAnonymousRating] = useState(false);
+
+  // Jey's improvement: Keep track of the specific request ID the modal is currently showing for.
+  const [currentRatingRequestId, setCurrentRatingRequestId] = useState(null);
 
   const lastNotifiedMessageId = useRef(null);
   const lastNotifiedSurveyId = useRef(null);
 
   const APP_LOGO = require('../assets/images/favicon.png');
-  // --- NEW: IMPORT YOUR CUSTOM ICONS HERE ---
   const ASSISTANCE_ICON = require('../assets/icons/assistance.png');
   const PROMO_ICON = require('../assets/icons/promos.png');
   const RATE_ICON = require('../assets/icons/rate.png');
@@ -76,8 +76,7 @@ const Dashboard = () => {
   const SETTINGS_ICON = require('../assets/icons/settings.png');
   const GIFT_ICON = require('../assets/icons/gift.png');
   const RIGHT_ENTER_ICON_DASH = require('../assets/icons/right_enter.png');
-  const CHAT_BUBBLE_ICON = require('../assets/icons/chat_bubble.png'); // New: Chat bubble icon
-  // --- END NEW IMPORTS ---
+  const CHAT_BUBBLE_ICON = require('../assets/icons/chat_bubble.png');
 
   const fetchUserData = async () => {
     try {
@@ -205,7 +204,6 @@ const Dashboard = () => {
     return () => unsubscribe();
   }, []);
 
-
   useEffect(() => {
     const user = auth.currentUser;
     if (!user || !userData) return;
@@ -276,9 +274,14 @@ const Dashboard = () => {
     return unsubscribe;
   }, [navigation]);
 
+  // Jey's Refactored useEffect for Rating Requests to fix the loop
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      console.log("Dashboard: No user logged in.");
+      return;
+    }
+    console.log("Dashboard: Current user UID:", user.uid);
 
     const q = query(
       collection(db, 'ratingRequests'),
@@ -289,52 +292,102 @@ const Dashboard = () => {
     );
 
     const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+      console.log("Dashboard: ratingRequests snapshot received. Docs count:", querySnapshot.docs.length);
+
       if (!querySnapshot.empty) {
         const ratingRequestDoc = querySnapshot.docs[0];
         const ratingRequest = ratingRequestDoc.data();
         const requestId = ratingRequestDoc.id;
 
-        const rdvDoc = await getDoc(doc(db, 'appointments', ratingRequest.rdvId));
-        if (rdvDoc.exists() && rdvDoc.data().clientRated) {
+        // Jey's improvement: Check if this is the same request we are already handling.
+        // This is the core fix for the loop.
+        if (requestId === currentRatingRequestId && showRatePartnerModal) {
+            console.log("Dashboard: Already handling this request. Skipping.");
+            return;
+        }
+
+        console.log("Dashboard: Found rating request:", ratingRequest);
+
+        const appointmentCodeData = ratingRequest.codeData;
+        const requestedPartnerId = ratingRequest.partnerId;
+
+        if (!appointmentCodeData || !requestedPartnerId) {
+            console.warn("Dashboard: Rating Request missing codeData or partnerId, skipping:", ratingRequest);
+            return;
+        }
+
+        const appointmentQuery = query(
+            collection(db, 'appointments'),
+            where('codeData', '==', appointmentCodeData),
+            where('partnerId', '==', requestedPartnerId),
+            where('clientId', '==', user.uid),
+            limit(1)
+        );
+
+        const appointmentSnapshots = await getDocs(appointmentQuery);
+        console.log("Dashboard: Appointment lookup results count:", appointmentSnapshots.docs.length);
+
+        if (appointmentSnapshots.empty) {
+            console.log("Dashboard: No matching appointment found for rating request, marking as invalid_appointment_link:", ratingRequest);
+            await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'invalid_appointment_link' });
+            setShowRatePartnerModal(false);
+            setCurrentRatingRequestId(null);
+            return;
+        }
+
+        const rdvDoc = appointmentSnapshots.docs[0];
+        const rdvData = rdvDoc.data();
+        console.log("Dashboard: Found matching appointment:", rdvData);
+
+        if (rdvData.clientRated) {
+          console.log("Dashboard: Appointment already clientRated=true, marking rating request as completed.", rdvData);
           await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'completed' });
-          if (showRatePartnerModal) {
-              setShowRatePartnerModal(false);
-          }
+          setShowRatePartnerModal(false);
+          setCurrentRatingRequestId(null);
           return;
         }
 
-        if (ratingRequest.rdvId !== rdvIdForRating || !showRatePartnerModal) {
-          setPartnerToRateId(ratingRequest.partnerId);
-          setRdvIdForRating(ratingRequest.rdvId);
-          setRating(0);
-          setRatingComment('');
+        // We found a new, valid, unrated request. Set states to show the modal.
+        console.log("Dashboard: Preparing to show rating modal for partner:", requestedPartnerId);
+        setPartnerToRateId(requestedPartnerId);
+        setCodeDataForRating(appointmentCodeData);
+        setCurrentRatingRequestId(requestId); // Jey's Fix: Set the ID of the request we are handling.
+        setRating(0);
+        setRatingComment('');
+        setIsAnonymousRating(false);
+        setShowRatePartnerModal(true); // Jey's Fix: show modal only once after all data is ready
 
-          const fetchPartnerName = async () => {
-            try {
-              const partnerDocSnap = await getDoc(doc(db, 'partners', ratingRequest.partnerId));
-              if (partnerDocSnap.exists()) {
-                setPartnerToRateName(partnerDocSnap.data().name || 'le partenaire');
-              } else {
-                setPartnerToRateName('le partenaire');
-              }
-            } catch (error) {
-              console.error("Error fetching partner name for rating:", error);
-              setPartnerToRateName('le partenaire');
-            } finally {
-              setShowRatePartnerModal(true);
-              await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'displayed' });
-            }
-          };
-          fetchPartnerName();
+        // Update the status to 'displayed' only once, when we first show the modal.
+        // This still triggers the listener, but the `if (requestId === currentRatingRequestId)` check will prevent the loop.
+        if (ratingRequest.status === 'pending') {
+            await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'displayed' });
+            console.log("Dashboard: Updated rating request status to 'displayed'.");
         }
+
+        const fetchPartnerName = async () => {
+          try {
+            const partnerDocSnap = await getDoc(doc(db, 'partners', requestedPartnerId));
+            if (partnerDocSnap.exists()) {
+              setPartnerToRateName(partnerDocSnap.data().nom || 'le partenaire');
+            } else {
+              setPartnerToRateName('le partenaire');
+            }
+            console.log("Dashboard: Partner name fetched:", partnerDocSnap.data()?.nom);
+          } catch (error) {
+            console.error("Dashboard: Error fetching partner name for rating:", error);
+            setPartnerToRateName('le partenaire');
+          }
+        };
+        fetchPartnerName();
       } else {
+        console.log("Dashboard: No pending/displayed rating requests found for this client. Closing modal.");
         setShowRatePartnerModal(false);
+        setCurrentRatingRequestId(null);
       }
     });
 
     return () => unsubscribe();
-  }, [auth.currentUser, rdvIdForRating, showRatePartnerModal]);
-
+  }, [auth.currentUser, userData, showRatePartnerModal, currentRatingRequestId]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -397,20 +450,71 @@ const Dashboard = () => {
       Alert.alert("Évaluation Requise", "Veuillez donner une note de 1 à 5 étoiles.");
       return;
     }
-    if (!partnerToRateId || !rdvIdForRating || !userData?.uid) {
+    if (!codeDataForRating || !userData?.uid || !partnerToRateId || !currentRatingRequestId) {
         Alert.alert("Erreur", "Informations d'évaluation manquantes.");
         return;
     }
 
     setIsSubmittingRating(true);
+    let finalClientName = null;
+    let appointmentDocId = null;
+
     try {
+        const appointmentQuery = query(
+            collection(db, 'appointments'),
+            where('codeData', '==', codeDataForRating),
+            where('partnerId', '==', partnerToRateId),
+            where('clientId', '==', userData.uid),
+            limit(1)
+        );
+        const appointmentSnapshots = await getDocs(appointmentQuery);
+
+        if (appointmentSnapshots.empty) {
+            Alert.alert("Erreur", "Rendez-vous introuvable pour l'évaluation. Il a peut-être déjà été évalué.");
+            setIsSubmittingRating(false);
+            return;
+        }
+
+        const appointmentDoc = appointmentSnapshots.docs[0];
+        const appointmentData = appointmentDoc.data();
+        appointmentDocId = appointmentDoc.id;
+
+        if (appointmentData.clientRated) {
+            Alert.alert("Déjà Évalué", "Ce rendez-vous a déjà été évalué.");
+            setIsSubmittingRating(false);
+            const ratingRequestsQuery = query(
+              collection(db, 'ratingRequests'),
+              where('clientId', '==', userData.uid),
+              where('codeData', '==', codeDataForRating),
+              where('partnerId', '==', partnerToRateId),
+              where('status', 'in', ['pending', 'displayed']),
+              limit(1)
+            );
+            const querySnapshot = await getDocs(ratingRequestsQuery);
+            if (!querySnapshot.empty) {
+              const requestId = querySnapshot.docs[0].id;
+              await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'completed' });
+            }
+            setShowRatePartnerModal(false);
+            setCurrentRatingRequestId(null);
+            return;
+        }
+
+        if (isAnonymousRating) {
+            finalClientName = 'Anonyme';
+        } else {
+            finalClientName = Array.isArray(appointmentData.clientNames)
+                                ? appointmentData.clientNames.join(', ')
+                                : appointmentData.clientNames || userData.name || 'Anonyme';
+        }
+
         await addDoc(collection(db, 'partnerRatings'), {
             partnerId: partnerToRateId,
             clientId: userData.uid,
-            nomUtilisateur: userData.name || 'Anonyme',
+            nomUtilisateur: finalClientName,
             rating: rating,
             comment: ratingComment,
-            rdvId: rdvIdForRating,
+            codeData: codeDataForRating,
             dateCreation: serverTimestamp(),
             status: 'completed',
         });
@@ -418,38 +522,29 @@ const Dashboard = () => {
         await addDoc(collection(db, 'partners', partnerToRateId, 'evaluations'), {
             partnerId: partnerToRateId,
             clientId: userData.uid,
-            nomUtilisateur: userData.name || 'Anonyme',
+            nomUtilisateur: finalClientName,
             rating: rating,
             comment: ratingComment,
-            rdvId: rdvIdForRating,
+            codeData: codeDataForRating,
             dateCreation: serverTimestamp(),
             status: 'completed',
         });
 
-        // --- MODIFIED: Update the appointment status to mark it as rated AND completed ---
-        const appointmentRef = doc(db, 'appointments', rdvIdForRating);
-        const appointmentSnap = await getDoc(appointmentRef);
         let updateAppointmentData = {
             clientRated: true,
             clientRating: rating,
             clientComment: ratingComment,
         };
 
-        // If the appointment is not already 'completed' by the partner, mark it completed now.
-        // This ensures it gets removed from the client's 'scheduled/rescheduled' list in UserRdv.
-        if (appointmentSnap.exists() && appointmentSnap.data().status !== 'completed') {
+        if (appointmentData.status !== 'completed') {
             updateAppointmentData.status = 'completed';
-            console.log("Dashboard: Client rating also marking appointment as completed:", rdvIdForRating);
-        } else {
-            console.log("Dashboard: Appointment already completed or does not exist, not changing status on client rating.");
         }
-        await updateDoc(appointmentRef, updateAppointmentData);
-        // --- END MODIFIED ---
+        await updateDoc(doc(db, 'appointments', appointmentDocId), updateAppointmentData);
 
         const ratingRequestsQuery = query(
           collection(db, 'ratingRequests'),
           where('clientId', '==', userData.uid),
-          where('rdvId', '==', rdvIdForRating),
+          where('codeData', '==', codeDataForRating),
           where('partnerId', '==', partnerToRateId),
           where('status', 'in', ['pending', 'displayed']),
           limit(1)
@@ -461,6 +556,7 @@ const Dashboard = () => {
         }
 
         setShowRatePartnerModal(false);
+        setCurrentRatingRequestId(null);
         Alert.alert(
           "Merci pour votre évaluation !",
           `Nous apprécions grandement votre avis sur ${partnerToRateName}.`
@@ -468,6 +564,7 @@ const Dashboard = () => {
 
         setRating(0);
         setRatingComment('');
+        setIsAnonymousRating(false);
 
     } catch (error) {
         console.error("Error submitting rating:", error);
@@ -599,9 +696,7 @@ const Dashboard = () => {
               onPress={() => navigation.navigate('UserRequest')}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#ff6b6b' }]}>
-                {/* --- MODIFIED: Use your custom image for Assistance --- */}
                 <Image source={ASSISTANCE_ICON} style={styles.customActionIcon} />
-                {/* --- END MODIFIED --- */}
               </View>
               <Text style={styles.actionText}>Assistance</Text>
             </TouchableOpacity>
@@ -610,10 +705,9 @@ const Dashboard = () => {
               style={styles.actionCard}
               onPress={() => navigation.navigate('News')}
             >
+
               <View style={[styles.actionIcon, { backgroundColor: '#25c15b' }]}>
-                {/* --- MODIFIED: Use your custom image for Promos --- */}
                 <Image source={PROMO_ICON} style={styles.customActionIcon} />
-                {/* --- END MODIFIED --- */}
               </View>
               <Text style={styles.actionText}>Promos</Text>
             </TouchableOpacity>
@@ -629,9 +723,7 @@ const Dashboard = () => {
             >
               <View style={styles.catchySurveyCardContent}>
                 <View style={styles.catchySurveyIconSection}>
-                  {/* --- MODIFIED: Use custom image for Gift Icon --- */}
                   <Image source={GIFT_ICON} style={styles.customGiftIcon} />
-                  {/* --- END MODIFIED --- */}
                   {activeSurvey.couponDetails?.value && (
                     <Animatable.View animation="bounceIn" delay={300} style={styles.rewardBubble}>
                       <Text style={styles.rewardBubbleText}>
@@ -666,9 +758,7 @@ const Dashboard = () => {
                 </View>
 
                 <View style={styles.catchySurveyArrow}>
-                  {/* --- MODIFIED: Use custom image for Right Arrow --- */}
                   <Image source={RIGHT_ENTER_ICON_DASH} style={styles.customArrowIconDashboard} />
-                  {/* --- END MODIFIED --- */}
                 </View>
               </View>
             </TouchableOpacity>
@@ -690,9 +780,7 @@ const Dashboard = () => {
                 onPress={() => navigation.navigate(option.screen)}
               >
                 <View style={[styles.optionIcon, { backgroundColor: option.color }]}>
-                  {/* --- MODIFIED: Use custom image for Support Client icons --- */}
                   <Image source={option.icon} style={styles.customOptionIcon} />
-                  {/* --- END MODIFIED --- */}
                 </View>
                 <Text style={styles.optionText}>{option.name}</Text>
               </TouchableOpacity>
@@ -713,9 +801,7 @@ const Dashboard = () => {
         ]}
       >
         <TouchableOpacity onPress={handleChatPress} activeOpacity={0.7}>
-          {/* --- MODIFIED: Use custom image for Chat Bubble Icon --- */}
           <Image source={CHAT_BUBBLE_ICON} style={styles.customChatBubbleIcon} />
-          {/* --- END MODIFIED --- */}
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -723,27 +809,15 @@ const Dashboard = () => {
           )}
         </TouchableOpacity>
       </Animated.View>
-      {/*
-      {showNotificationBanner && notificationType && (
-        <NotificationBanner
-          isVisible={showNotificationBanner}
-          title={notificationTitle}
-          message={notificationMessage}
-          senderName={notificationSenderName}
-          onClose={() => setShowNotificationBanner(false)}
-          onPress={handleNotificationPress}
-          appLogoSource={APP_LOGO}
-          type={notificationType}
-        />
-      )}
-
-      */}
 
       <Modal
         animationType="slide"
         transparent={true}
         visible={showRatePartnerModal}
-        onRequestClose={() => setShowRatePartnerModal(false)}
+        onRequestClose={() => {
+            setShowRatePartnerModal(false);
+            setCurrentRatingRequestId(null); // Jey's Fix: Reset the request ID when closing the modal manually.
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -771,7 +845,7 @@ const Dashboard = () => {
                 </TouchableOpacity>
               ))}
             </View>
-            
+
             <TextInput
               style={styles.ratingTextInput}
               placeholder="Votre commentaire (optionnel)..."
@@ -781,6 +855,18 @@ const Dashboard = () => {
               onChangeText={setRatingComment}
               editable={!isSubmittingRating}
             />
+
+            <View style={styles.anonymousToggleContainer}>
+              <Text style={styles.anonymousToggleText}>Publier de manière anonyme</Text>
+              <Switch
+                trackColor={{ false: "#767577", true: "#81b0ff" }}
+                thumbColor={isAnonymousRating ? "#f5dd4b" : "#f4f3f4"}
+                ios_backgroundColor="#3e3e3e"
+                onValueChange={() => setIsAnonymousRating(previousState => !previousState)}
+                value={isAnonymousRating}
+                disabled={isSubmittingRating}
+              />
+            </View>
 
             <View style={styles.ratingModalActions}>
               <TouchableOpacity
@@ -814,7 +900,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#f4f4f4',
     padding: 20,
-    //marginTop: 26,
+    marginTop: 18,
   },
   loadingContainer: {
     flex: 1,
@@ -843,7 +929,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   helpText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#64748b',
     marginTop: 4,
     width: '100%',
@@ -966,14 +1052,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  // --- NEW STYLE FOR CUSTOM IMAGE ICONS ---
   customActionIcon: {
-    width: 28, // Adjust size as needed
-    height: 28, // Adjust size as needed
-    resizeMode: 'contain', // Ensures the image scales properly within the view
-    tintColor: '#fff', // This will make the icon white, matching the previous icons' color
+    width: 28,
+    height: 28,
+    resizeMode: 'contain',
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
   actionText: {
     fontSize: 14,
     fontWeight: '500',
@@ -1007,14 +1091,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  // --- NEW STYLE FOR CUSTOM OPTION ICONS ---
   customOptionIcon: {
-    width: 24, // Adjust size as needed
-    height: 24, // Adjust size as needed
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
-    tintColor: '#fff', // These icons should also be white on their colored backgrounds
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1052,14 +1134,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
-  // --- NEW STYLE for Custom Chat Bubble Icon ---
   customChatBubbleIcon: {
-    width: 28, // Match Ionicons size
-    height: 28, // Match Ionicons size
+    width: 28,
+    height: 28,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match original Ionicons color
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
   badge: {
     position: 'absolute',
     right: -5,
@@ -1076,22 +1156,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  /*
-  swiperDot: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    margin: 3,
-  },
-  swiperActiveDot: {
-    backgroundColor: 'white',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    margin: 3,
-  },
-  */
   catchySurveyCardContainer: {
     borderRadius: 15,
     marginBottom: 24,
@@ -1121,14 +1185,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 15,
   },
-  // --- NEW STYLE for Custom Gift Icon ---
   customGiftIcon: {
-    width: 45, // Match Ionicons size
-    height: 45, // Match Ionicons size
+    width: 45,
+    height: 45,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match original Ionicons color
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
   rewardBubble: {
     position: 'absolute',
     top: 35,
@@ -1139,7 +1201,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 40,
+    minWidth: 50,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1177,15 +1239,19 @@ const styles = StyleSheet.create({
   catchySurveyArrow: {
     marginLeft: 'auto',
   },
-  // --- NEW STYLE for Custom Arrow Icon in Dashboard ---
   customArrowIconDashboard: {
-    width: 30, // Match Ionicons size
-    height: 30, // Match Ionicons size
+    width: 30,
+    height: 30,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match original Ionicons color
+    tintColor: '#fff',
   },
-  // --- END NEW STYLE ---
 
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
   ratingModalContent: {
     backgroundColor: '#FFFFFF',
     borderRadius: 15,
@@ -1198,7 +1264,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     alignSelf: 'center',
-    top: 230
   },
   ratingModalTitle: {
     fontSize: 22,
@@ -1229,6 +1294,19 @@ const styles = StyleSheet.create({
     color: '#333',
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  anonymousToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+  },
+  anonymousToggleText: {
+    fontSize: 16,
+    color: '#4A5568',
+    flex: 1,
   },
   ratingModalActions: {
     flexDirection: 'row',

@@ -1,10 +1,9 @@
-# dependencies
 /node_modules
 /.expo/
 /.expo-shared/
 /web-build/
 /android/
-/ios/build/
+/ios/
 /npm-debug.*
 /yarn-debug.*
 /yarn-error.log

@@ -5,6 +5,10 @@ import { getAuth, setPersistence } from "firebase/auth";
 import { Platform } from 'react-native';
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 
+// --- Jey's Update: Import getAnalytics and logEvent ---
+import { getAnalytics, logEvent } from "firebase/analytics"; 
+// --- End Jey's Update ---
+
 const firebaseConfig = {
   apiKey: "AIzaSyDtPtoTbl_1NjlfYo0I86jGhuwfsCqzxyk",
   authDomain: "elitereply-bd74d.firebaseapp.com",
@@ -13,7 +17,7 @@ const firebaseConfig = {
   storageBucket: "elitereply-bd74d.firebasestorage.app",
   messagingSenderId: "796596006633",
   appId: "1:796596006633:web:ba173771ae4ed6fe6b0a78",
-  measurementId: "G-BCHDBRD26Q",
+  measurementId: "G-BCHDBRD26Q", // This is your GA4 Measurement ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -38,4 +42,11 @@ if (Platform.OS !== 'web') {
 const storage = getStorage(app);
 const db = getFirestore(app);
 
-export { auth, storage, db, app };
+// --- Jey's Update: Initialize Analytics ---
+const analytics = getAnalytics(app); 
+// --- End Jey's Update ---
+
+
+// --- Jey's Update: Export analytics and logEvent ---
+export { auth, storage, db, app, analytics, logEvent }; 
+// --- End Jey's Update ---

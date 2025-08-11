@@ -1,3 +1,4 @@
+import 'react-native-get-random-values'; 
 import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, StackActions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -69,6 +70,9 @@ import AppointmentFormModal from './components/AppointmentFormModal';
 import AppointmentListScreen from './screens/AppointmentListScreen';
 import NewsDetail from './screens/NewsDetail';
 import Deconnection from './screens/Deconnection';
+import PartnerPage from './screens/partner/PartnerPage';
+import ProductDetail from './screens/partner/ProductDetail';
+import PartnerList from './screens/partner/PartnerList';
 
 
 const Stack = createNativeStackNavigator();
@@ -701,6 +705,16 @@ export default function App() {
           options={{ headerShown: false, title: 'Détail Enquête', headerTitleAlign: 'center' }}
           initialParams={{ partnerId: '' }}
         />
+        <Stack.Screen
+          name="PartnerList"
+          component={PartnerList}
+          options={{ headerShown: false, title: 'Partenaires', headerTitleAlign: 'center' }}
+        />
+        <Stack.Screen name="PartnerPage"
+        component={PartnerPage} options={{ title: '' }} />
+        <Stack.Screen name="ProductDetail" 
+        component={ProductDetail} options={{ title: 'Détails du Produit' }} />
+
         <Stack.Screen
           name="Payments"
           component={PaymentsScreen}

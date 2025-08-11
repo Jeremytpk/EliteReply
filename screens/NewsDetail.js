@@ -1,29 +1,33 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  Image, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
   StyleSheet,
   Dimensions,
-  ActivityIndicator, // In case you want a loading state within detail
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons'; // Assuming these are needed for placeholders/icons
-import { useRoute } from '@react-navigation/native'; // Hook to access route params
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { useRoute, useNavigation } from '@react-navigation/native'; // Add useNavigation for back button
 
 const { width } = Dimensions.get('window');
 
 const NewsDetail = () => {
   const route = useRoute();
-  // The newsItem object passed from the previous screen (NewsList.js or Dashboard)
-  const { newsItem } = route.params || {}; 
+  const navigation = useNavigation(); // Get navigation object
+  const { newsItem } = route.params || {};
 
   // Basic validation to ensure newsItem exists
   if (!newsItem) {
     return (
       <View style={styles.errorContainer}>
         <Feather name="alert-triangle" size={40} color="#ef4444" />
-        <Text style={styles.errorText}>News article not found!</Text>
+        <Text style={styles.errorText}>Actualité non trouvée !</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>Retour</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -31,7 +35,8 @@ const NewsDetail = () => {
   // Function to format date (copied from your News.js for consistency)
   const formatNewsDate = (date) => {
     try {
-      const dateObj = date?.toDate?.() || new Date(date || Date.now());
+      // Ensure date is a valid Date object or can be converted to one
+      const dateObj = date?.toDate?.() || (date instanceof Date ? date : new Date(date || Date.now()));
       return dateObj.toLocaleDateString('fr-FR', {
         day: 'numeric',
         month: 'long',
@@ -43,58 +48,128 @@ const NewsDetail = () => {
     }
   };
 
+  // Determine the main image URL (first one from imageUrls array)
+  const mainImageUrl = newsItem.imageUrls && newsItem.imageUrls.length > 0
+    ? newsItem.imageUrls[0]
+    : null;
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={[styles.newsCardFull, { backgroundColor: newsItem.backgroundColor || '#f0f4ff' }]}>
-        {newsItem.imageUrl ? ( 
-          <Image 
-            source={{ uri: newsItem.imageUrl }} 
-            style={styles.newsImageFull}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.newsImagePlaceholderFull}>
-            <Feather name="image" size={60} color="#ccc" />
-            <Text style={styles.newsImagePlaceholderTextFull}>No Image</Text>
-          </View>
-        )}
-        <View style={styles.newsContentFull}>
-          <Text style={styles.newsTitleFull}>{newsItem.title}</Text>
-          <Text style={styles.newsDescriptionFull}>{newsItem.description}</Text>
-          
-          {/* This is the full moreInformation display */}
-          {newsItem.moreInformation && ( 
-              <Text style={styles.newsMoreInfoFull}>{newsItem.moreInformation}</Text>
-          )}
-          
-          <Text style={styles.newsDateFull}>{formatNewsDate(newsItem.createdAt)}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIconContainer}>
+            <Ionicons name="arrow-back" size={28} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode='tail'>
+            Actualité
+          </Text>
+          <View style={styles.placeholderIcon} /> {/* Spacer */}
         </View>
-      </View>
-    </ScrollView>
+
+        <View style={[styles.newsCardFull, { backgroundColor: newsItem.backgroundColor || 'white' }]}>
+          {mainImageUrl ? (
+            <Image
+              source={{ uri: mainImageUrl }}
+              style={styles.newsImageFull}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.newsImagePlaceholderFull}>
+              <Feather name="image" size={60} color="#ccc" />
+              <Text style={styles.newsImagePlaceholderTextFull}>Pas d'image</Text>
+            </View>
+          )}
+          <View style={styles.newsContentFull}>
+            <Text style={styles.newsTitleFull}>{newsItem.title}</Text>
+            <Text style={styles.newsDescriptionFull}>{newsItem.description}</Text>
+
+            {newsItem.moreInformation && (
+                <Text style={styles.newsMoreInfoFull}>{newsItem.moreInformation}</Text>
+            )}
+
+            {/* Render a gallery if there are multiple images */}
+            {newsItem.imageUrls && newsItem.imageUrls.length > 1 && (
+              <View style={styles.galleryContainer}>
+                <Text style={styles.galleryTitle}>Galerie</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {newsItem.imageUrls.map((url, index) => (
+                    <Image key={index} source={{ uri: url }} style={styles.galleryImage} />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <Text style={styles.newsDateFull}>{formatNewsDate(newsItem.createdAt)}</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? 35 : 0,
+  },
+  backIconContainer: {
+    padding: 5,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 10,
+  },
+  placeholderIcon: { // To balance the back icon for perfect centering of title
+    width: 28 + 10, // Ionicons size + padding
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
+    padding: 20,
   },
   errorText: {
     marginTop: 10,
     fontSize: 18,
     color: '#ef4444',
+    textAlign: 'center',
   },
-  newsCardFull: { 
+  backButton: {
+    marginTop: 20,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+  },
+  backButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  newsCardFull: {
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: 'white', 
-    margin: 16, // Add margin to the full card
+    backgroundColor: 'white',
+    margin: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -103,7 +178,7 @@ const styles = StyleSheet.create({
   },
   newsImageFull: {
     width: '100%',
-    height: width * 0.75, 
+    height: width * 0.75,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
@@ -139,7 +214,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontWeight: '500',
   },
-  newsMoreInfoFull: { 
+  newsMoreInfoFull: {
     fontSize: 16,
     lineHeight: 24,
     color: '#4a4a4a',
@@ -147,6 +222,25 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#eee',
+  },
+  galleryContainer: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 15,
+  },
+  galleryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  galleryImage: {
+    width: 120, // Adjust size as needed
+    height: 90,  // Adjust size as needed
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: '#e0e0e0', // Placeholder for loading
   },
   newsDateFull: {
     fontSize: 14,

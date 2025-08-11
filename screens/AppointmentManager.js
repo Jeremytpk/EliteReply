@@ -1,3 +1,5 @@
+// AppointmentManager.js (Updated)
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -18,7 +20,7 @@ import {
   serverTimestamp,
   onSnapshot,
   query,
-  where, // Still needed if you want to filter tickets by clientEmail if applicable in other parts
+  where,
   updateDoc,
   getDoc,
   writeBatch,
@@ -27,7 +29,6 @@ import {
 import { auth, db } from '../firebase';
 
 import AppointmentFormModal from '../components/AppointmentFormModal';
-// import AppointmentListModal from '../components/AppointmentListModal'; // REMOVED: No longer needed
 
 import moment from 'moment';
 import 'moment/locale/fr';
@@ -48,18 +49,15 @@ const AppointmentManager = ({ route, navigation }) => {
   const [loggedInAgentData, setLoggedInAgentData] = useState(null);
   const [loadingAgentData, setLoadingAgentData] = useState(true);
 
-  // The client's email to filter appointments by (if this manager specifically for one client's ticket)
-  // Note: The AppointmentListScreen will now fetch ALL appointments regardless of this.
   const clientEmailToFilter = initialUserEmail;
 
   const [partners, setPartners] = useState([]);
-  const [loadingPartners, setLoadingPartners] = useState(true);
-  const [appointments, setAppointments] = useState([]); // This state will still hold specific client's appointments if needed elsewhere, but not for the "All Appointments" list view.
+  const [loadingPartners, setLoadingPartners] = true;
+  const [appointments, setAppointments] = useState([]);
 
   const [showAppointmentFormModal, setShowAppointmentFormModal] = useState(false);
   const [appointmentToEdit, setAppointmentToEdit] = useState(null);
 
-  // Helper function for date/time formatting
   const formatDateTime = useCallback((dateISOString) => {
     if (!dateISOString) return 'N/A';
     const date = new Date(dateISOString);
@@ -70,8 +68,7 @@ const AppointmentManager = ({ route, navigation }) => {
     return moment(date).format('DD/MM/YYYY [à] HH:mm');
   }, []);
 
-  // Send system message to ticket
-  const sendSystemMessageToTicket = useCallback(async (messageText) => {
+  const sendSystemMessageToTicket = useCallback(async (messageText, messageType = 'text', messageData = {}) => {
     if (!ticketId) {
         console.warn("WARN: Not sending system message, no ticketId provided in AppointmentManager.");
         return;
@@ -88,7 +85,8 @@ const AppointmentManager = ({ route, navigation }) => {
         expediteurId: 'systeme',
         nomExpediteur: 'Système Rendez-vous',
         createdAt: serverTimestamp(),
-        type: 'text',
+        type: messageType,
+        ...messageData,
       });
 
       const updateData = {
@@ -107,7 +105,6 @@ const AppointmentManager = ({ route, navigation }) => {
     }
   }, [ticketId]);
 
-  // Agent Details Fetching
   useEffect(() => {
     const fetchAgentDetails = async () => {
       if (!currentUser || !currentUser.uid) {
@@ -134,7 +131,6 @@ const AppointmentManager = ({ route, navigation }) => {
     fetchAgentDetails();
   }, [currentUser]);
 
-  // Partner Fetching and Prioritization
   useEffect(() => {
     const fetchPartners = async () => {
       setLoadingPartners(true);
@@ -167,34 +163,22 @@ const AppointmentManager = ({ route, navigation }) => {
     fetchPartners();
   }, []);
 
-  // --- NEW LOGIC FOR HANDLING NAVIGATION PARAMS FROM AppointmentListScreen ---
   useEffect(() => {
-    // Handle direct navigation to edit an appointment from AppointmentListScreen
     if (route.params?.editingAppointment) {
       setAppointmentToEdit(route.params.editingAppointment);
       setShowAppointmentFormModal(true);
-      // Clear the param after use to prevent re-opening modal on subsequent renders
       navigation.setParams({ editingAppointment: undefined });
     }
 
-    // Handle deletion request from AppointmentListScreen
     const { appointmentToDelete, partnerIdToDelete, appointmentDetailsForMessage } = route.params || {};
     if (appointmentToDelete && partnerIdToDelete) {
       handleDeleteAppointmentConfirmed(appointmentToDelete, partnerIdToDelete, appointmentDetailsForMessage);
-      // Clear the params after use
       navigation.setParams({ appointmentToDelete: undefined, partnerIdToDelete: undefined, appointmentDetailsForMessage: undefined });
     }
   }, [route.params, navigation]);
 
-  // Appointment Fetching (Real-time for THIS client's ticket - Optional)
-  // This useEffect can remain if you still need a local list of appointments
-  // specific to the client of the current ticket, for other purposes in this manager.
-  // If this manager is solely for routing to "all appointments" or creating new ones,
-  // this specific client-filtered fetching might be removed to simplify.
-  // Keeping it for now as it doesn't conflict with the new AppointmentListScreen.
   useEffect(() => {
     if (!clientEmailToFilter) {
-      // console.warn("WARN: No client email provided, cannot fetch client-specific appointments.");
       setAppointments([]);
       return;
     }
@@ -224,19 +208,32 @@ const AppointmentManager = ({ route, navigation }) => {
   }, [clientEmailToFilter]);
 
 
-  // handleBookingSuccessFromModal: Callback after an appointment is successfully booked or updated.
   const handleBookingSuccessFromModal = useCallback(async (newOrUpdatedAppointment) => {
-    setAppointmentToEdit(null); // Clear edit state
+    setAppointmentToEdit(null);
 
     const action = newOrUpdatedAppointment.id ? 'mis à jour' : 'créé';
     let message = `Le rendez-vous avec ${newOrUpdatedAppointment.partnerNom} pour ${newOrUpdatedAppointment.clientNames ? newOrUpdatedAppointment.clientNames.join(', ') : newOrUpdatedAppointment.clientName || 'un client'} du ${formatDateTime(newOrUpdatedAppointment.appointmentDateTime)} a été ${action} par l'agent ${loggedInAgentData?.name || 'inconnu'}.`;
     if (newOrUpdatedAppointment.description) {
       message += ` Description: ${newOrUpdatedAppointment.description}.`;
     }
-    await sendSystemMessageToTicket(message);
-  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime]);
+    await sendSystemMessageToTicket(
+        message,
+        'appointment_booked_agent_confirmation',
+        {
+            appointmentId: newOrUpdatedAppointment.id,
+            partnerNom: newOrUpdatedAppointment.partnerNom,
+            appointmentDateTime: newOrUpdatedAppointment.appointmentDateTime,
+            clientNames: newOrUpdatedAppointment.clientNames,
+            bookedByAgentName: loggedInAgentData?.name || currentUser?.displayName,
+            bookedByAgentId: loggedInAgentData?.id || currentUser?.uid,
+            clientId: newOrUpdatedAppointment.clientId,
+            clientName: newOrUpdatedAppointment.clientName,
+            clientEmail: newOrUpdatedAppointment.clientEmail,
+            clientPhone: newOrUpdatedAppointment.clientPhone,
+        }
+    );
+  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime, currentUser]);
 
-  // New function to handle the actual deletion (called by useEffect from route.params)
   const handleDeleteAppointmentConfirmed = useCallback(async (appointmentId, partnerId, apptDetailsForMessage) => {
     if (!appointmentId || !partnerId) {
         console.error("ERROR: Missing critical appointment data for confirmed deletion.");
@@ -247,11 +244,9 @@ const AppointmentManager = ({ route, navigation }) => {
     try {
         const batch = writeBatch(db);
 
-        // 1. Delete from main 'appointments' collection
         const rdvDocRefMain = doc(db, 'appointments', appointmentId);
         batch.delete(rdvDocRefMain);
 
-        // 2. Delete from partner's subcollection 'rdv_reservation'
         const partnerRdvDocRef = doc(db, 'partners', partnerId, 'rdv_reservation', appointmentId);
         batch.delete(partnerRdvDocRef);
 
@@ -261,7 +256,17 @@ const AppointmentManager = ({ route, navigation }) => {
         if (apptDetailsForMessage.description) {
           message += ` Description: ${apptDetailsForMessage.description}.`;
         }
-        await sendSystemMessageToTicket(message);
+        await sendSystemMessageToTicket(
+            message,
+            'appointment_deleted_agent_confirmation',
+            {
+                appointmentId: appointmentId,
+                partnerNom: apptDetailsForMessage.partnerNom,
+                appointmentDateTime: apptDetailsForMessage.appointmentDateTime,
+                bookedByAgentName: loggedInAgentData?.name || currentUser?.displayName,
+                bookedByAgentId: loggedInAgentData?.id || currentUser?.uid,
+            }
+        );
 
         Alert.alert("Succès", "Rendez-vous supprimé.");
     } catch (error) {
@@ -271,7 +276,7 @@ const AppointmentManager = ({ route, navigation }) => {
             "Impossible de supprimer le rendez-vous. Il se peut qu'il ait déjà été supprimé ou qu'une erreur de permission se soit produite. Veuillez réessayer ou contacter le support."
         );
     }
-  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime]);
+  }, [loggedInAgentData, sendSystemMessageToTicket, formatDateTime, currentUser]);
 
 
   if (loadingPartners || loadingAgentData) {
@@ -282,6 +287,13 @@ const AppointmentManager = ({ route, navigation }) => {
       </View>
     );
   }
+
+  const ticketClientInfo = {
+    id: initialUserId,
+    name: initialUserName,
+    email: initialUserEmail,
+    phone: userPhone,
+  };
 
   return (
     <KeyboardAvoidingView
@@ -302,25 +314,39 @@ const AppointmentManager = ({ route, navigation }) => {
         <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
                 onPress={() => {
-                    setAppointmentToEdit(null); // Ensure we're creating a new one
-                    setShowAppointmentFormModal(true);
+                    // Send a simple message to the ticket that Jey can interpret
+                    sendSystemMessageToTicket(
+                        `/demander_rendez_vous`, // New internal command for Jey
+                        'command_to_jey', // A type to explicitly indicate it's a command for Jey
+                        {
+                            agentId: loggedInAgentData?.id || currentUser?.uid,
+                            agentName: loggedInAgentData?.name || currentUser?.displayName,
+                            // Pass client info for Jey's context if needed
+                            clientId: initialUserId,
+                            clientName: initialUserName,
+                            clientEmail: initialUserEmail,
+                            clientPhone: userPhone,
+                        }
+                    );
+                    Alert.alert(
+                        "Demande envoyée à Jey",
+                        "Jey va maintenant aider le client à prendre rendez-vous dans la conversation."
+                    );
                 }}
                 style={styles.newAppointmentButton}
             >
-                <Ionicons name="add-circle" size={22} color="white" />
-                <Text style={styles.newAppointmentButtonText}>Nouveau Rendez-vous</Text>
+                <Ionicons name="chatbox-outline" size={22} color="white" />
+                <Text style={styles.newAppointmentButtonText}>Demander Rendez-vous à Jey</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
                 onPress={() => navigation.navigate('AppointmentListScreen', {
-                    // Pass current ticket/client info if AppointmentListScreen needs to highlight specific appointments
-                    // Or if editing/deleting needs to navigate back with this context
                     ticketId: ticketId,
                     initialUserId: initialUserId,
                     initialUserName: initialUserName,
                     userPhone: userPhone,
                     initialUserEmail: initialUserEmail,
-                    allPartners: partners, // Pass partners for context in AppointmentListScreen if needed (e.g. for display)
+                    allPartners: partners,
                     loggedInAgentId: loggedInAgentData?.id || currentUser?.uid,
                     loggedInAgentName: loggedInAgentData?.name || currentUser?.displayName,
                 })}
@@ -334,31 +360,26 @@ const AppointmentManager = ({ route, navigation }) => {
         <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={24} color="#0a8fdf" style={{ marginRight: 10 }} />
             <Text style={styles.infoText}>
-                Utilisez le bouton "Nouveau Rendez-vous" pour planifier une nouvelle rencontre.
+                Cliquez sur "**Demander Rendez-vous à Jey**" pour que Jey assiste le client dans la prise de rendez-vous directement dans la conversation.
                 {"\n"}
-                Cliquez sur "Voir les Rendez-vous" pour consulter et gérer l'historique de tous les rendez-vous.
+                Utilisez "**Voir les Rendez-vous**" pour consulter et gérer l'historique de tous les rendez-vous pris.
             </Text>
         </View>
 
       </ScrollView>
 
-      {/* Appointment Form Modal (for creation and editing) */}
       <AppointmentFormModal
           isVisible={showAppointmentFormModal}
           onClose={() => {
               setShowAppointmentFormModal(false);
-              setAppointmentToEdit(null); // Clear edit state on close
+              setAppointmentToEdit(null);
           }}
           onBookingSuccess={handleBookingSuccessFromModal}
           ticketId={ticketId}
-          initialUserId={initialUserId}
-          initialUserName={initialUserName}
-          userPhone={userPhone}
-          initialUserEmail={initialUserEmail}
           allPartners={partners}
           editingAppointment={appointmentToEdit}
-          loggedInAgentId={loggedInAgentData?.id || currentUser?.uid}
-          loggedInAgentName={loggedInAgentData?.name || currentUser?.displayName}
+          isAgentMode={true}
+          ticketClientInfo={ticketClientInfo}
       />
     </KeyboardAvoidingView>
   );

@@ -53,9 +53,9 @@ const ITDashboard = () => {
   const [showClockInOutModal, setShowClockInOutModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [showStats, setShowStats] = useState(true);
-  
-  const [allPartnersForDropdown, setAllPartnersForDropdown] = useState([]); 
-  const [loadingPartnersForDropdown, setLoadingPartnersForDropdown] = useState(true); 
+
+  const [allPartnersForDropdown, setAllPartnersForDropdown] = useState([]);
+  const [loadingPartnersForDropdown, setLoadingPartnersForDropdown] = useState(true);
 
   const [stats, setStats] = useState({
     totalTickets: 0,
@@ -75,7 +75,7 @@ const ITDashboard = () => {
   const currentUser = auth.currentUser;
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const notifiedTicketsRef = useRef(new Set()); 
+  const notifiedTicketsRef = useRef(new Set());
   const lastKnownTicketsRef = useRef([]);
 
   const unsubscribesRef = useRef([]);
@@ -140,8 +140,10 @@ const ITDashboard = () => {
         (t.status === 'escalated_to_agent' && !t.assignedTo)
       ).length,
       activeConversations: allTicketsData.filter(t => t.status === 'in-progress' && t.assignedTo === currentUser?.uid).length,
-      completedTickets: allTicketsData.filter(t => t.status === 'terminé').length, 
-      jeyHandlingTicketsCount: allTicketsData.filter(t => t.status === 'jey-handling' && !t.isAgentRequested).length,
+      completedTickets: allTicketsData.filter(t => t.status === 'terminé').length,
+      jeyHandlingTicketsCount: allTicketsData.filter(t =>
+        t.status === 'jey-handling' && !t.isAgentRequested
+      ).length,
       premiumTicketsCount: allTicketsData.filter(t => t.userIsPremium).length,
     }));
   };
@@ -310,12 +312,15 @@ const ITDashboard = () => {
             waitingTime: calculateWaitingTime(doc.data().createdAt),
             isOverdue: isTicketOverdue(doc.data().createdAt, doc.data().status),
             userIsPremium: doc.data().userIsPremium || false,
+            // Add the new clientTerminated flag here
+            clientTerminated: doc.data().clientTerminated || false,
           }));
 
-        // --- Filter out terminated tickets for display on the dashboard list ---
-        // We calculate stats based on ALL fetched tickets (allFetchedTickets)
-        // but set the 'tickets' state (for display) to only non-terminated ones.
-        const activeDisplayTickets = allFetchedTickets.filter(t => t.status !== 'terminé');
+        // Filter out completely terminated tickets for the main display list
+        // but include those terminated by Jey for agent action.
+        const activeDisplayTickets = allFetchedTickets.filter(t =>
+            t.status !== 'terminé' || (t.status === 'terminé' && t.terminatedBy === 'jey-ai')
+        );
 
         // --- Push Notification and In-App Notification Logic for IT Agents ---
         if (currentUser?.uid && isClockedIn) {
@@ -331,9 +336,9 @@ const ITDashboard = () => {
               let notificationTitle = "Nouveau Ticket!";
               let notificationBody = "";
 
-              // Skip notifications for tickets that are already terminated
-              if (newTicket.status === 'terminé') {
-                  continue; 
+              // Skip notifications for tickets that are already terminated by a human agent
+              if (newTicket.status === 'terminé' && newTicket.terminatedBy !== 'jey-ai') {
+                  continue;
               }
 
               // Case 1: Brand new ticket
@@ -361,15 +366,15 @@ const ITDashboard = () => {
                   shouldSendPush = true;
                   console.log(`[NOTIFY] JEY ESCALATED: ${newTicket.id}`);
               }
-              // Case 4: A new ticket that starts directly in Jey-handling without explicit agent request (optional notification)
-              // This is commented out based on prior discussions where direct Jey-handling might not need immediate agent notification
-              // if (isNewTicketAdded && newTicket.status === 'jey-handling' && !newTicket.isAgentRequested) {
-              //     notificationTitle = "Ticket Géré par Jey (Nouveau)!";
-              //     notificationBody = `Un nouveau ticket de type "${newTicket.category}" est géré par Jey.`;
-              //     shouldNotifyInApp = true;
-              //     shouldSendPush = true;
-              //     console.log(`[NOTIFY] NEW JEY-HANDLING: ${newTicket.id}`);
-              // }
+              // Case 4: Ticket terminated by Jey (client or Jey initiated) and needs agent's manual termination
+              else if (oldTicketState?.status !== 'terminé' && newTicket.status === 'terminé' && newTicket.terminatedBy === 'jey-ai') {
+                  notificationTitle = "Conversation Terminée par Jey!";
+                  notificationBody = `Le ticket "${newTicket.category}" de ${newTicket.userName} a été terminé par Jey. Veuillez le clôturer manuellement.`;
+                  shouldNotifyInApp = true;
+                  shouldSendPush = true;
+                  console.log(`[NOTIFY] JEY TERMINATED: ${newTicket.id}`);
+              }
+
 
               if (shouldNotifyInApp && !notifiedTicketsRef.current.has(newTicket.id + '_inapp') && isFocused) {
                 setInAppNotification({
@@ -389,11 +394,11 @@ const ITDashboard = () => {
                       where('expoPushToken', '!=', null)
                   );
                   const itAgentsSnap = await getDocs(itAgentsQuery);
-                  
+
                   itAgentsSnap.forEach(agentDoc => {
                       const agentData = agentDoc.data();
                       // Only send push if not to the current agent (they get in-app)
-                      if (agentData.expoPushToken && agentDoc.id !== currentUser.uid) { 
+                      if (agentData.expoPushToken && agentDoc.id !== currentUser.uid) {
                           sendPushNotification(
                               agentData.expoPushToken,
                               notificationTitle,
@@ -410,7 +415,11 @@ const ITDashboard = () => {
           // Cleanup notifiedTicketsRef for tickets that are no longer in the fetched list (e.g., terminated)
           notifiedTicketsRef.current.forEach(notifiedId => {
               const ticketId = notifiedId.split('_')[0];
-              if (!currentTicketIds.has(ticketId)) {
+              const ticketExistsInCurrentFetch = currentTicketIds.has(ticketId);
+              // Only remove from notified list if the ticket is truly no longer active AND not in the `terminatedBy Jey` state
+              const isTerminatedByJeyAndStillInList = activeDisplayTickets.some(t => t.id === ticketId && t.status === 'terminé' && t.terminatedBy === 'jey-ai');
+
+              if (!ticketExistsInCurrentFetch && !isTerminatedByJeyAndStillInList) {
                   notifiedTicketsRef.current.delete(notifiedId);
               }
           });
@@ -419,25 +428,28 @@ const ITDashboard = () => {
         // Sort the *active* tickets for display
         activeDisplayTickets.sort((a, b) => {
             const getPriority = (ticket) => {
+                // Highest priority: Tickets terminated by Jey awaiting agent closure
+                if (ticket.status === 'terminé' && ticket.terminatedBy === 'jey-ai') {
+                    return 0;
+                }
                 if (ticket.status === 'in-progress' && ticket.assignedTo === currentUser?.uid) {
-                    return 0; // My active conversations
+                    return 1; // My active conversations
                 }
                 if (ticket.status === 'jey-handling' && ticket.isAgentRequested === true) {
-                    return 1; // Jey requested agent (client initiated)
+                    return 2; // Jey requested agent (client initiated)
                 }
                 if (ticket.status === 'escalated_to_agent') {
-                    return 2; // Jey escalated (Jey initiated)
+                    return 3; // Jey escalated (Jey initiated, perhaps for a different reason)
                 }
                 if (ticket.status === 'nouveau' && !ticket.assignedTo) {
-                    return 3; // Truly new, unassigned
+                    return 4; // Truly new, unassigned
                 }
                 if (ticket.status === 'jey-handling' && (ticket.assignedTo === null || ticket.assignedTo === undefined || ticket.assignedTo === '')) {
-                    return 4; // Jey handling, not agent requested
+                    return 5; // Jey handling, not agent requested
                 }
                 if (ticket.status === 'in-progress' && ticket.assignedTo && ticket.assignedTo !== currentUser?.uid) {
-                    return 5; // Other agent's active conversations
+                    return 6; // Other agent's active conversations
                 }
-                // 'terminé' tickets are now filtered out before this sort
                 return 99; // Fallback for any unexpected status
             };
 
@@ -500,7 +512,7 @@ const ITDashboard = () => {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    
+
     unsubscribesRef.current.forEach(unsub => unsub());
     unsubscribesRef.current = [];
 
@@ -508,7 +520,7 @@ const ITDashboard = () => {
     setInAppNotification(null);
     notifiedTicketsRef.current.clear();
     lastKnownTicketsRef.current = [];
-    
+
     try {
         await setupListeners();
     } catch (error) {
@@ -519,6 +531,53 @@ const ITDashboard = () => {
 
     console.log('ITDashboard manually refreshed!');
   }, [setupListeners]);
+
+
+  // ⭐ NEW: handleManualJeyTermination
+  const handleManualJeyTermination = async (ticketIdToTerminate) => {
+    Alert.alert(
+      'Clôturer le ticket',
+      'Ce ticket a été terminé par Jey. Confirmez-vous la clôture manuelle ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            try {
+              const ticketDocRef = doc(db, 'tickets', ticketIdToTerminate);
+              // Update the ticket to indicate it's now fully handled by an agent
+              // We're changing the terminatedBy field from 'jey-ai' to the current agent's ID
+              await updateDoc(ticketDocRef, {
+                status: 'terminé', // Ensure it's terminated
+                terminatedBy: currentUser?.uid, // Set to current agent's ID
+                terminatedByName: userData?.name || currentUser?.displayName || 'Agent',
+                manuallyClosedByAgent: true, // New flag to indicate agent's final action
+                lastUpdated: serverTimestamp(),
+              });
+
+              // Add a system message to the chat indicating agent manual closure
+              await addDoc(collection(db, 'tickets', ticketIdToTerminate, 'messages'), {
+                texte: `${userData?.name || currentUser.displayName || 'Un agent'} a clôturé ce ticket manuellement.`,
+                expediteurId: 'systeme',
+                nomExpediteur: 'Système',
+                createdAt: serverTimestamp(),
+                type: 'system_message'
+              });
+
+              Alert.alert('Succès', 'Ticket clôturé manuellement.');
+              // The `onSnapshot` listener will automatically remove this ticket from the active list
+              // if its status is now 'terminé' and `terminatedBy` is a human agent.
+
+            } catch (error) {
+              console.error("Error manually closing Jey-terminated ticket:", error);
+              Alert.alert("Erreur", "Impossible de clôturer le ticket manuellement.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
   const handleTakeTicket = async (ticket) => {
     if (!currentUser) {
@@ -534,8 +593,8 @@ const ITDashboard = () => {
         Alert.alert("Information", `Ce ticket est déjà pris en charge par ${ticket.assignedToName || 'un autre agent'}.`);
         return;
     }
-    if (ticket.status === 'terminé') { // Should be caught by UI filter, but good to have
-        Alert.alert("Information", "Ce ticket est déjà terminé.");
+    if (ticket.status === 'terminé' && ticket.terminatedBy !== 'jey-ai') { // Prevents taking tickets already closed by a human agent
+        Alert.alert("Information", "Ce ticket est déjà terminé par un agent.");
         return;
     }
 
@@ -737,7 +796,7 @@ const ITDashboard = () => {
 
       {/* Tickets Section Header */}
       <View style={styles.ticketSectionHeader}>
-        <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text> {/* This now reflects only non-terminated tickets */}
+        <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text>
         {stats.jeyHandlingTicketsCount > 0 && (
           <Text style={styles.jeyHandlingLabel}>Jey ({stats.jeyHandlingTicketsCount})</Text>
         )}
@@ -751,13 +810,16 @@ const ITDashboard = () => {
 
       {/* Ticket List */}
       <FlatList
-        data={tickets} // This data now only contains non-terminated tickets
+        data={tickets}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={[
             styles.ticketCard,
             item.userIsPremium && styles.premiumTicketCard,
-            // Removed terminatedTicketCard styling as these items won't be in the list
+            // Apply a distinct style for Jey-terminated tickets that need manual closure
+            item.status === 'terminé' && item.terminatedBy === 'jey-ai' && styles.jeyTerminatedCard,
+            // Visually diminish if already fully closed by an agent (though filter should largely prevent this)
+            item.status === 'terminé' && item.terminatedBy !== 'jey-ai' && styles.fullyClosedCard,
           ]}>
             <View style={styles.ticketHeader}>
               <View style={styles.ticketStatusContainer}>
@@ -783,7 +845,14 @@ const ITDashboard = () => {
                 {item.status === 'jey-handling' && item.isAgentRequested && (
                     <View style={[styles.statusDot, styles.purpleDot]} />
                 )}
-                {/* Removed grayDot for terminated as they won't be displayed */}
+                {/* ⭐ MODIFIED: Red check icon for Jey-terminated tickets awaiting manual close ⭐ */}
+                {item.status === 'terminé' && item.terminatedBy === 'jey-ai' && (
+                  <MaterialIcons name="check-circle" size={18} color="#FF3B30" style={styles.jeyTerminatedIcon} />
+                )}
+                 {/* Gray dot for fully closed tickets (by human agent) - if they still appear due to filter logic */}
+                {item.status === 'terminé' && item.terminatedBy !== 'jey-ai' && (
+                  <View style={[styles.statusDot, styles.grayDot]} />
+                )}
 
                 <Text style={styles.ticketCategory}>{item.category}</Text>
 
@@ -837,12 +906,26 @@ const ITDashboard = () => {
              {item.status === 'escalated_to_agent' && (
                 <Text style={styles.assignedText}>Agent demandé par Jey.</Text>
             )}
-            {/* Removed 'Terminé' status display as these tickets are filtered out */}
+            {/* ⭐ NEW: Specific label for Jey-terminated tickets ⭐ */}
+            {item.status === 'terminé' && item.terminatedBy === 'jey-ai' && (
+                <Text style={[styles.assignedText, styles.jeyTerminationLabel]}>Terminé par Jey (client ou auto).</Text>
+            )}
+            {item.status === 'terminé' && item.terminatedBy !== 'jey-ai' && (
+                <Text style={[styles.assignedText, {color: '#6B7280', fontWeight: 'bold'}]}>Terminé par l'agent.</Text>
+            )}
 
 
             <View style={styles.ticketActions}>
-              {/* The 'Terminé' button logic is no longer needed here as terminated tickets are not rendered */}
-              {item.assignedTo === currentUser?.uid ? (
+              {/* ⭐ MODIFIED: Button for Jey-terminated tickets ⭐ */}
+              {item.status === 'terminé' && item.terminatedBy === 'jey-ai' ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.completeButton]} // Use complete button style for manual close
+                  onPress={() => handleManualJeyTermination(item.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.buttonText}>Clôturer Manuellement</Text>
+                </TouchableOpacity>
+              ) : item.assignedTo === currentUser?.uid ? (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.inProgressButton]}
                   onPress={() => navigation.navigate('Conversation', {
@@ -861,20 +944,26 @@ const ITDashboard = () => {
                 <TouchableOpacity
                   style={[
                     styles.actionButton,
-                    (item.status === 'jey-handling' && !item.isAgentRequested) || (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid)
+                    // ⭐ MODIFIED: If Jey is handling and it's not requested, or if terminated by Jey, disable "Take" ⭐
+                    (item.status === 'jey-handling' && !item.isAgentRequested) ||
+                    (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid) ||
+                    (item.status === 'terminé' && item.terminatedBy === 'jey-ai') // Disable if terminated by Jey
                       ? styles.disabledButton
                       : styles.takeButton
                   ]}
                   onPress={() => handleTakeTicket(item)}
                   disabled={
                     (item.status === 'jey-handling' && !item.isAgentRequested) ||
-                    (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid)
+                    (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid) ||
+                    (item.status === 'terminé' && item.terminatedBy === 'jey-ai') // Disable if terminated by Jey
                   }
                   activeOpacity={0.8}
                 >
                   <Text style={styles.buttonText}>
                     {item.status === 'jey-handling' && !item.isAgentRequested ? 'Géré par Jey' :
                      (item.status === 'in-progress' && item.assignedTo && item.assignedTo !== currentUser?.uid) ? 'Pris par un autre Agent' :
+                     // ⭐ MODIFIED: If terminated by Jey, show "Terminer" on the button ⭐
+                     (item.status === 'terminé' && item.terminatedBy === 'jey-ai') ? 'Terminer' :
                      'Prendre'}
                   </Text>
                 </TouchableOpacity>
@@ -885,7 +974,7 @@ const ITDashboard = () => {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle" size={60} color="#34C759" />
-            <Text style={styles.emptyText}>Aucun ticket actif trouvé.</Text> {/* Updated text */}
+            <Text style={styles.emptyText}>Aucun ticket actif trouvé.</Text>
           </View>
         }
         refreshControl={
@@ -1121,7 +1210,13 @@ const styles = StyleSheet.create({
     borderColor: '#FFD700',
     borderWidth: 1,
   },
-  terminatedTicketCard: { // This style is now effectively unused for display filtering
+  // ⭐ NEW STYLE: For tickets terminated by Jey, awaiting agent closure
+  jeyTerminatedCard: {
+    backgroundColor: '#FEE2E2', // Light red background
+    borderColor: '#EF4444',    // Red border
+    borderWidth: 1.5,
+  },
+  fullyClosedCard: { // For tickets terminated by human agents (can be visually deemphasized or filtered out entirely)
     opacity: 0.7,
     borderColor: '#B0B9C2',
   },
@@ -1158,8 +1253,13 @@ const styles = StyleSheet.create({
   purpleDot: {
     backgroundColor: '#AF52DE',
   },
-  grayDot: { // This style is now effectively unused for display filtering
+  grayDot: {
     backgroundColor: '#6B7280',
+  },
+  // ⭐ NEW STYLE: Icon for Jey-terminated tickets ⭐
+  jeyTerminatedIcon: {
+    marginLeft: 5,
+    marginRight: 8,
   },
   ticketHeaderRight: {
     flexDirection: 'row',
@@ -1198,6 +1298,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontStyle: 'italic',
   },
+  // ⭐ NEW STYLE: Label for Jey-terminated tickets ⭐
+  jeyTerminationLabel: {
+    color: '#EF4444', // Red color
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
   ticketActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1215,8 +1321,8 @@ const styles = StyleSheet.create({
   inProgressButton: {
     backgroundColor: '#4285F4',
   },
-  completeButton: { // This style is now effectively unused for display filtering
-    backgroundColor: '#6B7280',
+  completeButton: {
+    backgroundColor: '#6B7280', // Darker gray for manual closure
   },
   disabledButton: {
     backgroundColor: '#D1D5DB',

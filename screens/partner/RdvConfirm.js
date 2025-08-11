@@ -14,11 +14,11 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   ScrollView,
-  Image // Import Image
+  Image
 } from 'react-native';
 import {
-  Ionicons, // Keep Ionicons if still used elsewhere
-  MaterialIcons // Keep MaterialIcons if still used elsewhere
+  Ionicons,
+  MaterialIcons
 } from '@expo/vector-icons';
 import { db, auth } from '../../firebase';
 import {
@@ -31,18 +31,19 @@ import {
   updateDoc,
   addDoc,
   serverTimestamp,
-  orderBy
+  orderBy,
+  limit // Keep limit for single order/filter scenarios, but not with multiple 'where' causing issues
 } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
-import moment from 'moment'; // Ensure moment is imported if used for formatting
+import moment from 'moment';
 
 // --- NEW: Import your custom icons ---
-const BACK_CIRCLE_ICON = require('../../assets/icons/back_circle.png'); // From PartnerDoc
-const CALENDAR_OUTLINE_ICON = require('../../assets/icons/appointment.png'); // From PartnerDoc
-const PAYMENT_ICON = require('../../assets/icons/money_bill.png'); // For the pay button
-const EYE_OUTLINE_ICON = require('../../assets/icons/eye_outline.png'); // For view details button
-const CHECK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/checked_apt.png'); // For empty state
-const STAR_ICON_RATING = require('../../assets/icons/rate.png'); // For the star in "Demander évaluation"
+const BACK_CIRCLE_ICON = require('../../assets/icons/back_circle.png');
+const CALENDAR_OUTLINE_ICON = require('../../assets/icons/appointment.png');
+const PAYMENT_ICON = require('../../assets/icons/money_bill.png');
+const EYE_OUTLINE_ICON = require('../../assets/icons/eye_outline.png');
+const CHECK_CIRCLE_OUTLINE_ICON = require('../../assets/icons/checked_apt.png');
+const STAR_ICON_RATING = require('../../assets/icons/rate.png');
 // --- END NEW IMPORTS ---
 
 const COMMISSION_RATE = 0.13; // 13% commission rate
@@ -109,13 +110,12 @@ const RdvConfirm = () => {
         const partnerIdFromUser = userDocSnap.data().partnerId;
         setCurrentPartnerId(partnerIdFromUser);
 
-        // ⭐ MODIFIED: Fetch partner's 'nom' using partnerId ⭐
         const partnerDocRef = doc(db, 'partners', partnerIdFromUser);
         const partnerDocSnap = await getDoc(partnerDocRef);
         if (partnerDocSnap.exists()) {
           setLoggedInPartnerName(partnerDocSnap.data().nom || 'Partenaire Inconnu');
         } else {
-          setLoggedInPartnerName('Partenaire (Non trouvé)'); // Fallback
+          setLoggedInPartnerName('Partenaire (Non trouvé)');
           console.warn("WARN: Partner document not found for ID:", partnerIdFromUser);
         }
       } else {
@@ -124,7 +124,7 @@ const RdvConfirm = () => {
       }
     };
     fetchPartnerInfo();
-  }, [navigation]); // Added navigation to dependency array
+  }, [navigation]);
 
   const fetchData = useCallback(async () => {
     if (!currentPartnerId) return;
@@ -192,11 +192,11 @@ const RdvConfirm = () => {
     setIsProcessingPayment(true);
     try {
       await addDoc(collection(db, 'partners', currentPartnerId, 'revenue_transactions'), {
-        rdvId: selectedRdvForPayment.id,
+        rdvId: selectedRdvForPayment.id, // Still using rdvId here as it's for partner's specific revenue
         clientId: selectedRdvForPayment.clientId,
         clientName: selectedRdvForPayment.clientName,
         partnerId: currentPartnerId,
-        partnerName: loggedInPartnerName, // Using the partner's 'nom'
+        partnerName: loggedInPartnerName,
         amountReceived: amount,
         commissionAmount: commissionAmount,
         transactionDate: serverTimestamp(),
@@ -236,41 +236,66 @@ const RdvConfirm = () => {
     }
   };
 
-  const sendRatingRequestToClient = async (clientId, partnerId, rdvId, clientName, partnerName) => {
-    if (!clientId || !partnerId || !rdvId || !clientName || !partnerName) {
+  // MODIFIED: sendRatingRequestToClient function to use client-side filtering
+  const sendRatingRequestToClient = async (clientId, partnerId, appointmentCodeData, clientName, partnerName) => {
+    if (!clientId || !partnerId || !appointmentCodeData || !clientName || !partnerName) {
       Alert.alert("Erreur", "Informations de la demande d'évaluation manquantes.");
+      console.log("Missing info for rating request: ", { clientId, partnerId, appointmentCodeData, clientName, partnerName });
       return;
     }
 
     try {
+      // Step 1: Query for all rating requests for this client that are pending or displayed.
+      // This query should not require a composite index if 'clientId' and 'status' are indexed.
+      const baseQuery = query(
+        collection(db, 'ratingRequests'),
+        where('clientId', '==', clientId),
+        where('status', 'in', ['pending', 'displayed'])
+        // DO NOT add where('partnerId', '==', partnerId) or where('codeData', '==', appointmentCodeData) here
+        // if you want to avoid the composite index requirement.
+        // Also remove orderBy if it's causing issues without a matching index.
+      );
+      const querySnapshot = await getDocs(baseQuery);
+
+      // Step 2: Filter results on the client side
+      const existingRequest = querySnapshot.docs.find(doc => {
+        const data = doc.data();
+        return data.partnerId === partnerId && data.codeData === appointmentCodeData;
+      });
+
+      if (existingRequest) {
+        Alert.alert("Demande Déjà Envoyée", "Une demande d'évaluation est déjà en attente ou affichée pour ce rendez-vous.");
+        setPaymentDetailsModalVisible(false); // Close details modal
+        return;
+      }
+
+      // If no existing request found after client-side filtering, add a new one
       await addDoc(collection(db, 'ratingRequests'), {
         clientId: clientId,
         partnerId: partnerId,
-        rdvId: rdvId,
-        partnerName: partnerName, // Using the partner's 'nom' here
+        codeData: appointmentCodeData,
+        partnerName: partnerName,
         requestDate: serverTimestamp(),
         status: 'pending',
       });
       setPaymentDetailsModalVisible(false);
-      Alert.alert("Demande Envoyée", `Une demande d'évaluation a été envoyée au Client.`);
+      Alert.alert("Demande Envoyée", `Une demande d'évaluation a été envoyée au client pour le rendez-vous ${appointmentCodeData}.`);
     } catch (error) {
-      console.error("Error sending rating request:", error);
+      console.error("Error sending rating request (client-side filter):", error);
       Alert.alert("Erreur", "Impossible d'envoyer la demande d'évaluation. Veuillez réessayer.");
     }
   };
+  // END MODIFIED: sendRatingRequestToClient
 
   const renderRdvItem = ({ item }) => {
     const isCompleted = item.status === 'completed';
-    const partnerTotal = (item.paymentAmount || 0) - (item.commissionCalculated || 0); // Handle potential undefined values
+    const partnerTotal = (item.paymentAmount || 0) - (item.commissionCalculated || 0);
     const formattedPartnerTotal = partnerTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' });
 
     return (
       <View style={styles.rdvCard}>
         <View style={styles.rdvCardHeader}>
-          {/* --- MODIFIED: Use custom image for calendar icon --- */}
           <Image source={CALENDAR_OUTLINE_ICON} style={[styles.customRdvCardIcon, { tintColor: '#16a085' }]} />
-          {/* --- END MODIFIED --- */}
-          {/* Changed from 'item.clientNames' for consistency if clientNames is an array */}
           <Text style={styles.rdvCardTitle}>Rendez-vous avec {Array.isArray(item.clientNames) ? item.clientNames.join(', ') : item.clientNames || 'un client'}</Text>
         </View>
         <Text style={styles.rdvCardDetails}>Description: {item.description || 'Non spécifié'}</Text>
@@ -286,9 +311,7 @@ const RdvConfirm = () => {
             style={styles.payButton}
             onPress={() => openPaymentModal(item)}
           >
-            {/* --- MODIFIED: Use custom image for payment icon --- */}
             <Image source={PAYMENT_ICON} style={styles.customPayButtonIcon} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.payButtonText}>Enregistrer le Paiement</Text>
           </TouchableOpacity>
         ) : (
@@ -296,9 +319,7 @@ const RdvConfirm = () => {
             style={styles.viewDetailsButton}
             onPress={() => openPaymentDetailsModal(item)}
           >
-            {/* --- MODIFIED: Use custom image for eye icon --- */}
             <Image source={EYE_OUTLINE_ICON} style={[styles.customViewDetailsIcon, { tintColor: '#4a6bff' }]} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.viewDetailsButtonText}>Voir les Détails</Text>
           </TouchableOpacity>
         )}
@@ -319,9 +340,7 @@ const RdvConfirm = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          {/* --- MODIFIED: Use custom image for back arrow --- */}
           <Image source={BACK_CIRCLE_ICON} style={styles.customHeaderIconRdv} />
-          {/* --- END MODIFIED --- */}
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rendez-vous Confirmés</Text>
         <View style={{ width: 24 }} />
@@ -339,9 +358,7 @@ const RdvConfirm = () => {
       >
         {rdvs.length === 0 ? (
           <View style={styles.emptyCard}>
-            {/* --- MODIFIED: Use custom image for empty state icon --- */}
             <Image source={CHECK_CIRCLE_OUTLINE_ICON} style={styles.customEmptyCardIcon} />
-            {/* --- END MODIFIED --- */}
             <Text style={styles.emptyCardText}>Aucun rendez-vous confirmé ou complété.</Text>
             <Text style={styles.emptyCardSubText}>Les rendez-vous confirmés s'afficheront ici pour paiement.</Text>
           </View>
@@ -447,14 +464,12 @@ const RdvConfirm = () => {
                   onPress={() => sendRatingRequestToClient(
                     displayedPaymentDetails.clientId,
                     displayedPaymentDetails.partnerId,
-                    displayedPaymentDetails.id,
-                    displayedPaymentDetails.clientName,
-                    loggedInPartnerName // Using the partner's 'nom' here
+                    displayedPaymentDetails.codeData,
+                    Array.isArray(displayedPaymentDetails.clientNames) ? displayedPaymentDetails.clientNames.join(', ') : displayedPaymentDetails.clientNames || 'N/A',
+                    loggedInPartnerName
                   )}
                 >
-                  {/* --- MODIFIED: Use custom image for star icon --- */}
                   <Image source={STAR_ICON_RATING} style={styles.customRateClientIcon} />
-                  {/* --- END MODIFIED --- */}
                   <Text style={styles.rateClientButtonText}>Demander évaluation au client</Text>
                 </TouchableOpacity>
 
@@ -492,14 +507,12 @@ const styles = StyleSheet.create({
       backButton: {
         padding: 8,
       },
-      // --- NEW STYLE for custom header icon (back arrow) ---
       customHeaderIconRdv: {
-        width: 24, // Match Ionicons size
-        height: 24, // Match Ionicons size
+        width: 24,
+        height: 24,
         resizeMode: 'contain',
-        tintColor: '#2D3748', // Match Ionicons color
+        tintColor: '#2D3748',
       },
-      // --- END NEW STYLE ---
       headerTitle: {
         fontSize: 20,
         fontWeight: '700',
@@ -541,14 +554,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 10,
       },
-      // --- NEW STYLE for custom RDV card icon (calendar) ---
       customRdvCardIcon: {
-        width: 24, // Match Ionicons size
-        height: 24, // Match Ionicons size
+        width: 24,
+        height: 24,
         resizeMode: 'contain',
-        // tintColor is applied inline
       },
-      // --- END NEW STYLE ---
       rdvCardTitle: {
         fontSize: 19,
         fontWeight: '700',
@@ -576,15 +586,13 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
       },
-      // --- NEW STYLE for custom pay button icon ---
       customPayButtonIcon: {
-        width: 20, // Match MaterialIcons size
-        height: 20, // Match MaterialIcons size
+        width: 20,
+        height: 20,
         resizeMode: 'contain',
-        tintColor: 'white', // Match MaterialIcons color
+        tintColor: 'white',
         marginRight: 5,
       },
-      // --- END NEW STYLE ---
       payButtonText: {
         color: 'white',
         fontWeight: '600',
@@ -603,15 +611,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#4a6bff',
       },
-      // --- NEW STYLE for custom view details icon ---
       customViewDetailsIcon: {
-        width: 20, // Match Ionicons size
-        height: 20, // Match Ionicons size
+        width: 20,
+        height: 20,
         resizeMode: 'contain',
-        // tintColor is applied inline
         marginRight: 5,
       },
-      // --- END NEW STYLE ---
       viewDetailsButtonText: {
         color: '#4a6bff',
         fontWeight: '600',
@@ -633,14 +638,12 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
         minHeight: 180,
       },
-      // --- NEW STYLE for custom empty card icon ---
       customEmptyCardIcon: {
-        width: 50, // Match MaterialIcons size
-        height: 50, // Match MaterialIcons size
+        width: 50,
+        height: 50,
         resizeMode: 'contain',
-        tintColor: '#ccc', // Match MaterialIcons color
+        tintColor: '#ccc',
       },
-      // --- END NEW STYLE ---
       emptyCardText: {
         fontSize: 16,
         color: '#6B7280',
@@ -766,15 +769,13 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
       },
-      // --- NEW STYLE for custom rate client icon ---
       customRateClientIcon: {
-        width: 20, // Match Ionicons size
-        height: 20, // Match Ionicons size
+        width: 20,
+        height: 20,
         resizeMode: 'contain',
-        tintColor: 'white', // Match Ionicons color
+        tintColor: 'white',
         marginRight: 5,
       },
-      // --- END NEW STYLE ---
       rateClientButtonText: {
         color: 'white',
         fontWeight: '600',

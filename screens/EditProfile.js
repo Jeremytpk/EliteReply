@@ -1,3 +1,4 @@
+// Jey's Refined EditProfile Component with Firebase Storage Timeout Adjustment
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,11 +15,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker'; // Changed from ImagePicker to avoid conflict if already defined
+import * as ImagePicker from 'expo-image-picker';
 import { auth, db, storage } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile } from 'firebase/auth'; // Removed updateEmail
+// Jey's Fix: Import getStorage and maxUploadRetryTime
+import { ref, uploadBytes, getDownloadURL, getStorage, maxUploadRetryTime } from 'firebase/storage';
+import { updateProfile } from 'firebase/auth';
 
 const EditProfile = () => {
   const navigation = useNavigation();
@@ -26,8 +28,7 @@ const EditProfile = () => {
   const { userData: initialUserData } = route.params;
 
   const [name, setName] = useState(initialUserData?.name || '');
-  // Removed email state
-  const [phoneNumber, setPhoneNumber] = useState(initialUserData?.phoneNumber || ''); // New state for phone number
+  const [phoneNumber, setPhoneNumber] = useState(initialUserData?.phoneNumber || '');
   const [department, setDepartment] = useState(initialUserData?.department || '');
   const [position, setPosition] = useState(initialUserData?.position || '');
   const [photoURL, setPhotoURL] = useState(initialUserData?.photoURL || null);
@@ -49,7 +50,7 @@ const EditProfile = () => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 0.7, // Existing quality setting, which is good
     });
 
     if (!result.canceled) {
@@ -58,10 +59,21 @@ const EditProfile = () => {
   };
 
   const uploadImage = async (uri) => {
-    if (!uri) return null;
+    if (!uri) {
+      console.warn("Attempted to upload null or empty URI.");
+      return null;
+    }
 
     setLoading(true);
     try {
+      // Jey's Fix: Get the storage instance and set the max retry time
+      const storageInstance = getStorage();
+      // Set max retry time to 2 minutes (120000 milliseconds)
+      // Default is 60000ms (1 minute). Increasing it gives more time for slow networks.
+      storageInstance.maxUploadRetryTime = 120000; // 2 minutes
+
+      console.log("Attempting to upload image from URI:", uri); // Jey's Debug Log
+
       const response = await fetch(uri);
       const blob = await response.blob();
       const user = auth.currentUser;
@@ -70,9 +82,10 @@ const EditProfile = () => {
         return null;
       }
 
-      const storageRef = ref(storage, `profile_pictures/${user.uid}`);
+      const storageRef = ref(storageInstance, `profile_pictures/${user.uid}`); // Use storageInstance here
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
+      console.log("Image uploaded, download URL:", downloadURL);
       return downloadURL;
     } catch (error) {
       console.error("Error uploading image:", error);
@@ -95,30 +108,33 @@ const EditProfile = () => {
 
     try {
       let newPhotoURL = photoURL;
+
       if (photoURL && photoURL !== initialUserData?.photoURL) {
-        // Only upload if photoURL has changed
-        newPhotoURL = await uploadImage(photoURL);
-        if (!newPhotoURL) {
-          throw new Error("Failed to upload new photo.");
+        const uploadedURL = await uploadImage(photoURL);
+        if (uploadedURL) {
+          newPhotoURL = uploadedURL;
+        } else {
+          newPhotoURL = initialUserData?.photoURL || null;
+          Alert.alert("Avertissement", "La nouvelle photo n'a pas pu être téléchargée. L'ancienne photo sera conservée.");
         }
+      } else if (photoURL === null && initialUserData?.photoURL) {
+        newPhotoURL = null;
       }
 
       const updates = {
         name: name,
-        phoneNumber: phoneNumber, // Include phone number in updates
-        role: initialUserData?.role, // Keep existing role
+        phoneNumber: phoneNumber,
+        role: initialUserData?.role,
         department: department,
         position: position,
-        photoURL: newPhotoURL, // Update photoURL in Firestore
+        photoURL: newPhotoURL,
       };
 
-      // Update user authentication profile (only display name and photoURL)
       await updateProfile(user, {
         displayName: name,
         photoURL: newPhotoURL,
       });
 
-      // Update user document in Firestore
       await updateDoc(doc(db, 'users', user.uid), updates);
 
       Alert.alert('Succès', 'Votre profil a été mis à jour avec succès.', [
@@ -143,7 +159,7 @@ const EditProfile = () => {
             <Ionicons name="arrow-back" size={28} color="#2D3748" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Modifier le profil</Text>
-          <View style={{ width: 28 }} /> {/* Placeholder for alignment */}
+          <View style={{ width: 28 }} />
         </View>
 
         <View style={styles.profileImageContainer}>
@@ -175,7 +191,6 @@ const EditProfile = () => {
             />
           </View>
 
-          {/* New Phone Number Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Numéro de Téléphone</Text>
             <TextInput
@@ -187,7 +202,6 @@ const EditProfile = () => {
             />
           </View>
 
-          {/* Render department and position only if user had them initially */}
           {(initialUserData?.role === 'ITSupport' || initialUserData?.role === 'Admin') && (
             <>
               <View style={styles.inputGroup}>

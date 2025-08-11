@@ -8,27 +8,27 @@ import {
   TouchableOpacity,
   Alert,
   Image,
-  Modal, // Import Modal
+  Modal,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import moment from 'moment';
 import 'moment/locale/fr';
+import { useNavigation } from '@react-navigation/native';
 
-// Assuming you have a way to get the current user's info, e.g., from an auth context or global state
-// For demonstration, we'll hardcode isAdmin and a dummy agent name for now.
-// In a real app, this would come from your user management/authentication.
-const currentUser = { isAdmin: true, name: 'Agent Smith' }; // <--- ADDED AGENT NAME HERE
+// Assuming you have a way to get the current user's info
+const currentUser = { isAdmin: true, name: 'Agent Smith' };
 
 moment.locale('fr');
 
-const TicketInfo = ({ route, navigation }) => {
+const TicketInfo = ({ route }) => {
   const { ticketId } = route.params;
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
-  const [isConversationModalVisible, setIsConversationModalVisible] = useState(false); // State for modal visibility
+  const [isConversationModalVisible, setIsConversationModalVisible] = useState(false);
+  const navigation = useNavigation();
 
   useEffect(() => {
     const fetchTicketData = async () => {
@@ -72,12 +72,12 @@ const TicketInfo = ({ route, navigation }) => {
 
       // If status is 'terminé', also save the agent's name and the completion timestamp
       if (newStatus === 'terminé') {
-        updateData.termineLe = new Date(); // Sets the completion time
-        updateData.agentName = currentUser.name; // <--- ADDED: Store the agent's name
+        updateData.termineLe = new Date();
+        updateData.agentName = currentUser.name;
       }
 
       await updateDoc(doc(db, 'tickets', ticketId), updateData);
-      setTicket(prev => ({ ...prev, ...updateData, termineLe: updateData.termineLe || prev.termineLe })); // Update local state correctly
+      setTicket(prev => ({ ...prev, ...updateData, termineLe: updateData.termineLe || prev.termineLe }));
       Alert.alert("Succès", `Statut du ticket mis à jour: ${newStatus}`);
     } catch (error) {
       console.error("Error updating status:", error);
@@ -94,6 +94,10 @@ const TicketInfo = ({ route, navigation }) => {
         { text: "Confirmer", onPress: () => handleChangeStatus(newStatus) }
       ]
     );
+  };
+  
+  const handleViewPartners = () => {
+    navigation.navigate('PartnerList');
   };
 
   if (loading) {
@@ -144,6 +148,17 @@ const TicketInfo = ({ route, navigation }) => {
       ]}>
         <Text style={styles.statusText}>{ticket.status.toUpperCase()}</Text>
       </View>
+
+      {/* "Voir Partenaires" Button */}
+      {currentUser.isAdmin && (
+        <TouchableOpacity 
+          style={styles.viewPartnersButton}
+          onPress={handleViewPartners}
+        >
+          <MaterialIcons name="group" size={20} color="#fff" />
+          <Text style={styles.viewPartnersButtonText}>Voir la liste des partenaires</Text>
+        </TouchableOpacity>
+      )}
 
       {/* "Read Ticket" button for admins */}
       {currentUser.isAdmin && ( // Only show if isAdmin is true
@@ -242,7 +257,7 @@ const TicketInfo = ({ route, navigation }) => {
             <View style={styles.timelineContent}>
               <Text style={styles.timelineTitle}>
                 Terminé le
-                {ticket.agentName && <Text style={styles.agentNameText}> par: {ticket.agentName}</Text>} {/* <--- ADDED: Agent Name Display */}
+                {ticket.agentName && <Text style={styles.agentNameText}> par: {ticket.agentName}</Text>}
               </Text>
               <Text style={styles.timelineDate}>
                 {moment(ticket.termineLe).format('LL [à] LT')}
@@ -290,8 +305,6 @@ const TicketInfo = ({ route, navigation }) => {
           <View style={styles.modalView}>
             <Text style={styles.modalTitle}>Conversation du Ticket</Text>
             <ScrollView style={styles.conversationScroll}>
-              {/* This is where your conversation messages would go */}
-              {/* For now, we'll just display the main message as a placeholder */}
               <View style={styles.conversationMessageContainer}>
                 <Text style={styles.conversationSender}>Demandeur:</Text>
                 <Text style={styles.conversationText}>{ticket.message}</Text>
@@ -299,7 +312,6 @@ const TicketInfo = ({ route, navigation }) => {
                   {moment(ticket.createdAt).format('DD/MM/YYYY HH:mm')}
                 </Text>
               </View>
-              {/* Add more conversation messages here, e.g., from a 'conversations' subcollection */}
               <Text style={styles.noConversationText}>
                 (Future: Additional messages will appear here)
               </Text>
@@ -455,10 +467,9 @@ const styles = StyleSheet.create({
     color: '#2C2C2C',
     fontWeight: '500',
   },
-  // New style for the agent's name
   agentNameText: {
     fontWeight: 'bold',
-    color: '#333', // Or any color you prefer
+    color: '#333',
   },
   actionsContainer: {
     backgroundColor: '#FFF',
@@ -524,12 +535,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  // New styles for the "Read Ticket" button and modal
+  viewPartnersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#34C759',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  viewPartnersButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '600',
+    fontSize: 16,
+  },
   readTicketButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a8fdf', // A nice blue color
+    backgroundColor: '#0a8fdf',
     padding: 12,
     borderRadius: 8,
     marginHorizontal: 16,
@@ -546,7 +572,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)', // Dim background
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalView: {
     margin: 20,
@@ -562,8 +588,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    width: '90%', // Adjust width as needed
-    maxHeight: '80%', // Adjust max height as needed
+    width: '90%',
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 20,
@@ -573,7 +599,7 @@ const styles = StyleSheet.create({
   },
   conversationScroll: {
     width: '100%',
-    maxHeight: 300, // Limit height for scrollability
+    maxHeight: 300,
     marginBottom: 20,
   },
   conversationMessageContainer: {

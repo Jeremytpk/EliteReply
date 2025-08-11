@@ -1,3 +1,4 @@
+// Jey's Refactored Component
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -15,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth'; // Removed signOut from here
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -50,13 +51,16 @@ const Paramètres = () => {
         if (user) {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
+            const firestoreData = userDoc.data();
             setUserData({
-              name: userDoc.data().name,
+              name: firestoreData.name,
               email: user.email,
-              photoURL: user.photoURL || userDoc.data().photoURL,
-              role: userDoc.data().role,
-              department: userDoc.data().department,
-              position: userDoc.data().position
+              // Jey's Fix: Prioritize the photoURL from Firestore if available.
+              // If not, fall back to the auth user photoURL.
+              photoURL: firestoreData.photoURL || user.photoURL || null,
+              role: firestoreData.role,
+              department: firestoreData.department,
+              position: firestoreData.position
             });
           } else {
             console.warn("No user data found in Firestore for UID:", user.uid);
@@ -77,9 +81,6 @@ const Paramètres = () => {
       fetchUserData();
     }
   }, [isFocused]);
-
-  // --- Removed handleLogout from here, as it's now handled by navigating to Deconnection.js ---
-  // const handleLogout = async () => { ... };
 
   // --- Handle Password Change ---
   const handleChangePassword = async () => {
@@ -126,8 +127,6 @@ const Paramètres = () => {
         errorMessage = 'Le nouveau mot de passe est trop faible.';
       } else if (error.code === 'auth/requires-recent-login') {
         errorMessage = 'Veuillez vous reconnecter pour changer votre mot de passe (session expirée).';
-        // Optionally, force re-login here
-        // signOut(auth).then(() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }));
       }
       Alert.alert('Erreur', errorMessage);
     } finally {
@@ -145,13 +144,16 @@ const Paramètres = () => {
     );
   }
 
+  // Jey's improvement: Use a variable for the image source to simplify the JSX.
+  const profileImageSource = userData?.photoURL ? { uri: userData.photoURL } : null;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Enhanced Profile Section */}
       <View style={styles.profileCard}>
-        {userData?.photoURL ? (
+        {profileImageSource ? (
           <Image
-            source={{ uri: userData.photoURL }}
+            source={profileImageSource}
             style={styles.profileImage}
           />
         ) : (
@@ -235,18 +237,15 @@ const Paramètres = () => {
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
         </TouchableOpacity>
 
-        {/* --- MODIFIED: Déconnexion Button now navigates to Deconnection screen --- */}
         <TouchableOpacity
           style={[styles.settingItem, styles.logoutButton]}
-          onPress={() => navigation.navigate('Deconnection')} 
+          onPress={() => navigation.navigate('Deconnection')}
         >
           <View style={styles.settingItemContent}>
             <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} />
             <Text style={[styles.settingText, styles.logoutText]}>Déconnexion</Text>
           </View>
-          {/* No right arrow needed for logout as it performs an action directly */}
         </TouchableOpacity>
-        {/* --- END MODIFIED --- */}
       </View>
 
       <Text style={styles.version}>Version 1.0.0</Text>
