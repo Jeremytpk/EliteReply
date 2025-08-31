@@ -1,0 +1,16 @@
+# Jey: This file tells Netlify exactly how to build and deploy your Expo web app.
+
+[build]
+  # This is the command we just used to build the site.
+  command = "npx expo export --platform web"
+  
+  # This is the folder that gets created by the build command.
+  publish = "dist"
+
+# Jey: This is a CRITICAL rule for single-page apps like yours.
+# It makes sure that if a user refreshes on a page like /gatecodes,
+# they aren't met with a 404 error. It redirects all requests to the main index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
