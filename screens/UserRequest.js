@@ -34,7 +34,7 @@ const UserRequest = ({ navigation }) => {
           Cette fonctionnalité d'assistance est exclusivement disponible sur l'application mobile.
         </Text>
         <Text style={styles.webMessage}>
-          Veuillez télécharger l'application depuis l'App Store ou Google Play pour soumettre votre demande.
+          Veuillez télécharger EliteReply depuis l'App Store ou Google Play pour soumettre votre demande.
         </Text>
       </View>
     );
@@ -616,6 +616,7 @@ const styles = StyleSheet.create({
   webImage: {
     width: 200,
     height: 200,
+    borderRadius: 100,
     marginBottom: 20,
   },
   webMessageTitle: {
