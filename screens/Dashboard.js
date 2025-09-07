@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: '#f4f4f4',
     padding: 20,
-    marginTop: 18,
+    marginTop: 10,
   },
   loadingContainer: {
     flex: 1,

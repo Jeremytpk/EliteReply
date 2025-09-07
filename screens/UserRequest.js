@@ -17,9 +17,30 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { collection, addDoc, setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { APP_CATEGORIES } from '../constants/APP_CATEGORIES'; // NEW: Import categories from shared file
+import { APP_CATEGORIES } from '../constants/APP_CATEGORIES';
 
 const UserRequest = ({ navigation }) => {
+  // Check if the platform is web and return the message early
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webContainer}>
+        <Image
+          source={require('../assets/images/logoFace.png')}
+          style={styles.webImage}
+          resizeMode="contain"
+        />
+        <Text style={styles.webMessageTitle}>Fonctionnalité non disponible sur le web</Text>
+        <Text style={styles.webMessage}>
+          Cette fonctionnalité d'assistance est exclusivement disponible sur l'application mobile.
+        </Text>
+        <Text style={styles.webMessage}>
+          Veuillez télécharger l'application depuis l'App Store ou Google Play pour soumettre votre demande.
+        </Text>
+      </View>
+    );
+  }
+
+  // Rest of the component's state and logic
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
@@ -37,12 +58,7 @@ const UserRequest = ({ navigation }) => {
   const phoneInputRef = useRef(null);
   const messageInputRef = useRef(null);
 
-  // Categories are now imported from APP_CATEGORIES.js, no longer defined here
-  // const categories = [ ... ].sort(...);
-
-  // Helper to find category name/icon by ID
   const getCategoryInfo = (categoryId) => {
-    // Use APP_CATEGORIES from the imported constant
     return APP_CATEGORIES.find(cat => cat.id === categoryId) || { name: 'Sélectionnez une catégorie', icon: 'category' };
   };
 
@@ -326,7 +342,7 @@ const UserRequest = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={APP_CATEGORIES} // Using APP_CATEGORIES from imported constant
+              data={APP_CATEGORIES}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -436,7 +452,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  // Re-used styles for custom category select button
   categorySelectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -589,6 +604,33 @@ const styles = StyleSheet.create({
     color: '#34C759',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // NEW STYLES FOR WEB
+  webContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#F8F9FA',
+  },
+  webImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 20,
+  },
+  webMessageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#2C2C2C',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  webMessage: {
+    fontSize: 18,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 28,
+    marginBottom: 10,
   },
 });
 
