@@ -13,7 +13,7 @@ import {
   Dimensions,
   FlatList,
   RefreshControl,
-  Platform // <-- Import Platform
+  Platform
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
@@ -33,7 +33,7 @@ const DEFAULT_PRODUCT_PLACEHOLDER = require('../../assets/icons/product_placehol
 const { width } = Dimensions.get('window');
 const PRODUCT_ITEM_SIZE = (width - 60) / 2;
 
-// Helper to render star rating (copied from Conversation.js or could be a shared component)
+// Helper to render star rating
 const renderStarRating = (rating) => {
   if (typeof rating !== 'number' || rating < 0 || rating > 5) {
     return null;
@@ -70,11 +70,9 @@ const PartnerPage = ({ route }) => {
   const [productUploading, setProductUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isCurrentUserPartner, setIsCurrentUserPartner] = useState(false);
-  // NEW: State for admin status
   const [isAdmin, setIsAdmin] = useState(false);
   const [partnerRating, setPartnerRating] = useState(null);
 
-  // NEW: State for reviews modal
   const [isReviewsModalVisible, setIsReviewsModalVisible] = useState(false);
   const [partnerReviews, setPartnerReviews] = useState([]);
   const [fetchingReviews, setFetchingReviews] = useState(false);
@@ -89,11 +87,10 @@ const PartnerPage = ({ route }) => {
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           setIsCurrentUserPartner(userData.isPartner || false);
-          // NEW: Set isAdmin status
           setIsAdmin(userData.isAdmin || false);
         } else {
           setIsCurrentUserPartner(false);
-          setIsAdmin(false); // No user doc, not admin
+          setIsAdmin(false);
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -101,15 +98,14 @@ const PartnerPage = ({ route }) => {
         setIsAdmin(false);
       }
     } else {
-      setIsCurrentUserPartner(false); // No user logged in
-      setIsAdmin(false); // No user logged in, not admin
+      setIsCurrentUserPartner(false);
+      setIsAdmin(false);
     }
   }, []);
 
   const fetchPartnerAndProducts = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch Partner Details
       const partnerDocRef = doc(db, 'partners', partnerId);
       const partnerDocSnap = await getDoc(partnerDocRef);
 
@@ -121,7 +117,6 @@ const PartnerPage = ({ route }) => {
         return;
       }
 
-      // Fetch Partner Ratings
       const ratingsQuery = query(collection(db, 'partnerRatings'), where('partnerId', '==', partnerId));
       const ratingsSnapshot = await getDocs(ratingsQuery);
       let totalRating = 0;
@@ -132,19 +127,18 @@ const PartnerPage = ({ route }) => {
           totalRating += doc.data().rating;
           numberOfRatings++;
         });
-        setPartnerRating((totalRating / numberOfRatings).toFixed(1)); // Average rating, to 1 decimal place
+        setPartnerRating((totalRating / numberOfRatings).toFixed(1));
       } else {
-        setPartnerRating(null); // No ratings yet
+        setPartnerRating(null);
       }
 
-      // Fetch Products
       let productsQueryRef;
-      if (isAdmin) { // Admin sees all products (approved and unapproved)
+      if (isAdmin) {
         productsQueryRef = collection(db, 'partners', partnerId, 'products');
-      } else { // Regular users (including partners, if not admin) only see approved products
+      } else {
         productsQueryRef = query(
           collection(db, 'partners', partnerId, 'products'),
-          where('isApproved', '==', true) // Filter for approved products
+          where('isApproved', '==', true)
         );
       }
 
@@ -154,10 +148,9 @@ const PartnerPage = ({ route }) => {
         ...doc.data()
       }));
 
-      // Sort products so unapproved ones appear at the top for easier admin management
       fetchedProducts.sort((a, b) => {
         if (a.isApproved === b.isApproved) return 0;
-        return a.isApproved ? 1 : -1; // Unapproved (false) comes before approved (true)
+        return a.isApproved ? 1 : -1;
       });
 
       setProducts(fetchedProducts);
@@ -170,9 +163,8 @@ const PartnerPage = ({ route }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [partnerId, navigation, isAdmin]); // Add isAdmin to dependencies
+  }, [partnerId, navigation, isAdmin]);
 
-  // Function to fetch reviews for the modal - MODIFIED FOR NO INDEX
   const fetchReviews = useCallback(async () => {
     setFetchingReviews(true);
     try {
@@ -186,12 +178,10 @@ const PartnerPage = ({ route }) => {
         ...doc.data()
       }));
 
-      // Step 2: Perform client-side sorting
-      // Ensure createdAt is a Date object or comparable for sorting
       fetchedReviews.sort((a, b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-        return dateB - dateA; // Sort descending (most recent first)
+        return dateB - dateA;
       });
 
       setPartnerReviews(fetchedReviews);
@@ -203,7 +193,6 @@ const PartnerPage = ({ route }) => {
     }
   }, [partnerId]);
 
-  // Handle opening reviews modal
   const handleOpenReviewsModal = () => {
     fetchReviews();
     setIsReviewsModalVisible(true);
@@ -241,14 +230,13 @@ const PartnerPage = ({ route }) => {
     return true;
   };
 
-  // UPDATED pickImage function for both web and mobile
+  // UPDATED: pickImage function for both web and mobile
   const pickImage = async () => {
     if (newProductImages.length >= 5) {
       Alert.alert("Limite de photos", "Vous ne pouvez ajouter qu'un maximum de 5 photos par produit.");
       return;
     }
 
-    // Handle Web platform
     if (Platform.OS === 'web') {
       try {
         const input = document.createElement('input');
@@ -258,14 +246,12 @@ const PartnerPage = ({ route }) => {
         input.onchange = (event) => {
           const files = event.target.files;
           if (files) {
-            const uris = [];
+            const newImages = [];
             for (let i = 0; i < files.length && i + newProductImages.length < 5; i++) {
-              // Store the File object itself for web, as createObjectURL is temporary
               const file = files[i];
-              // Store a temporary URL for display purposes, but we will upload the file object itself.
-              uris.push({ uri: URL.createObjectURL(file), file });
+              newImages.push({ uri: URL.createObjectURL(file), file });
             }
-            setNewProductImages(prevImages => [...prevImages, ...uris].slice(0, 5));
+            setNewProductImages(prevImages => [...prevImages, ...newImages]);
           }
         };
         input.click();
@@ -276,7 +262,6 @@ const PartnerPage = ({ route }) => {
       return;
     }
 
-    // Handle Mobile (iOS/Android) platforms
     Alert.alert(
       "Sélectionner une photo",
       "Voulez-vous prendre une photo ou en choisir une dans la galerie ?",
@@ -296,8 +281,8 @@ const PartnerPage = ({ route }) => {
             });
 
             if (!result.canceled) {
-              const selectedUris = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
-              setNewProductImages(prevImages => [...prevImages, ...selectedUris].slice(0, 5));
+              const selectedImages = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
+              setNewProductImages(prevImages => [...prevImages, ...selectedImages].slice(0, 5));
             }
           },
         },
@@ -317,8 +302,8 @@ const PartnerPage = ({ route }) => {
             });
 
             if (!result.canceled) {
-              const selectedUris = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
-              setNewProductImages(prevImages => [...prevImages, ...selectedUris].slice(0, 5));
+              const selectedImages = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
+              setNewProductImages(prevImages => [...prevImages, ...selectedImages].slice(0, 5));
             }
           },
         },
@@ -331,13 +316,15 @@ const PartnerPage = ({ route }) => {
     );
   };
   
-  // UPDATED uploadImage function for web
+  // UPDATED: uploadImage function for both web and mobile
   const uploadImage = async (imageObject) => {
     let blob;
 
     if (Platform.OS === 'web') {
+      // Use the file object directly for web
       blob = imageObject.file;
     } else {
+      // Fetch the blob from the local URI for native
       const response = await fetch(imageObject.uri);
       blob = await response.blob();
     }
@@ -363,7 +350,6 @@ const PartnerPage = ({ route }) => {
     setProductUploading(true);
     try {
       const imageUrls = [];
-      // Loop over the new image objects
       for (const imageObject of newProductImages) {
         const url = await uploadImage(imageObject);
         imageUrls.push(url);
@@ -376,12 +362,11 @@ const PartnerPage = ({ route }) => {
         imageUrls: imageUrls,
         createdAt: serverTimestamp(),
         partnerId: partnerId,
-        // NEW: Add isApproved field, default to false
         isApproved: false,
       };
 
       await addDoc(collection(db, 'partners', partnerId, 'products'), productData);
-      Alert.alert("Succès", "Produit ajouté avec succès et en attente d'approbation !"); // Updated message
+      Alert.alert("Succès", "Produit ajouté avec succès et en attente d'approbation !");
       setIsProductModalVisible(false);
       setNewProductName('');
       setNewProductDescription('');
@@ -397,7 +382,7 @@ const PartnerPage = ({ route }) => {
     }
   };
   
-  // UPDATED handleDeleteProduct function for web
+  // UPDATED: handleDeleteProduct function for both web and mobile
   const handleDeleteProduct = async (productId, imageUrls) => {
     Alert.alert(
       "Supprimer le produit",
@@ -412,11 +397,10 @@ const PartnerPage = ({ route }) => {
               for (const url of imageUrls) {
                 if (url && url.startsWith('https://firebasestorage.googleapis.com/')) {
                   try {
-                    // Robust method to extract file path for all platforms
-                    const storagePath = `products/${partnerId}/${url.split('/').pop().split('?')[0]}`;
-                    const imageRef = ref(storage, storagePath);
+                    const decodedPath = decodeURIComponent(url.split('?')[0].split('o/')[1]);
+                    const imageRef = ref(storage, decodedPath);
                     await deleteObject(imageRef);
-                    console.log("Image deleted from storage:", storagePath);
+                    console.log("Image deleted from storage:", decodedPath);
                   } catch (deleteError) {
                     console.warn("Error deleting product image from storage:", deleteError);
                   }
@@ -439,7 +423,6 @@ const PartnerPage = ({ route }) => {
     );
   };
 
-  // NEW: Function to approve a product
   const handleApproveProduct = async (productId) => {
     Alert.alert(
       "Approuver le produit",
@@ -455,7 +438,7 @@ const PartnerPage = ({ route }) => {
                 isApproved: true,
               });
               Alert.alert("Succès", "Produit approuvé avec succès !");
-              fetchPartnerAndProducts(); // Refresh the list
+              fetchPartnerAndProducts();
             } catch (error) {
               console.error("Error approving product:", error);
               Alert.alert("Erreur", "Échec de l'approbation du produit: " + error.message);
@@ -466,7 +449,6 @@ const PartnerPage = ({ route }) => {
     );
   };
 
-  // NEW: Function to reject (delete) a product
   const handleRejectProduct = async (productId, imageUrls) => {
     Alert.alert(
       "Rejeter le produit",
@@ -476,7 +458,6 @@ const PartnerPage = ({ route }) => {
         {
           text: "Rejeter",
           onPress: async () => {
-            // Re-using handleDeleteProduct logic as rejection means deletion
             await handleDeleteProduct(productId, imageUrls);
           },
           style: "destructive",
@@ -502,14 +483,13 @@ const PartnerPage = ({ route }) => {
     <TouchableOpacity
       style={styles.productCard}
       onPress={() => {
-        // Only allow navigation to ProductDetail if approved or if it's the partner/admin viewing it
         if (item.isApproved || isCurrentUserPartner || isAdmin) {
           navigation.navigate('ProductDetail', { productId: item.id, partnerName: partner.nom, productName: item.name });
         } else {
           Alert.alert("Produit Inactif", "Ce produit n'est pas encore approuvé par l'administrateur.");
         }
       }}
-      disabled={!item.isApproved && !isCurrentUserPartner && !isAdmin} // Disable if not approved and not partner/admin
+      disabled={!item.isApproved && !isCurrentUserPartner && !isAdmin}
     >
       <Image
         source={item.imageUrls && item.imageUrls.length > 0 ? { uri: item.imageUrls[0] } : DEFAULT_PRODUCT_PLACEHOLDER}
@@ -518,20 +498,20 @@ const PartnerPage = ({ route }) => {
       <Text style={styles.productName}>{item.name}</Text>
       <Text style={styles.productPrice}>{item.price.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}</Text>
 
-      {/* NEW: Inactivated status and Admin approval/rejection icons */}
+      {/* Inactivated status and Admin approval/rejection icons */}
       {!item.isApproved && (
         <View style={styles.inactivatedOverlay}>
           <Text style={styles.inactivatedText}>Inactif</Text>
           {isAdmin && (
             <View style={styles.adminActionButtons}>
               <TouchableOpacity
-                style={[styles.adminActionButton, { backgroundColor: '#28a745' }]} // Green for approve
+                style={[styles.adminActionButton, { backgroundColor: '#28a745' }]}
                 onPress={() => handleApproveProduct(item.id)}
               >
                 <Ionicons name="checkmark-circle" size={24} color="#fff" />
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.adminActionButton, { backgroundColor: '#dc3545', marginLeft: 10 }]} // Red for reject
+                style={[styles.adminActionButton, { backgroundColor: '#dc3545', marginLeft: 10 }]}
                 onPress={() => handleRejectProduct(item.id, item.imageUrls)}
               >
                 <Ionicons name="close-circle" size={24} color="#fff" />
@@ -541,8 +521,8 @@ const PartnerPage = ({ route }) => {
         </View>
       )}
 
-      {/* Existing delete button for partners and also if current user is partner and product is not approved*/}
-      {isCurrentUserPartner && (item.isApproved || !item.isApproved) && (
+      {/* UPDATED: Delete button now visible for partners OR admins */}
+      {(isCurrentUserPartner || isAdmin) && (
         <TouchableOpacity
           style={styles.deleteProductButton}
           onPress={() => handleDeleteProduct(item.id, item.imageUrls)}
@@ -553,7 +533,6 @@ const PartnerPage = ({ route }) => {
     </TouchableOpacity>
   );
 
-  // Render function for individual review items
   const renderReviewItem = ({ item }) => (
     <View style={styles.reviewItem}>
       <View style={styles.reviewHeader}>
