@@ -241,7 +241,7 @@ const PartnerPage = ({ route }) => {
     return true;
   };
 
-  // UPDATED pickImage function
+  // UPDATED pickImage function for both web and mobile
   const pickImage = async () => {
     if (newProductImages.length >= 5) {
       Alert.alert("Limite de photos", "Vous ne pouvez ajouter qu'un maximum de 5 photos par produit.");
@@ -259,8 +259,11 @@ const PartnerPage = ({ route }) => {
           const files = event.target.files;
           if (files) {
             const uris = [];
-            for (let i = 0; i < files.length && uris.length < 5; i++) {
-              uris.push(URL.createObjectURL(files[i]));
+            for (let i = 0; i < files.length && i + newProductImages.length < 5; i++) {
+              // Store the File object itself for web, as createObjectURL is temporary
+              const file = files[i];
+              // Store a temporary URL for display purposes, but we will upload the file object itself.
+              uris.push({ uri: URL.createObjectURL(file), file });
             }
             setNewProductImages(prevImages => [...prevImages, ...uris].slice(0, 5));
           }
@@ -293,7 +296,7 @@ const PartnerPage = ({ route }) => {
             });
 
             if (!result.canceled) {
-              const selectedUris = result.assets ? result.assets.map(asset => asset.uri) : [result.uri];
+              const selectedUris = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
               setNewProductImages(prevImages => [...prevImages, ...selectedUris].slice(0, 5));
             }
           },
@@ -314,7 +317,7 @@ const PartnerPage = ({ route }) => {
             });
 
             if (!result.canceled) {
-              const selectedUris = result.assets ? result.assets.map(asset => asset.uri) : [result.uri];
+              const selectedUris = result.assets ? result.assets.map(asset => ({ uri: asset.uri })) : [{ uri: result.uri }];
               setNewProductImages(prevImages => [...prevImages, ...selectedUris].slice(0, 5));
             }
           },
@@ -327,16 +330,15 @@ const PartnerPage = ({ route }) => {
       { cancelable: true }
     );
   };
-
-  const uploadImage = async (uri) => {
+  
+  // UPDATED uploadImage function for web
+  const uploadImage = async (imageObject) => {
     let blob;
-    // Condition to handle web
+
     if (Platform.OS === 'web') {
-      const response = await fetch(uri);
-      blob = await response.blob();
+      blob = imageObject.file;
     } else {
-      // Original mobile logic
-      const response = await fetch(uri);
+      const response = await fetch(imageObject.uri);
       blob = await response.blob();
     }
 
@@ -346,6 +348,7 @@ const PartnerPage = ({ route }) => {
     const downloadURL = await getDownloadURL(storageRef);
     return downloadURL;
   };
+  
 
   const handleAddProduct = async () => {
     if (!newProductName || !newProductDescription || !newProductPrice) {
@@ -360,8 +363,9 @@ const PartnerPage = ({ route }) => {
     setProductUploading(true);
     try {
       const imageUrls = [];
-      for (const uri of newProductImages) {
-        const url = await uploadImage(uri);
+      // Loop over the new image objects
+      for (const imageObject of newProductImages) {
+        const url = await uploadImage(imageObject);
         imageUrls.push(url);
       }
 
@@ -392,7 +396,8 @@ const PartnerPage = ({ route }) => {
       setProductUploading(false);
     }
   };
-
+  
+  // UPDATED handleDeleteProduct function for web
   const handleDeleteProduct = async (productId, imageUrls) => {
     Alert.alert(
       "Supprimer le produit",
@@ -407,11 +412,11 @@ const PartnerPage = ({ route }) => {
               for (const url of imageUrls) {
                 if (url && url.startsWith('https://firebasestorage.googleapis.com/')) {
                   try {
-                    const imagePath = new URL(url).pathname.split('/o/')[1].split('?')[0];
-                    const decodedImagePath = decodeURIComponent(imagePath);
-                    const imageRef = ref(storage, decodedImagePath);
+                    // Robust method to extract file path for all platforms
+                    const storagePath = `products/${partnerId}/${url.split('/').pop().split('?')[0]}`;
+                    const imageRef = ref(storage, storagePath);
                     await deleteObject(imageRef);
-                    console.log("Image deleted:", decodedImagePath);
+                    console.log("Image deleted from storage:", storagePath);
                   } catch (deleteError) {
                     console.warn("Error deleting product image from storage:", deleteError);
                   }
@@ -678,9 +683,9 @@ const PartnerPage = ({ route }) => {
             </TouchableOpacity>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectedImagesContainer}>
-              {newProductImages.map((uri, index) => (
+              {newProductImages.map((imageObject, index) => (
                 <View key={index} style={styles.selectedImageWrapper}>
-                  <Image source={{ uri }} style={styles.selectedImage} />
+                  <Image source={{ uri: imageObject.uri }} style={styles.selectedImage} />
                   <TouchableOpacity style={styles.removeImageButton} onPress={() => removeSelectedImage(index)}>
                     <Ionicons name="close-circle" size={24} color="#EF4444" />
                   </TouchableOpacity>
