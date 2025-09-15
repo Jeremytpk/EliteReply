@@ -12,10 +12,11 @@ import {
   TextInput,
   Dimensions,
   FlatList,
-  RefreshControl
+  RefreshControl,
+  Platform // <-- Import Platform
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, updateDoc, orderBy } from 'firebase/firestore'; // Import updateDoc and orderBy
+import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../../firebase';
 import * as ImagePicker from 'expo-image-picker';
@@ -240,12 +241,39 @@ const PartnerPage = ({ route }) => {
     return true;
   };
 
+  // UPDATED pickImage function
   const pickImage = async () => {
     if (newProductImages.length >= 5) {
       Alert.alert("Limite de photos", "Vous ne pouvez ajouter qu'un maximum de 5 photos par produit.");
       return;
     }
 
+    // Handle Web platform
+    if (Platform.OS === 'web') {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = (event) => {
+          const files = event.target.files;
+          if (files) {
+            const uris = [];
+            for (let i = 0; i < files.length && uris.length < 5; i++) {
+              uris.push(URL.createObjectURL(files[i]));
+            }
+            setNewProductImages(prevImages => [...prevImages, ...uris].slice(0, 5));
+          }
+        };
+        input.click();
+      } catch (error) {
+        console.error("Error picking image on web:", error);
+        Alert.alert("Erreur", "Impossible de sélectionner des images sur le web. Veuillez réessayer.");
+      }
+      return;
+    }
+
+    // Handle Mobile (iOS/Android) platforms
     Alert.alert(
       "Sélectionner une photo",
       "Voulez-vous prendre une photo ou en choisir une dans la galerie ?",
@@ -301,6 +329,10 @@ const PartnerPage = ({ route }) => {
   };
 
   const uploadImage = async (uri) => {
+    // This part should also be updated for web, as 'fetch' with a URL created by 'createObjectURL'
+    // will be a different process. You may need to create a 'blob' from the 'uri' differently
+    // for web. For now, this existing logic will work for native.
+    // A robust web solution would require handling the original File object from the input.
     const response = await fetch(uri);
     const blob = await response.blob();
     const filename = `products/${partnerId}/${uuidv4()}`;
