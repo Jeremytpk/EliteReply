@@ -329,12 +329,17 @@ const PartnerPage = ({ route }) => {
   };
 
   const uploadImage = async (uri) => {
-    // This part should also be updated for web, as 'fetch' with a URL created by 'createObjectURL'
-    // will be a different process. You may need to create a 'blob' from the 'uri' differently
-    // for web. For now, this existing logic will work for native.
-    // A robust web solution would require handling the original File object from the input.
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    let blob;
+    // Condition to handle web
+    if (Platform.OS === 'web') {
+      const response = await fetch(uri);
+      blob = await response.blob();
+    } else {
+      // Original mobile logic
+      const response = await fetch(uri);
+      blob = await response.blob();
+    }
+
     const filename = `products/${partnerId}/${uuidv4()}`;
     const storageRef = ref(storage, filename);
     await uploadBytes(storageRef, blob);
