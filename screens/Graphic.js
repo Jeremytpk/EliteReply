@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
@@ -20,7 +21,9 @@ import * as MediaLibrary from 'expo-media-library';
 import ViewShot from 'react-native-view-shot';
 import * as FileSystem from 'expo-file-system'; // Ensure this is imported for CSV download
 
-const screenWidth = Dimensions.get('window').width;
+// Import rotation icon
+const ROTATE_ICON = require('../assets/icons/refresh.png');
+
 const PADDING_HORIZONTAL = 20; // Consistent padding for content
 const CHART_MARGIN_BOTTOM = 20; // Space between chart sections
 
@@ -28,6 +31,8 @@ const Graphic = () => {
   const route = useRoute();
   const { dataType, displayName } = route.params;
   const [loading, setLoading] = useState(true);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
   const [chartData, setChartData] = useState({
     day: { labels: [], datasets: [{ data: [] }], total: 0 },
     month: { labels: [], datasets: [{ data: [] }], total: 0 },
@@ -39,26 +44,52 @@ const Graphic = () => {
   const monthChartRef = useRef();
   const yearChartRef = useRef();
 
-  // --- Orientation Lock Effect ---
+  // --- Orientation Management ---
   useEffect(() => {
-    const lockOrientation = async () => {
-      // Lock to landscape primary to prioritize right-side up landscape
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+    const initializeOrientation = async () => {
+      // Start in portrait mode by default
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      setIsLandscape(false);
     };
 
-    const unlockOrientation = async () => {
-      // Revert to portrait up when component unmounts
+    const cleanup = async () => {
+      // Revert to portrait when component unmounts
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     };
 
-    lockOrientation();
+    initializeOrientation();
 
-    // Cleanup: revert orientation when component unmounts
+    // Listen for dimension changes to update chart sizes
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenDimensions(window);
+      // Update landscape state based on dimensions
+      setIsLandscape(window.width > window.height);
+    });
+
     return () => {
-      unlockOrientation();
+      cleanup();
+      subscription?.remove();
     };
-  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
-  // --- End Orientation Lock Effect ---
+  }, []);
+
+  // Function to toggle orientation
+  const toggleOrientation = async () => {
+    try {
+      if (isLandscape) {
+        // Switch to portrait
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        setIsLandscape(false);
+      } else {
+        // Switch to landscape
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+        setIsLandscape(true);
+      }
+    } catch (error) {
+      console.error('Error changing orientation:', error);
+      Alert.alert('Erreur', 'Impossible de changer l\'orientation de l\'écran.');
+    }
+  };
+  // --- End Orientation Management ---
 
   const getGrowthData = async () => {
     setLoading(true);
@@ -234,8 +265,8 @@ const Graphic = () => {
     );
   }
 
-  // Calculate chart width dynamically to fit within padding
-  const chartWidth = screenWidth - (PADDING_HORIZONTAL * 2);
+  // Calculate chart width dynamically based on current screen dimensions
+  const chartWidth = screenDimensions.width - (PADDING_HORIZONTAL * 2);
 
   const chartConfig = {
     backgroundColor: '#ffffff',
@@ -262,8 +293,9 @@ const Graphic = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Croissance des {displayName}</Text>
+    <View style={styles.mainContainer}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Croissance des {displayName}</Text>
 
       {/* Day Chart Section */}
       <View style={styles.chartWrapper}>
@@ -362,11 +394,31 @@ const Graphic = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Floating Orientation Toggle Button */}
+      <TouchableOpacity 
+        style={styles.floatingButton} 
+        onPress={toggleOrientation}
+        activeOpacity={0.8}
+      >
+        <Image 
+          source={ROTATE_ICON} 
+          style={[
+            styles.floatingButtonIcon,
+            { transform: [{ rotate: isLandscape ? '90deg' : '0deg' }] }
+          ]} 
+        />
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
   container: {
     flexGrow: 1, // Allows content to scroll if it overflows
     backgroundColor: '#f8f9fa',
@@ -450,6 +502,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0a8fdf',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    zIndex: 1000,
+  },
+  floatingButtonIcon: {
+    width: 24,
+    height: 24,
+    tintColor: '#fff',
+    resizeMode: 'contain',
   },
 });
 
