@@ -10,7 +10,7 @@ import {
   Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useStripe, useConfirmPayment } from '@stripe/stripe-react-native';
+import { useStripe, useConfirmPayment } from '../utils/StripeWrapper';
 
 const StripeCardInput = ({ onPaymentMethodReady, onPaymentSuccess, loading, amount, orderInfo }) => {
   const [cardNumber, setCardNumber] = useState('');

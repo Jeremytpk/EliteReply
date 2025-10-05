@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProvider } from '../utils/StripeWrapper';
 import SecureStripeCardInput from './SecureStripeCardInput';
 import { STRIPE_PUBLISHABLE_KEY } from '../config/stripe';
 

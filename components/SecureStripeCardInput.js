@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native';
-import { CardField, useStripe } from '@stripe/stripe-react-native';
+import { CardField, useStripe } from '../utils/StripeWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { createPaymentIntent } from '../config/stripe';
 

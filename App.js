@@ -11,7 +11,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Audio } from 'expo-av';
 import Constants from 'expo-constants'; // Import Constants to access app.json config
 import * as ExpoLinking from 'expo-linking'; // Use Expo's Linking module
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProvider } from './utils/StripeWrapper';
 
 import { db, auth } from './firebase';
 import { STRIPE_PUBLISHABLE_KEY } from './config/stripe';
