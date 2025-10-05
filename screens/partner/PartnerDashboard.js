@@ -12,8 +12,11 @@ import {
   RefreshControl,
   Animated,
   Easing,
-  ScrollView
+  ScrollView,
+  Dimensions,
+  StatusBar
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Ionicons,
   MaterialIcons,
@@ -64,6 +67,29 @@ const STORE_ICON = require('../../assets/icons/store.png');
 
 import { sendPushNotification } from '../../services/notifications';
 
+// Responsive design helper function
+const getResponsiveValues = () => {
+  const { width: screenWidth } = Dimensions.get('window');
+  const isTablet = screenWidth >= 768;
+  const isLargePhone = screenWidth >= 414;
+  
+  return {
+    statCardWidth: isTablet ? 200 : (isLargePhone ? 160 : 140),
+    headerPadding: isTablet ? 30 : 20,
+    fontSize: {
+      title: isTablet ? 28 : 24,
+      subtitle: isTablet ? 18 : 16,
+      body: isTablet ? 16 : 14,
+      small: isTablet ? 14 : 12,
+    },
+    spacing: {
+      small: isTablet ? 12 : 8,
+      medium: isTablet ? 20 : 15,
+      large: isTablet ? 30 : 25,
+    }
+  };
+};
+
 // Custom Progress Bar Component
 const ProgressBar = ({ progress, color }) => {
   return (
@@ -85,6 +111,7 @@ const PartnerDashboard = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
   const [partnerData, setPartnerData] = useState(null);
   const [loggedInUserBusinessName, setLoggedInUserBusinessName] = useState('');
   const [reviews, setReviews] = useState([]);
@@ -92,6 +119,7 @@ const PartnerDashboard = ({ navigation }) => {
   const [dashboardData, setDashboardData] = useState({
     documentsCount: 0,
     confirmedBookings: 0,
+    pendingBookings: 0,
     totalAppointments: 0,
     revenueGenerated: 0,
     commissionEarned: 0,
@@ -106,6 +134,28 @@ const PartnerDashboard = ({ navigation }) => {
   const notifiedAppointments = useRef(new Set());
   const notifiedSurveys = useRef(new Set());
   const notifiedDocuments = useRef(new Set());
+
+  // Responsive design helper
+  const getResponsiveValues = () => {
+    const { width, height } = screenDimensions;
+    const isSmallScreen = width < 375;
+    const isMediumScreen = width >= 375 && width < 414;
+    const isLargeScreen = width >= 414;
+    
+    return {
+      padding: isSmallScreen ? 12 : isMediumScreen ? 16 : 20,
+      cardPadding: isSmallScreen ? 12 : isMediumScreen ? 16 : 20,
+      fontSize: {
+        small: isSmallScreen ? 12 : 14,
+        medium: isSmallScreen ? 14 : 16,
+        large: isSmallScreen ? 18 : 20,
+        xlarge: isSmallScreen ? 22 : 24,
+      },
+      iconSize: isSmallScreen ? 20 : 24,
+      statIconSize: isSmallScreen ? 40 : 50,
+      actionIconSize: isSmallScreen ? 50 : 60,
+    };
+  };
   
   // Chat states
   const [unreadChatsCount, setUnreadChatsCount] = useState(0);
@@ -323,6 +373,7 @@ const PartnerDashboard = ({ navigation }) => {
 
       let totalAppointments = 0;
       let confirmedBookings = 0;
+      let pendingBookings = 0;
 
       console.log("Jey: Processing appointments for partnerId:", partnerId);
       allRdvQuerySnapshot.forEach(doc => {
@@ -331,6 +382,8 @@ const PartnerDashboard = ({ navigation }) => {
           totalAppointments++;
           if (rdvData.status === 'confirmed' || rdvData.status === 'completed') {
               confirmedBookings++;
+          } else if (rdvData.status === 'scheduled' || rdvData.status === 'pending' || rdvData.status === 'en attente' || !rdvData.status) {
+              pendingBookings++;
           }
       });
       console.log("Jey: Calculated confirmedBookings:", confirmedBookings);
@@ -363,6 +416,7 @@ const PartnerDashboard = ({ navigation }) => {
         ...prevData,
         totalAppointments: totalAppointments,
         confirmedBookings: confirmedBookings,
+        pendingBookings: pendingBookings,
         documentsCount: documentsCount,
         revenueGenerated: revenueGenerated,
         commissionEarned: commissionEarned,
@@ -637,44 +691,44 @@ const PartnerDashboard = ({ navigation }) => {
 
   const statsCards = [
     {
-      icon: <Image source={DOC_ICON} style={[styles.customStatIcon, { tintColor: '#4a6bff' }]} />,
+      icon: <Image source={DOC_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Documents",
       value: dashboardData.documentsCount,
       color: "#4a6bff",
       onPress: () => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })
     },
     {
-      icon: <Image source={CHECKED_APT_ICON} style={[styles.customStatIcon, { tintColor: '#34C759' }]} />,
+      icon: <Image source={CHECKED_APT_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Confirmées",
       value: dashboardData.confirmedBookings,
       color: "#34C759",
       onPress: () => navigation.navigate('RdvConfirm')
     },
     {
-      icon: <Image source={HOLD_APT_ICON} style={[styles.customStatIcon, { tintColor: '#FF7043' }]} />,
-      title: "Rendez-vous",
-      value: dashboardData.totalAppointments,
+      icon: <Image source={HOLD_APT_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
+      title: "En Attente",
+      value: dashboardData.pendingBookings,
       color: "#FF7043",
       onPress: () => navigation.navigate('PartnerSurvey')
     },
     {
-      icon: <Image source={MONEY_BILL_ICON} style={[styles.customStatIcon, { tintColor: '#FBBC05' }]} />,
+      icon: <Image source={MONEY_BILL_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Revenus",
       value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#FBBC05",
       onPress: () => navigation.navigate('RdvConfirm')
     },
     {
-      icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#9C27B0' }]} />,
+      icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Commission",
       value: `${dashboardData.commissionEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
       color: "#9C27B0",
       onPress: () => navigation.navigate('RdvConfirm')
     },
     {
-      icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#EA4335' }]} />,
+      icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Support ER",
-      value: "",
+      value: "24/7",
       color: "#EA4335",
       onPress: () => {
         if (partnerData?.id && loggedInUserBusinessName) {
@@ -707,12 +761,18 @@ const PartnerDashboard = ({ navigation }) => {
     }
   };
 
+  const responsiveValues = getResponsiveValues();
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4a6bff" />
-        <Text style={{ marginTop: 10, color: '#666' }}>Chargement du tableau de bord...</Text>
-      </View>
+      <LinearGradient
+        colors={['#4facfe', '#00f2fe']}
+        style={styles.loadingContainer}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#4facfe" />
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Chargement du tableau de bord...</Text>
+      </LinearGradient>
     );
   }
 
@@ -730,247 +790,391 @@ const PartnerDashboard = ({ navigation }) => {
   }
 
   return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#4facfe" />
+      
+      {/* Professional Partner Header */}
+      <LinearGradient
+        colors={['#4facfe', '#00f2fe']}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
           <TouchableOpacity
-            style={styles.profileContainer}
+            style={styles.profileSection}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Image
-              source={partnerData?.assignedUserPhotoURL
-                ? { uri: partnerData.assignedUserPhotoURL }
-                : (partnerData?.profileImage ? { uri: partnerData.profileImage } : require('../../assets/images/Profile.png'))
-              }
-              style={styles.profileImage}
-            />
-            <View>
-              <Text style={styles.userName}>{loggedInUserBusinessName || 'Mon Entreprise'}</Text>
-              {partnerData?.isPromoted && (
-                <Text style={styles.userRole}>Partenaire Premium</Text>
-              )}
+            <View style={styles.profileImageContainer}>
+              <Image
+                source={partnerData?.assignedUserPhotoURL
+                  ? { uri: partnerData.assignedUserPhotoURL }
+                  : (partnerData?.profileImage ? { uri: partnerData.profileImage } : require('../../assets/images/Profile.png'))
+                }
+                style={styles.profilePicture}
+              />
+              <View style={styles.onlineIndicator} />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.partnerName}>{loggedInUserBusinessName || 'Mon Entreprise'}</Text>
+              <Text style={styles.partnerRole}>
+                {partnerData?.isPromoted ? 'Partenaire Premium' : 'Partenaire'}
+              </Text>
+              <View style={styles.ratingContainer}>
+                <Text style={styles.ratingText}>★ {dashboardData.partnerRating.toFixed(1)}</Text>
+                <Text style={styles.reviewsCount}>({reviews.length} avis)</Text>
+              </View>
             </View>
           </TouchableOpacity>
-          {/* --- NEW: Store Icon and Logo Container --- */}
-          <View style={styles.headerRight}>
-            {partnerData?.id && ( // Only show if partnerData is loaded
+          
+          <View style={styles.headerActions}>
+            {partnerData?.id && (
               <TouchableOpacity
-                style={styles.storeIconContainer}
+                style={styles.storeButton}
                 onPress={() => navigation.navigate('PartnerPage', { partnerId: partnerData.id })}
               >
-                <Image source={STORE_ICON} style={styles.storeIcon} />
+                <Image source={STORE_ICON} style={styles.storeButtonIcon} />
               </TouchableOpacity>
             )}
-            <Image
-              source={require('../../assets/images/logoVide.png')}
-              style={styles.logo}
-            />
+            <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate('Settings')}>
+              <Ionicons name="settings-outline" size={24} color="rgba(255, 255, 255, 0.9)" />
+            </TouchableOpacity>
           </View>
-          {/* --- END NEW --- */}
         </View>
+        
+        {/* Quick Stats Overview */}
+        <View style={styles.quickStatsContainer}>
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>{dashboardData.totalAppointments}</Text>
+            <Text style={styles.quickStatLabel}>RDV Total</Text>
+          </View>
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>{dashboardData.confirmedBookings}</Text>
+            <Text style={styles.quickStatLabel}>Confirmés</Text>
+          </View>
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>${dashboardData.revenueGenerated.toFixed(0)}</Text>
+            <Text style={styles.quickStatLabel}>Revenus</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-        {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && (
-          <Animated.View
-            style={[
-              styles.promotionBanner,
-              {
-                backgroundColor: `${promotionColor}20`,
-                borderLeftColor: promotionColor,
-                transform: [{ scale: pulseAnim }]
-              }
-            ]}
-          >
-            <View style={styles.promotionBannerContent}>
-              <Image
-                source={promotionIcon}
-                style={[styles.customPromotionStatusIcon, { tintColor: promotionColor }]}
+      {/* Promotion Banner */}
+      {partnerData?.estPromu && activeTab !== 'chat' && activeTab !== 'reviews' && (
+        <Animated.View
+          style={[
+            styles.promotionBanner,
+            {
+              backgroundColor: `${promotionColor}20`,
+              borderLeftColor: promotionColor,
+              transform: [{ scale: pulseAnim }]
+            }
+          ]}
+        >
+          <View style={styles.promotionBannerContent}>
+            <Image
+              source={promotionIcon}
+              style={[styles.customPromotionStatusIcon, { tintColor: promotionColor }]}
+            />
+            <View style={styles.promotionTextContainer}>
+              <Text style={[styles.promotionBannerText, { color: promotionColor }]}>
+                {daysLeft <= 0 ?
+                  'PROMOTION EXPIRÉE' :
+                  daysLeft === 1 ?
+                  'DERNIER JOUR DE PROMOTION!' :
+                  `Promotion active • ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`
+                }
+              </Text>
+              {daysLeft > 0 && daysLeft <= 7 && (
+                <ProgressBar
+                  progress={daysLeft / 7}
+                  color={promotionColor}
+                />
+              )}
+            </View>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Main Content Area */}
+      <View style={styles.mainContent}>
+
+        {activeTab === 'dashboard' && (
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#4facfe']}
+                tintColor="#4facfe"
               />
-              <View style={styles.promotionTextContainer}>
-                <Text style={[styles.promotionBannerText, { color: promotionColor }]}>
-                  {daysLeft <= 0 ?
-                    'PROMOTION EXPIRÉE' :
-                    daysLeft === 1 ?
-                    'DERNIER JOUR DE PROMOTION!' :
-                    `Promotion active • ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`
-                  }
-                </Text>
-                {daysLeft > 0 && daysLeft <= 7 && (
-                  <ProgressBar
-                    progress={daysLeft / 7}
-                    color={promotionColor}
-                  />
-                )}
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Modern Statistics Grid */}
+            <View style={styles.statsSection}>
+              <Text style={styles.sectionTitle}>📊 Activités Principales</Text>
+              <View style={styles.statsGrid}>
+                {statsCards.map((card, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.gridStatCard}
+                    onPress={card.onPress}
+                  >
+                    <LinearGradient
+                      colors={[card.color, `${card.color}CC`]}
+                      style={styles.gridStatCardGradient}
+                    >
+                      <View style={styles.gridStatCardIcon}>
+                        {card.icon}
+                      </View>
+                      <Text style={styles.gridStatNumber}>{card.value}</Text>
+                      <Text style={styles.gridStatLabel}>{card.title}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
-            </Animated.View>
-          )}
 
-        <View style={{ flex: 1 }}>
-          {activeTab === 'dashboard' && (
-            <FlatList
-              data={[]}
-              renderItem={null}
-              ListHeaderComponent={
-                <>
-                  <Text style={styles.sectionTitle}>Résumé des Activités</Text>
-                  <View style={styles.statsContainer}>
-                    {statsCards.map((card, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[styles.statCard, { borderLeftColor: card.color }]}
-                        onPress={card.onPress}
-                      >
-                        <View style={styles.statIcon}>
-                          {card.icon}
-                        </View>
-                        <Text style={styles.statValue}>{card.value}</Text>
-                        <Text style={styles.statLabel}>{card.title}</Text>
-                      </TouchableOpacity>
+            {/* Professional Action Cards */}
+            <View style={styles.actionsSection}>
+              <Text style={styles.sectionTitle}>⚡ Gestion Rapide</Text>
+              
+              <TouchableOpacity
+                style={styles.primaryActionCard}
+                onPress={() => navigation.navigate('PartnerSurvey')}
+              >
+                <LinearGradient
+                  colors={['#667eea', '#764ba2']}
+                  style={styles.actionCardGradient}
+                >
+                  <View style={styles.actionCardContent}>
+                    <View style={styles.actionCardIcon}>
+                      <Image source={CHECKED_APT_ICON} style={[styles.actionIcon, { tintColor: '#fff' }]} />
+                    </View>
+                    <View style={styles.actionCardText}>
+                      <Text style={styles.actionCardTitle}>Rendez-vous & Vérifications</Text>
+                      <Text style={styles.actionCardSubtitle}>Gérez vos RDV et promotions client</Text>
+                    </View>
+                    <Ionicons name="chevron-forward-outline" size={24} color="#fff" />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryActionCard}
+                onPress={() => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })}
+              >
+                <LinearGradient
+                  colors={['#f093fb', '#f5576c']}
+                  style={styles.actionCardGradient}
+                >
+                  <View style={styles.actionCardContent}>
+                    <View style={styles.actionCardIcon}>
+                      <Image source={DOC_ICON} style={[styles.actionIcon, { tintColor: '#fff' }]} />
+                    </View>
+                    <View style={styles.actionCardText}>
+                      <Text style={styles.actionCardTitle}>Documents</Text>
+                      <Text style={styles.actionCardSubtitle}>Consultez vos documents importants</Text>
+                    </View>
+                    <Ionicons name="chevron-forward-outline" size={24} color="#fff" />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
+
+        {activeTab === 'payments' && (
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#4facfe']}
+                tintColor="#4facfe"
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.sectionTitle}>💰 Historique des Paiements</Text>
+            
+            {/* Payment Summary Cards */}
+            <View style={styles.paymentSummaryContainer}>
+              <View style={styles.paymentSummaryCard}>
+                <LinearGradient
+                  colors={['#4ecdc4', '#44a08d']}
+                  style={styles.paymentCardGradient}
+                >
+                  <Text style={styles.paymentSummaryLabel}>Revenus Nets</Text>
+                  <Text style={styles.paymentSummaryValue}>
+                    ${dashboardData.revenueGenerated.toFixed(2)}
+                  </Text>
+                </LinearGradient>
+              </View>
+              
+              <View style={styles.paymentSummaryCard}>
+                <LinearGradient
+                  colors={['#9C27B0', '#8E24AA']}
+                  style={styles.paymentCardGradient}
+                >
+                  <Text style={styles.paymentSummaryLabel}>Commission ER</Text>
+                  <Text style={styles.paymentSummaryValue}>
+                    ${dashboardData.commissionEarned.toFixed(2)}
+                  </Text>
+                </LinearGradient>
+              </View>
+            </View>
+
+            {/* Payment Management Action */}
+            <TouchableOpacity
+              style={styles.primaryActionCard}
+              onPress={() => navigation.navigate('RdvConfirm')}
+            >
+              <LinearGradient
+                colors={['#16a085', '#1abc9c']}
+                style={styles.actionCardGradient}
+              >
+                <View style={styles.actionCardContent}>
+                  <View style={styles.actionCardIcon}>
+                    <Image source={MONEY_BILL_ICON} style={[styles.actionIcon, { tintColor: '#fff' }]} />
+                  </View>
+                  <View style={styles.actionCardText}>
+                    <Text style={styles.actionCardTitle}>Gérer les Paiements</Text>
+                    <Text style={styles.actionCardSubtitle}>Enregistrez et consultez l'historique</Text>
+                  </View>
+                  <Ionicons name="chevron-forward-outline" size={24} color="#fff" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {activeTab === 'reviews' && (
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#4facfe']}
+                tintColor="#4facfe"
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.sectionTitle}>⭐ Gestion des Avis</Text>
+            
+            {/* Overall Rating Summary */}
+            <View style={styles.ratingOverviewCard}>
+              <LinearGradient
+                colors={['#667eea', '#764ba2']}
+                style={styles.ratingOverviewGradient}
+              >
+                <View style={styles.ratingOverviewContent}>
+                  <Text style={styles.overallRatingValue}>
+                    {dashboardData.partnerRating.toFixed(1)}
+                  </Text>
+                  <View style={styles.starsContainer}>
+                    {[...Array(5)].map((_, i) => (
+                      <Ionicons
+                        key={`avg_star_${i}`}
+                        name={i < Math.floor(dashboardData.partnerRating) ? "star" : "star-outline"}
+                        size={20}
+                        color="#FFD700"
+                      />
                     ))}
                   </View>
-
-                  <View style={styles.actionCard}>
-                    <Text style={styles.actionCardTitle}>Gérez vos Rendez-vous & Vérifications</Text>
-                    <Text style={styles.actionCardText}>
-                      Consultez et confirmez vos rendez-vous, et gérez vos promotions client.
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => navigation.navigate('PartnerSurvey')}
-                    >
-                      <Text style={styles.actionButtonText}>Accéder aux Rendez-vous & Vérifications</Text>
-                      <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.actionCard}>
-                    <Text style={styles.actionCardTitle}>Gérez vos Documents</Text>
-                    <Text style={styles.actionCardText}>
-                      Consultez et téléchargez les documents importants pour votre entreprise.
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => navigation.navigate('PartnerDoc', { partnerId: partnerData?.id, partnerName: loggedInUserBusinessName, isAdmin: isAdmin })}
-                    >
-                      <Text style={styles.actionButtonText}>Accéder aux Documents</Text>
-                      <Image source={ARROW_RIGHT_SHORT_ICON} style={styles.customActionArrowIcon} />
-                    </TouchableOpacity>
-                  </View>
-                </>
-              }
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={['#4a6bff']}
-                />
-              }
-              contentContainerStyle={styles.contentContainer}
-            />
-          )}
-
-          {activeTab === 'payments' && (
-            <ScrollView
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={['#4a6bff']}
-                />
-              }
-              contentContainerStyle={styles.contentContainer}
-            >
-              <Text style={styles.sectionTitle}>Historique des Paiements</Text>
-              <View style={styles.paymentSummary}>
-                <View style={styles.paymentSummaryItem}>
-                  <Text style={styles.paymentSummaryLabel}>Total Revenus (Net)</Text>
-                  <Text style={styles.paymentSummaryValue}>
-                    {dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
+                  <Text style={styles.reviewCountText}>
+                    Basé sur {reviews.length} avis
                   </Text>
                 </View>
-                <View style={styles.paymentSummaryItem}>
-                  <Text style={styles.paymentSummaryLabel}>Commission totale EliteReply</Text>
-                  <Text style={[styles.paymentSummaryValue, { color: '#9C27B0' }]}>
-                    {dashboardData.commissionEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}
-                  </Text>
-                </View>
+              </LinearGradient>
+            </View>
+
+            {/* Reviews List or Empty State */}
+            {reviews.length > 0 ? (
+              <View style={styles.reviewsList}>
+                {reviews.slice(0, 3).map((review) => (
+                  <View key={review.id} style={styles.reviewCard}>
+                    <LinearGradient
+                      colors={['#ffffff', '#f8f9fa']}
+                      style={styles.reviewCardGradient}
+                    >
+                      <View style={styles.reviewHeader}>
+                        <Text style={styles.reviewerName}>{review.userName || 'Client'}</Text>
+                        <View style={styles.reviewRating}>
+                          {[...Array(5)].map((_, i) => (
+                            <Ionicons
+                              key={`review_star_${i}`}
+                              name={i < review.rating ? "star" : "star-outline"}
+                              size={16}
+                              color="#FFD700"
+                            />
+                          ))}
+                        </View>
+                      </View>
+                      {review.comment && (
+                        <Text style={styles.reviewComment}>{review.comment}</Text>
+                      )}
+                      <Text style={styles.reviewDate}>
+                        {new Date(review.date?.toDate()).toLocaleDateString('fr-FR')}
+                      </Text>
+                    </LinearGradient>
+                  </View>
+                ))}
+                
+                {reviews.length > 3 && (
+                  <TouchableOpacity
+                    style={styles.viewAllReviewsButton}
+                    onPress={() => navigation.navigate('PartnerReviews')}
+                  >
+                    <Text style={styles.viewAllReviewsText}>
+                      Voir tous les {reviews.length} avis
+                    </Text>
+                    <Ionicons name="chevron-forward-outline" size={20} color="#4facfe" />
+                  </TouchableOpacity>
+                )}
               </View>
-
-              <View style={[styles.actionCard, { borderColor: '#16a085' }]}>
-                    <Text style={styles.actionCardTitle}>Gérer les Paiements Clients</Text>
-                    <Text style={styles.actionCardText}>
-                      Enregistrez les paiements pour les rendez-vous confirmés et consultez l'historique détaillé.
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: '#16a085' }]}
-                      onPress={() => navigation.navigate('RdvConfirm')}
-                    >
-                      <Text style={styles.actionButtonText}>Accéder aux Paiements RDV</Text>
-                      <Image source={RIGHT_ENTER_ICON_PARTNER} style={styles.customActionArrowIcon} />
-                    </TouchableOpacity>
-                  </View>
-            </ScrollView>
-          )}
-
-          {activeTab === 'reviews' && (
-            <FlatList
-              data={reviews}
-              keyExtractor={(item) => item.id} // Simplified keyExtractor as reviews are now unique IDs from partnerRatings
-              renderItem={renderReviewItem}
-              ListHeaderComponent={
-                <View style={styles.reviewsHeader}>
-                  <Text style={styles.sectionTitle}>Avis des Clients</Text>
-                  <View style={styles.overallRatingContainer}>
-                    <Text style={styles.overallRatingText}>
-                      Note moyenne: {dashboardData.partnerRating.toFixed(1)}/5
-                    </Text>
-                    <View style={styles.ratingStars}>
-                      {[...Array(5)].map((_, i) => (
-                        <Image
-                          key={`avg_star_${i}`}
-                          source={i < Math.floor(dashboardData.partnerRating) ? RATE_FULL_ICON : RATE_ICON_EMPTY}
-                          style={[styles.customReviewStarIcon, { tintColor: '#FFD700' }]}
-                        />
-                      ))}
-                    </View>
-                    <Text style={styles.reviewCount}>
-                      Basé sur {reviews.length} avis
-                    </Text>
-                  </View>
-                </View>
-              }
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Image source={REVIEW_ANIM_GIF} style={styles.customEmptyReviewsGif} />
-                  <Text style={styles.emptyText}>Aucun avis pour le moment</Text>
-                </View>
-              }
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={['#4a6bff']}
-                />
-              }
-              contentContainerStyle={[
-                styles.contentContainer,
-                reviews.length === 0 && { flex: 1 }
-              ]}
-            />
-          )}
+            ) : (
+              <View style={styles.emptyReviewsState}>
+                <LinearGradient
+                  colors={['#f8f9fa', '#e9ecef']}
+                  style={styles.emptyStateGradient}
+                >
+                  <Ionicons name="star-outline" size={48} color="#6c757d" />
+                  <Text style={styles.emptyStateTitle}>Aucun avis pour le moment</Text>
+                  <Text style={styles.emptyStateSubtitle}>
+                    Vos premiers avis clients apparaîtront ici
+                  </Text>
+                </LinearGradient>
+              </View>
+            )}
+          </ScrollView>
+        )}
         </View>
 
+
+
+        {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => setActiveTab('dashboard')}
           >
-            <Image
-              source={DASHBOARD_ICON}
-              style={[styles.customNavIcon, { tintColor: activeTab === 'dashboard' ? '#4a6bff' : '#666' }]}
+            <Ionicons 
+              name={activeTab === 'dashboard' ? 'grid' : 'grid-outline'} 
+              size={22} 
+              color={activeTab === 'dashboard' ? '#4facfe' : '#6c757d'} 
             />
             <Text style={[
               styles.navButtonText,
-              { color: activeTab === 'dashboard' ? '#4a6bff' : '#666' }
+              { color: activeTab === 'dashboard' ? '#4facfe' : '#6c757d' }
             ]}>
               Tableau
             </Text>
@@ -980,13 +1184,14 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('payments')}
           >
-            <Image
-              source={CREDIT_CARD_ICON}
-              style={[styles.customNavIcon, { tintColor: activeTab === 'payments' ? '#4a6bff' : '#666' }]}
+            <Ionicons 
+              name={activeTab === 'payments' ? 'card' : 'card-outline'} 
+              size={22} 
+              color={activeTab === 'payments' ? '#4facfe' : '#6c757d'} 
             />
             <Text style={[
               styles.navButtonText,
-              { color: activeTab === 'payments' ? '#4a6bff' : '#666' }
+              { color: activeTab === 'payments' ? '#4facfe' : '#6c757d' }
             ]}>
               Paiements
             </Text>
@@ -996,13 +1201,14 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => setActiveTab('reviews')}
           >
-            <Image
-              source={RATE_HALF_ICON_NAV}
-              style={[styles.customNavIcon, { tintColor: activeTab === 'reviews' ? '#4a6bff' : '#666' }]}
+            <Ionicons 
+              name={activeTab === 'reviews' ? 'star' : 'star-outline'} 
+              size={22} 
+              color={activeTab === 'reviews' ? '#4facfe' : '#6c757d'} 
             />
             <Text style={[
               styles.navButtonText,
-              { color: activeTab === 'reviews' ? '#4a6bff' : '#666' }
+              { color: activeTab === 'reviews' ? '#4facfe' : '#6c757d' }
             ]}>
               Avis
             </Text>
@@ -1022,13 +1228,14 @@ const PartnerDashboard = ({ navigation }) => {
               }
             }}
           >
-            <Image
-              source={SUPPORT_ER_ICON}
-              style={[styles.customNavIcon, { tintColor: activeTab === 'chat' ? '#4a6bff' : '#666' }]}
+            <Ionicons 
+              name="help-circle-outline" 
+              size={22} 
+              color="#6c757d" 
             />
             <Text style={[
               styles.navButtonText,
-              { color: activeTab === 'chat' ? '#4a6bff' : '#666' }
+              { color: '#6c757d' }
             ]}>
               Support
             </Text>
@@ -1065,7 +1272,7 @@ const PartnerDashboard = ({ navigation }) => {
             </TouchableOpacity>
           </Animated.View>
         )}
-      </SafeAreaView>
+      </View>
   );
 };
 
@@ -1593,6 +1800,514 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+
+  // Professional UI Styles
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  mainContent: {
+    flex: 1,
+  },
+  statsSection: {
+    marginBottom: 25,
+  },
+  statsScrollView: {
+    paddingHorizontal: 5,
+  },
+  statsScrollContent: {
+    paddingHorizontal: 10,
+  },
+  statCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modernStatLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginLeft: 10,
+    fontWeight: '600',
+  },
+  modernStatNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  actionsSection: {
+    marginBottom: 25,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridStatCard: {
+    width: '48%',
+    marginBottom: 15,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  gridStatCardGradient: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+  },
+  gridStatCardIcon: {
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridStatNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  gridStatLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  customStatIcon: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
+  },
+  customReviewStarIcon: {
+    width: 16,
+    height: 16,
+    marginHorizontal: 1,
+  },
+  customPromotionStatusIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+  },
+  headerGradient: {
+    paddingTop: 45,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  profileImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 15,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profilePicture: {
+    width: '100%',
+    height: '100%',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  partnerRole: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 4,
+  },
+  reviewsCount: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginLeft: 5,
+  },
+  storeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  storeButtonIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#fff',
+  },
+  quickStatsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 15,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  quickStatNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  quickStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 10,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  partnerName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  partnerCategory: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginLeft: 5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickStatsBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 15,
+  },
+  quickStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  quickStatValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 20,
+  },
+  statisticsContainer: {
+    marginBottom: 25,
+  },
+  statisticsScrollView: {
+    paddingHorizontal: 5,
+  },
+  modernStatCard: {
+    width: getResponsiveValues().statCardWidth,
+    marginRight: 15,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  statCardGradient: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  actionsContainer: {
+    marginBottom: 25,
+  },
+  primaryActionCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 15,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  actionCardGradient: {
+    padding: 20,
+  },
+  actionCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionCardIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+  actionIcon: {
+    width: 28,
+    height: 28,
+  },
+  actionCardText: {
+    flex: 1,
+  },
+  actionCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  actionCardSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  paymentSummaryContainer: {
+    flexDirection: 'row',
+    marginBottom: 25,
+  },
+  paymentSummaryCard: {
+    flex: 1,
+    marginRight: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  paymentCardGradient: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  paymentSummaryLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  paymentSummaryValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  ratingOverviewCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 25,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  ratingOverviewGradient: {
+    padding: 25,
+    alignItems: 'center',
+  },
+  ratingOverviewContent: {
+    alignItems: 'center',
+  },
+  overallRatingValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  reviewCountText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  reviewsList: {
+    marginBottom: 20,
+  },
+  reviewCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  reviewCardGradient: {
+    padding: 15,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  reviewRating: {
+    flexDirection: 'row',
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: '#5a6c7d',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#95a5a6',
+  },
+  viewAllReviewsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#4facfe',
+  },
+  viewAllReviewsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4facfe',
+    marginRight: 8,
+  },
+  emptyReviewsState: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  emptyStateGradient: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#495057',
+    marginTop: 15,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: '#6c757d',
+    textAlign: 'center',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  navButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  navButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
   },
 });
 

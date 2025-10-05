@@ -24,8 +24,43 @@ import * as FileSystem from 'expo-file-system'; // Ensure this is imported for C
 // Import rotation icon
 const ROTATE_ICON = require('../assets/icons/refresh.png');
 
-const PADDING_HORIZONTAL = 20; // Consistent padding for content
-const CHART_MARGIN_BOTTOM = 20; // Space between chart sections
+// Responsive design constants
+const getResponsiveValues = (screenWidth) => {
+  if (screenWidth < 350) {
+    // Very small phones
+    return {
+      padding: 12,
+      chartMargin: 15,
+      titleSize: 20,
+      chartTitleSize: 16,
+      chartHeight: 180,
+      buttonPadding: 8,
+      buttonFontSize: 12,
+    };
+  } else if (screenWidth < 400) {
+    // Small phones
+    return {
+      padding: 16,
+      chartMargin: 18,
+      titleSize: 22,
+      chartTitleSize: 17,
+      chartHeight: 200,
+      buttonPadding: 10,
+      buttonFontSize: 13,
+    };
+  } else {
+    // Regular and large screens
+    return {
+      padding: 20,
+      chartMargin: 20,
+      titleSize: 24,
+      chartTitleSize: 18,
+      chartHeight: 220,
+      buttonPadding: 12,
+      buttonFontSize: 14,
+    };
+  }
+};
 
 const Graphic = () => {
   const route = useRoute();
@@ -166,20 +201,26 @@ const Graphic = () => {
         }
       });
 
+      // Ensure chart data has minimum values to prevent rendering issues
+      const ensureMinimumData = (data) => {
+        const maxValue = Math.max(...data);
+        return maxValue === 0 ? data.map(() => 0.1) : data;
+      };
+
       setChartData({
         day: {
           labels: Array.from(dailyCountsMap.keys()),
-          datasets: [{ data: Array.from(dailyCountsMap.values()) }],
+          datasets: [{ data: ensureMinimumData(Array.from(dailyCountsMap.values())) }],
           total: dayTotal,
         },
         month: {
           labels: Array.from(monthlyCountsMap.keys()),
-          datasets: [{ data: Array.from(monthlyCountsMap.values()) }],
+          datasets: [{ data: ensureMinimumData(Array.from(monthlyCountsMap.values())) }],
           total: monthTotal,
         },
         year: {
           labels: Array.from(yearlyCountsMap.keys()),
-          datasets: [{ data: Array.from(yearlyCountsMap.values()) }],
+          datasets: [{ data: ensureMinimumData(Array.from(yearlyCountsMap.values())) }],
           total: yearTotal,
         },
       });
@@ -265,135 +306,246 @@ const Graphic = () => {
     );
   }
 
-  // Calculate chart width dynamically based on current screen dimensions
-  const chartWidth = screenDimensions.width - (PADDING_HORIZONTAL * 2);
-
-  const chartConfig = {
-    backgroundColor: '#ffffff',
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
-    decimalPlaces: 0, // No decimal places for counts
-    color: (opacity = 1) => `rgba(10, 143, 223, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: '#ffa726',
-    },
-    // Ensure labels don't get cut off
-    // Adjust based on your chart's specific needs and label density
-    paddingRight: 30, // Space for Y-axis labels
-    paddingLeft: 30,  // Space for first X-axis label
-    // Custom Y-axis intervals (optional, but good for professional look)
-    yAxisInterval: 1, // At least 1 unit between labels
-    formatYLabel: (yLabel) => Math.round(Number(yLabel)).toString(), // Ensure Y-labels are whole numbers
+  // Get responsive values based on current screen width
+  const responsive = getResponsiveValues(screenDimensions.width);
+  
+  // Calculate chart width with proper padding for centering and preventing overflow
+  const chartWidth = Math.min(
+    screenDimensions.width - (responsive.padding * 2) - 60,
+    screenDimensions.width * 0.85
+  );
+  
+  // Enhanced chart configuration for mobile
+  const getMobileOptimizedChartConfig = () => {
+    const isSmallScreen = screenDimensions.width < 400;
+    
+    return {
+      backgroundColor: '#ffffff',
+      backgroundGradientFrom: '#ffffff',
+      backgroundGradientTo: '#f8f9fa',
+      decimalPlaces: 0,
+      color: (opacity = 1) => `rgba(10, 143, 223, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(60, 60, 67, ${opacity})`,
+      style: {
+        borderRadius: 12,
+      },
+      propsForDots: {
+        r: isSmallScreen ? '4' : '6',
+        strokeWidth: '2',
+        stroke: '#0a8fdf',
+        fill: '#ffffff',
+        shadowColor: '#0a8fdf',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      propsForBackgroundLines: {
+        strokeDasharray: '',
+        stroke: '#e0e0e0',
+        strokeWidth: 1,
+      },
+      paddingRight: isSmallScreen ? 30 : 40,
+      paddingLeft: isSmallScreen ? 20 : 25,
+      yAxisInterval: 1,
+      segments: 4, // Control number of horizontal grid lines
+      formatYLabel: (yLabel) => {
+        const num = Math.round(Number(yLabel));
+        // Ensure unique Y labels and better formatting
+        return num >= 1000 ? `${(num / 1000).toFixed(1)}k` : num.toString();
+      },
+      formatXLabel: (xLabel, index) => {
+        // Show every nth label to prevent overlap
+        const showEvery = isSmallScreen ? 3 : 2;
+        if (index % showEvery !== 0) return '';
+        return isSmallScreen && xLabel.length > 4 ? `${xLabel.slice(0, 3)}` : xLabel;
+      },
+    };
   };
+
+  const chartConfig = getMobileOptimizedChartConfig();
 
   return (
     <View style={styles.mainContainer}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Croissance des {displayName}</Text>
-
-      {/* Day Chart Section */}
-      <View style={styles.chartWrapper}>
-        <ViewShot ref={dayChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Par Jour (dernières 24h)</Text>
-          <LineChart
-            data={chartData.day}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chartStyle}
-            // Add custom props for labels to help with density, e.g., only show every Nth label
-            // labels should be visible but not overlap, this depends on label density and screen size
-            xLabelsOffset={-10} // Offset X labels if they get too close to the line
-            yLabelsOffset={5} // Offset Y labels if they get too close to the line
-            fromZero={true} // Ensure y-axis starts from zero
-          />
-          <View style={styles.legendContainer}>
-            <Text style={styles.legendText}>
-              Nouveaux {displayName} par heure au cours des dernières 24 heures.
-            </Text>
+      <ScrollView contentContainerStyle={[styles.container, { paddingHorizontal: responsive.padding }]}>
+        {/* Header Section */}
+        <View style={styles.headerContainer}>
+          <Text style={[styles.title, { fontSize: responsive.titleSize }]}>
+            Croissance des {displayName}
+          </Text>
+          <View style={styles.statsOverview}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{chartData.day.total}</Text>
+              <Text style={styles.statLabel}>Aujourd'hui</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{chartData.month.total}</Text>
+              <Text style={styles.statLabel}>Ce mois</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{chartData.year.total}</Text>
+              <Text style={styles.statLabel}>Cette année</Text>
+            </View>
           </View>
-        </ViewShot>
-        <Text style={styles.totalNumber}>Total des {displayName} enregistrés aujourd'hui: **{chartData.day.total}**</Text>
-        <View style={styles.downloadButtonsContainer}>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadImage(dayChartRef, 'Graphique Journalier')}>
-            <Text style={styles.downloadButtonText}>Télécharger JPG</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadCSV(chartData.day, 'Graphique Journalier')}>
-            <Text style={styles.downloadButtonText}>Télécharger CSV</Text>
-          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Month Chart Section */}
-      <View style={styles.chartWrapper}>
-        <ViewShot ref={monthChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Par Mois (derniers 30 jours)</Text>
-          <LineChart
-            data={chartData.month}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chartStyle}
-            xLabelsOffset={-10}
-            yLabelsOffset={5}
-            fromZero={true}
-          />
-          <View style={styles.legendContainer}>
-            <Text style={styles.legendText}>
-              Nouveaux {displayName} par jour au cours des 30 derniers jours.
-            </Text>
+        {/* Day Chart Section */}
+        <View style={[styles.chartWrapper, { marginBottom: responsive.chartMargin }]}>
+          <ViewShot ref={dayChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
+            <View style={styles.chartHeader}>
+              <Text style={[styles.chartTitle, { fontSize: responsive.chartTitleSize }]}>
+                📊 Par Jour (dernières 24h)
+              </Text>
+              <View style={styles.chartBadge}>
+                <Text style={styles.chartBadgeText}>{chartData.day.total}</Text>
+              </View>
+            </View>
+            <LineChart
+              data={chartData.day}
+              width={chartWidth}
+              height={responsive.chartHeight}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chartStyle}
+              xLabelsOffset={-5}
+              yLabelsOffset={5}
+              fromZero={true}
+              withHorizontalLabels={true}
+              withVerticalLabels={true}
+              withDots={true}
+              withShadow={false}
+              segments={4}
+            />
+            <View style={styles.legendContainer}>
+              <Text style={styles.legendText}>
+                Nouveaux {displayName} par heure au cours des dernières 24 heures.
+              </Text>
+            </View>
+          </ViewShot>
+          <View style={styles.downloadButtonsContainer}>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadImage(dayChartRef, 'Graphique Journalier')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📥 JPG
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadCSV(chartData.day, 'Graphique Journalier')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📊 CSV
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ViewShot>
-        <Text style={styles.totalNumber}>Total des {displayName} enregistrés ce mois-ci: **{chartData.month.total}**</Text>
-        <View style={styles.downloadButtonsContainer}>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadImage(monthChartRef, 'Graphique Mensuel')}>
-            <Text style={styles.downloadButtonText}>Télécharger JPG</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadCSV(chartData.month, 'Graphique Mensuel')}>
-            <Text style={styles.downloadButtonText}>Télécharger CSV</Text>
-          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Year Chart Section */}
-      <View style={styles.chartWrapper}>
-        <ViewShot ref={yearChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Par Année (derniers 12 mois)</Text>
-          <LineChart
-            data={chartData.year}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chartStyle}
-            xLabelsOffset={-10}
-            yLabelsOffset={5}
-            fromZero={true}
-          />
-          <View style={styles.legendContainer}>
-            <Text style={styles.legendText}>
-              Nouveaux {displayName} par mois au cours des 12 derniers mois.
-            </Text>
+        {/* Month Chart Section */}
+        <View style={[styles.chartWrapper, { marginBottom: responsive.chartMargin }]}>
+          <ViewShot ref={monthChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
+            <View style={styles.chartHeader}>
+              <Text style={[styles.chartTitle, { fontSize: responsive.chartTitleSize }]}>
+                📈 Par Mois (derniers 30 jours)
+              </Text>
+              <View style={styles.chartBadge}>
+                <Text style={styles.chartBadgeText}>{chartData.month.total}</Text>
+              </View>
+            </View>
+            <LineChart
+              data={chartData.month}
+              width={chartWidth}
+              height={responsive.chartHeight}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chartStyle}
+              xLabelsOffset={-5}
+              yLabelsOffset={5}
+              fromZero={true}
+              withHorizontalLabels={true}
+              withVerticalLabels={true}
+              withDots={true}
+              withShadow={false}
+              segments={4}
+            />
+            <View style={styles.legendContainer}>
+              <Text style={styles.legendText}>
+                Nouveaux {displayName} par jour au cours des 30 derniers jours.
+              </Text>
+            </View>
+          </ViewShot>
+          <View style={styles.downloadButtonsContainer}>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadImage(monthChartRef, 'Graphique Mensuel')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📥 JPG
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadCSV(chartData.month, 'Graphique Mensuel')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📊 CSV
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ViewShot>
-        <Text style={styles.totalNumber}>Total des {displayName} enregistrés cette année: **{chartData.year.total}**</Text>
-        <View style={styles.downloadButtonsContainer}>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadImage(yearChartRef, 'Graphique Annuel')}>
-            <Text style={styles.downloadButtonText}>Télécharger JPG</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.downloadButton} onPress={() => downloadCSV(chartData.year, 'Graphique Annuel')}>
-            <Text style={styles.downloadButtonText}>Télécharger CSV</Text>
-          </TouchableOpacity>
         </View>
-      </View>
+
+        {/* Year Chart Section */}
+        <View style={[styles.chartWrapper, { marginBottom: responsive.chartMargin + 60 }]}>
+          <ViewShot ref={yearChartRef} options={{ format: 'jpg', quality: 0.9 }} style={styles.chartSection}>
+            <View style={styles.chartHeader}>
+              <Text style={[styles.chartTitle, { fontSize: responsive.chartTitleSize }]}>
+                📅 Par Année (derniers 12 mois)
+              </Text>
+              <View style={styles.chartBadge}>
+                <Text style={styles.chartBadgeText}>{chartData.year.total}</Text>
+              </View>
+            </View>
+            <LineChart
+              data={chartData.year}
+              width={chartWidth}
+              height={responsive.chartHeight}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chartStyle}
+              xLabelsOffset={-5}
+              yLabelsOffset={5}
+              fromZero={true}
+              withHorizontalLabels={true}
+              withVerticalLabels={true}
+              withDots={true}
+              withShadow={false}
+              segments={4}
+            />
+            <View style={styles.legendContainer}>
+              <Text style={styles.legendText}>
+                Nouveaux {displayName} par mois au cours des 12 derniers mois.
+              </Text>
+            </View>
+          </ViewShot>
+          <View style={styles.downloadButtonsContainer}>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadImage(yearChartRef, 'Graphique Annuel')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📥 JPG
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.downloadButton, { paddingVertical: responsive.buttonPadding }]} 
+              onPress={() => downloadCSV(chartData.year, 'Graphique Annuel')}
+            >
+              <Text style={[styles.downloadButtonText, { fontSize: responsive.buttonFontSize }]}>
+                📊 CSV
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
 
       {/* Floating Orientation Toggle Button */}
@@ -417,113 +569,180 @@ const Graphic = () => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
   },
   container: {
-    flexGrow: 1, // Allows content to scroll if it overflows
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: PADDING_HORIZONTAL, // Use consistent horizontal padding
+    flexGrow: 1,
+    backgroundColor: 'transparent',
     paddingVertical: 15,
-    justifyContent: 'center', // Center content vertically
-    alignItems: 'center', // Center content horizontally
+    paddingBottom: 80, // Extra space for floating button
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f7fa',
+  },
+  headerContainer: {
+    marginBottom: 25,
+    paddingHorizontal: 5,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 20,
-    color: '#333',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  statsOverview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 0.5,
+    borderColor: '#e0e6ed',
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0a8fdf',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
     textAlign: 'center',
   },
   chartWrapper: {
-    marginBottom: CHART_MARGIN_BOTTOM, // Spacing between each chart block
-    width: '100%', // Take full width available within padding
-    alignItems: 'center', // Center content within the wrapper
+    width: '100%',
+    alignItems: 'center',
   },
   chartSection: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    width: '100%', // Ensure chart section takes full width of its parent (chartWrapper)
-    overflow: 'hidden', // Crucial to prevent content like bezier lines from overflowing
+    shadowRadius: 12,
+    elevation: 6,
+    width: '100%',
+    borderWidth: 0.5,
+    borderColor: '#e0e6ed',
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
   },
   chartTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#555',
-    textAlign: 'center',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    flex: 1,
+    letterSpacing: 0.3,
+  },
+  chartBadge: {
+    backgroundColor: '#0a8fdf',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  chartBadgeText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   chartStyle: {
     marginVertical: 8,
-    borderRadius: 16,
+    borderRadius: 12,
+    alignSelf: 'center',
   },
   legendContainer: {
-    marginTop: 10,
-    paddingHorizontal: 10,
+    marginTop: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#f8fafc',
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0a8fdf',
   },
   legendText: {
     fontSize: 12,
-    color: '#777',
-    textAlign: 'center',
+    color: '#64748b',
+    textAlign: 'left',
+    lineHeight: 16,
+    fontWeight: '500',
   },
-  totalNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 10,
-    marginBottom: 15, // Space between number and buttons
-    textAlign: 'center',
-  },
+
   downloadButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%', // Take full width within chartWrapper
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 4,
   },
   downloadButton: {
-    backgroundColor: '#0a8fdf',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#0a8fdf',
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginHorizontal: 4,
     flex: 1,
     alignItems: 'center',
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   downloadButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    color: '#0a8fdf',
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   floatingButton: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 25,
     right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#0a8fdf',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
     zIndex: 1000,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   floatingButtonIcon: {
-    width: 24,
-    height: 24,
-    tintColor: '#fff',
+    width: 26,
+    height: 26,
+    tintColor: '#ffffff',
     resizeMode: 'contain',
   },
 });

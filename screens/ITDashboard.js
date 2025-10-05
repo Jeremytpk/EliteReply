@@ -14,9 +14,12 @@ import {
   Easing,
   Dimensions,
   RefreshControl,
+  StatusBar,
+  ScrollView,
+  SafeAreaView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import Swiper from 'react-native-swiper'; // This still seems unused, consider removing if confirmed not needed.
 import { MaterialCommunityIcons, Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
 import {
   collection,
@@ -35,11 +38,29 @@ import {
   arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-// REMOVED: import moment from 'moment';
-// REMOVED: import 'moment/moment-timezone';
-// REMOVED: import 'moment/locale/fr';
 
-// REMOVED: moment.locale('fr');
+// Responsive design helper function
+const getResponsiveValues = () => {
+  const { width: screenWidth } = Dimensions.get('window');
+  const isTablet = screenWidth >= 768;
+  const isLargePhone = screenWidth >= 414;
+  
+  return {
+    statCardWidth: isTablet ? 120 : (isLargePhone ? 110 : 100),
+    headerPadding: isTablet ? 30 : 20,
+    fontSize: {
+      title: isTablet ? 28 : 24,
+      subtitle: isTablet ? 18 : 16,
+      body: isTablet ? 16 : 14,
+      small: isTablet ? 14 : 12,
+    },
+    spacing: {
+      small: isTablet ? 12 : 8,
+      medium: isTablet ? 20 : 15,
+      large: isTablet ? 30 : 25,
+    }
+  };
+};
 
 const ITDashboard = () => {
   const navigation = useNavigation();
@@ -699,116 +720,209 @@ const ITDashboard = () => {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.profileContainer} onPress={navigateToSettings}>
-          <Image
-            source={userData?.photoURL ? { uri: userData.photoURL } : require('../assets/images/Profile.png')}
-            style={styles.profileImage}
-          />
-          <View>
-            <Text style={styles.userName}>{userData?.name || 'Agent'}</Text>
-            <Text style={styles.userRole}>Agent</Text>
-          </View>
-        </TouchableOpacity>
-        <View style={styles.headerRightSection}>
-            <TouchableOpacity onPress={handleRefresh} style={styles.refreshIconContainer}>
-                <MaterialIcons name="refresh" size={24} color="#6B7280" />
-            </TouchableOpacity>
-            <Image style={styles.logo} source={require('../assets/images/logoVide.png')} />
-        </View>
-      </View>
-
-      {/* Stats Cards Section */}
-      <TouchableOpacity
-        onPress={() => setShowStats(!showStats)}
-        style={styles.toggleStatsButton}
-        activeOpacity={0.8}
+    <SafeAreaView style={styles.safeContainer}>
+      <View style={styles.mainContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#4285F4" />
+      
+      {/* Professional IT Header */}
+      <LinearGradient
+        colors={['#4285F4', '#34A853']}
+        style={styles.headerGradient}
       >
-        <Text style={styles.sectionTitle}>Statistiques de performance</Text>
-        <Ionicons
-          name={showStats ? 'chevron-up-outline' : 'chevron-down-outline'}
-          size={24}
-          color="#6B7280"
-        />
-      </TouchableOpacity>
-
-      {showStats && (
-        <>
-          <View style={styles.statsRow}>
-            {/* Clock In/Out Button */}
-            <TouchableOpacity
-              style={[
-                styles.statCard,
-                isClockedIn ? styles.clockOutCard : styles.clockInCard,
-                styles.clockButtonPadding
-              ]}
-              onPress={handleClockInOut}
-              activeOpacity={0.8}
-            >
-              <View style={[
-                  styles.statIcon,
-                  isClockedIn ? styles.clockOutIconBackground : styles.clockInIconBackground
-                ]}>
-                <MaterialIcons name={isClockedIn ? "logout" : "login"} size={24} color="#FFF" />
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.profileSection}
+            onPress={navigateToSettings}
+          >
+            <View style={styles.profileImageContainer}>
+              <Image
+                source={userData?.photoURL ? { uri: userData.photoURL } : require('../assets/images/Profile.png')}
+                style={styles.profilePicture}
+              />
+              <View style={styles.onlineIndicator} />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.agentName}>{userData?.name || 'Agent'}</Text>
+              <Text style={styles.agentRole}>Agent IT & Support</Text>
+              <View style={styles.statusContainer}>
+                <Text style={styles.statusText}>
+                  {isClockedIn ? '🟢 En service' : '🔴 Hors service'}
+                </Text>
               </View>
-              <Text style={styles.clockButtonText}>
-                {isClockedIn ? 'Terminer' : 'Travailler'}
-              </Text>
-              <Text style={styles.clockButtonSubText}>
-                {isClockedIn ? 'Fin de journée' : 'Début de journée'}
-              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+            >
+              <MaterialIcons name="refresh" size={24} color="rgba(255,255,255,0.9)" />
             </TouchableOpacity>
-
-            <StatCard
-              icon={<MaterialIcons name="hourglass-empty" size={24} color="#EA4335" />}
-              value={stats.waitingTickets}
-              label="En Attente"
-            />
-            <StatCard
-                icon={<MaterialIcons name="check-circle" size={24} color="#66BB6A" />}
-                value={stats.agentTerminatedTickets}
-                label="Mes Terminés"
-            />
+            <TouchableOpacity style={styles.settingsButton} onPress={navigateToSettings}>
+              <Ionicons name="settings-outline" size={24} color="rgba(255,255,255,0.9)" />
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.statsRow}>
-            <StatCard
-              icon={<MaterialIcons name="calendar-today" size={24} color="#FF9500" />}
-              value={stats.scheduledAppointmentsCount}
-              label="Rendez-vous"
-              onPress={() => navigation.navigate('Appointments')}
-            />
-            <StatCard
-              icon={<MaterialIcons name="assignment" size={24} color="#9C27B0" />}
-              value={stats.totalTickets}
-              label="Total Tickets"
-            />
-            <StatCard
-              icon={<MaterialIcons name="chat" size={24} color="#4285F4" />}
-              value={stats.activeConversations}
-              label="Actives"
-            />
+        </View>
+        
+        {/* Quick Stats Overview */}
+        <View style={styles.quickStatsContainer}>
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>{stats.waitingTickets}</Text>
+            <Text style={styles.quickStatLabel}>En Attente</Text>
           </View>
-        </>
-      )}
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>{stats.activeConversations}</Text>
+            <Text style={styles.quickStatLabel}>Mes Actifs</Text>
+          </View>
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatNumber}>{stats.agentTerminatedTickets}</Text>
+            <Text style={styles.quickStatLabel}>Terminés</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Professional Statistics Section */}
+      <View style={styles.statsSection}>
+        <TouchableOpacity
+          onPress={() => setShowStats(!showStats)}
+          style={styles.toggleStatsSection}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sectionTitle}>📊 Statistiques de Performance</Text>
+          <Ionicons
+            name={showStats ? 'chevron-up-outline' : 'chevron-down-outline'}
+            size={24}
+            color="#4285F4"
+          />
+        </TouchableOpacity>
+
+        {showStats && (
+          <View style={styles.statisticsContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.statsScrollView}
+              contentContainerStyle={styles.statsScrollContent}
+            >
+              {/* Clock In/Out Card */}
+              <TouchableOpacity
+                style={styles.modernStatCard}
+                onPress={handleClockInOut}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={isClockedIn ? ['#EA4335', '#D73527'] : ['#34C759', '#30A14E']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons 
+                      name={isClockedIn ? "logout" : "login"} 
+                      size={24} 
+                      color="#fff" 
+                    />
+                    <Text style={styles.modernStatLabel}>
+                      {isClockedIn ? 'Terminer' : 'Commencer'}
+                    </Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>
+                    {isClockedIn ? 'Service' : 'Journée'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Other Statistics Cards */}
+              <View style={styles.modernStatCard}>
+                <LinearGradient
+                  colors={['#EA4335', '#D73527']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons name="hourglass-empty" size={24} color="#fff" />
+                    <Text style={styles.modernStatLabel}>En Attente</Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>{stats.waitingTickets}</Text>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.modernStatCard}>
+                <LinearGradient
+                  colors={['#34C759', '#30A14E']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons name="check-circle" size={24} color="#fff" />
+                    <Text style={styles.modernStatLabel}>Mes Terminés</Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>{stats.agentTerminatedTickets}</Text>
+                </LinearGradient>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modernStatCard}
+                onPress={() => navigation.navigate('Appointments')}
+              >
+                <LinearGradient
+                  colors={['#FF9500', '#E6820E']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons name="calendar-today" size={24} color="#fff" />
+                    <Text style={styles.modernStatLabel}>Rendez-vous</Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>{stats.scheduledAppointmentsCount}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.modernStatCard}>
+                <LinearGradient
+                  colors={['#9C27B0', '#8E24AA']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons name="assignment" size={24} color="#fff" />
+                    <Text style={styles.modernStatLabel}>Total Tickets</Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>{stats.totalTickets}</Text>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.modernStatCard}>
+                <LinearGradient
+                  colors={['#4285F4', '#3367D6']}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardHeader}>
+                    <MaterialIcons name="chat" size={24} color="#fff" />
+                    <Text style={styles.modernStatLabel}>Conversations</Text>
+                  </View>
+                  <Text style={styles.modernStatNumber}>{stats.activeConversations}</Text>
+                </LinearGradient>
+              </View>
+            </ScrollView>
+          </View>
+        )}
+      </View>
 
       {/* Tickets Section Header */}
       <View style={styles.ticketSectionHeader}>
-        <Text style={styles.sectionTitle}>Tickets ({tickets.length})</Text>
+        <Text style={styles.sectionTitle}>🎫 Tickets ({tickets.length})</Text>
         {stats.jeyHandlingTicketsCount > 0 && (
-          <Text style={styles.jeyHandlingLabel}>Jey ({stats.jeyHandlingTicketsCount})</Text>
+          <View style={styles.jeyHandlingBadge}>
+            <Text style={styles.jeyHandlingLabel}>Jey ({stats.jeyHandlingTicketsCount})</Text>
+          </View>
         )}
         {stats.premiumTicketsCount > 0 && (
           <View style={styles.premiumCountContainer}>
             <MaterialIcons name="workspace-premium" size={20} color="#FFD700" />
-            <Text style={styles.premiumCountLabel}>Premium ({stats.premiumTicketsCount})</Text>
+            <Text style={styles.premiumCountLabel}>Premium ({stats.premiumCountsCount})</Text>
           </View>
         )}
       </View>
 
-      {/* Ticket List */}
+      {/* Ticket List (Outside ScrollView) */}
       <FlatList
         data={tickets}
         keyExtractor={item => item.id}
@@ -977,14 +1091,20 @@ const ITDashboard = () => {
             <Text style={styles.emptyText}>Aucun ticket actif trouvé.</Text>
           </View>
         }
+        ListFooterComponent={() => <View style={styles.listFooter} />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={['#34C759']}
-            tintColor={'#34C759'}
+            colors={['#4285F4']}
+            tintColor={'#4285F4'}
           />
         }
+        style={styles.ticketsList}
+        contentContainerStyle={styles.ticketsListContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
       />
 
       {/* Clock In/Out Modal */}
@@ -1042,7 +1162,8 @@ const ITDashboard = () => {
           </TouchableOpacity>
         </Modal>
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -1055,6 +1176,252 @@ const StatCard = ({ icon, value, label, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  // Professional UI Styles
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingBottom: 20,
+  },
+  headerGradient: {
+    paddingTop: 45,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  profileImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 15,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  profilePicture: {
+    width: '100%',
+    height: '100%',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  agentName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  agentRole: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickStatsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 15,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  quickStatNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  quickStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 10,
+  },
+  statsSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  toggleStatsSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  statisticsContainer: {
+    marginBottom: 25,
+  },
+  statsScrollView: {
+    paddingHorizontal: 5,
+  },
+  statsScrollContent: {
+    paddingHorizontal: 10,
+  },
+  modernStatCard: {
+    width: 120,
+    marginRight: 15,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  statCardGradient: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+    width: '100%',
+  },
+  statCardHeader: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modernStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 5,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modernStatNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  ticketSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  jeyHandlingBadge: {
+    marginLeft: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    borderRadius: 8,
+  },
+  jeyHandlingLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FF9500',
+  },
+  premiumCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 8,
+  },
+  premiumCountLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    marginLeft: 5,
+  },
+  ticketsList: {
+    flex: 1,
+    paddingHorizontal: 16,
+    marginBottom: 0,
+  },
+  ticketsListContent: {
+    paddingBottom: 150,
+    flexGrow: 1,
+  },
+  listFooter: {
+    height: 100,
+    backgroundColor: 'transparent',
+  },
+  
+  // Legacy styles (keeping for compatibility)
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
