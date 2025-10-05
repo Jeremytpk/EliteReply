@@ -1,0 +1,62 @@
+/node_modules
+/.expo/
+/.expo-shared/
+/web-build/
+/android/
+/ios/
+/npm-debug.*
+/yarn-debug.*
+/yarn-error.log
+
+# macOS
+.DS_Store
+
+# local env files
+.env
+.env.local
+*.env
+*.env.*
+
+# IDEs and other
+.vscode
+.idea
+*.iml
+*.class
+*.jar
+*.war
+*.log
+
+# firebase
+google-services.json # <--- IMPORTANT: DO NOT UPLOAD YOUR ACTUAL FIREBASE CONFIG FILE
+GoogleService-Info.plist # <--- IMPORTANT: DO NOT UPLOAD YOUR ACTUAL FIREBASE CONFIG FILE
+
+# EAS build artifacts
+/.eas/
+/dist/
+/build/
+
+# Metro bundler cache
+.history
+.vscode-test
+
+# React Native specific
+/ios/Pods/
+/ios/.symlinks/
+/ios/DerivedData/
+/ios/*.xcworkspace/
+/ios/*.xcodeproj/xcuserdata/
+/ios/*.xcodeproj/project.xcworkspace/
+/android/.gradle/
+/android/app/build/
+/android/app/.cxx/
+/android/app/src/main/assets/
+/android/app/src/debug/
+/android/app/.idea/
+/android/local.properties
+/android/.idea
+/android/captures
+/android/lint-results.xml
+/android/test-results.xml
+
+# Open AI config (if it holds your key directly)
+OpenAIConfig.js

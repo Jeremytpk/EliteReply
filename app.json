@@ -1,0 +1,126 @@
+{
+  "expo": {
+    "name": "EliteReply",
+    "slug": "EliteReply",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "elitereply",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set a profile picture.",
+          "cameraPermission": "The app accesses your camera to let you take a profile picture."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#0a8fdf",
+          "androidMode": "default",
+          "androidCollapsedTitle": "#{unread_notifications} nouveaux messages",
+          "android": {
+            "channels": [
+              {
+                "id": "er_notification_channel",
+                "name": "EliteReply Notifications",
+                "description": "Notifications importantes d'EliteReply",
+                "importance": "high",
+                "sound": "./assets/sounds/er_notification.mp3",
+                "vibrationPattern": [
+                  0,
+                  250,
+                  250,
+                  250
+                ],
+                "lightColor": "#FF231F7C"
+              }
+            ]
+          },
+          "ios": {
+            "allowForeground": true,
+            "supportsTablet": true,
+            "sounds": [
+              {
+                "name": "er_notification",
+                "path": "./assets/sounds/er_notification.wav",
+                "type": "wav"
+              }
+            ]
+          }
+        }
+      ],
+      "expo-font"
+    ],
+    "splash": {
+      "image": "./assets/images/logoVide.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your app needs access to your location to provide personalized services.",
+        "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition."
+      },
+      "bundleIdentifier": "com.yourcompany.elitereply",
+      "buildNumber": "1.0.0"
+    },
+    "android": {
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptiveIcon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourcompany.elitereply",
+      "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "elitereply",
+              "host": "app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2ed09575-61d8-47b8-ae78-ee5bfbf930f9"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "build": {
+        "babel": {
+          "include": [
+            "node_modules/@expo/vector-icons"
+          ]
+        }
+      }
+    },
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}
