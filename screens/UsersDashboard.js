@@ -11,8 +11,10 @@ import {
   ActivityIndicator,
   Image, // Import Image
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
+import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -592,87 +594,103 @@ const UsersDashboard = ({ navigation }) => {
           <View style={styles.cardActions}>
             {isEditing ? (
               <>
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: '#0a8fdf' }]}
-                  onPress={() => handleSaveUserChanges(user.id)}
-                >
-                  {/* --- MODIFIED: Use custom image for Save --- */}
-                  <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.cardActionButtonText}>Save</Text>
+                <TouchableOpacity onPress={() => handleSaveUserChanges(user.id)}>
+                  <LinearGradient
+                    colors={['#3b82f6', '#1d4ed8']}
+                    style={styles.cardActionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Save --- */}
+                    <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.cardActionButtonText}>Save</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: '#FF3B30' }]}
-                  onPress={handleCancelEdit}
-                >
-                  <Ionicons name="close" size={16} color="#fff" />
-                  <Text style={styles.cardActionButtonText}>Cancel</Text>
+                <TouchableOpacity onPress={handleCancelEdit}>
+                  <LinearGradient
+                    colors={['#ef4444', '#dc2626']}
+                    style={styles.cardActionButton}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                    <Text style={styles.cardActionButtonText}>Cancel</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: '#0a8fdf' }]}
-                  onPress={() => handleEditUser(user)}
-                >
-                  {/* --- MODIFIED: Use custom image for Edit --- */}
-                  <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.cardActionButtonText}>Edit</Text>
+                <TouchableOpacity onPress={() => handleEditUser(user)}>
+                  <LinearGradient
+                    colors={['#3b82f6', '#1d4ed8']}
+                    style={styles.cardActionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Edit --- */}
+                    <Image source={EDIT_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.cardActionButtonText}>Edit</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: user.isITSupport ? '#FF3B30' : '#34C759' }]}
-                  onPress={() => handleAssignITSupport(user)}
-                >
-                  {/* --- MODIFIED: Use custom image for Assign/Remove IT --- */}
-                  <Image source={REMOVE_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.cardActionButtonText}>
-                    {user.isITSupport ? 'Remove IT' : 'Assign IT'}
-                  </Text>
+                <TouchableOpacity onPress={() => handleAssignITSupport(user)}>
+                  <LinearGradient
+                    colors={user.isITSupport ? ['#ef4444', '#dc2626'] : ['#10b981', '#059669']}
+                    style={styles.cardActionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Assign/Remove IT --- */}
+                    <Image source={REMOVE_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.cardActionButtonText}>
+                      {user.isITSupport ? 'Remove IT' : 'Assign IT'}
+                    </Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: user.isPremium ? '#FF9500' : '#8A2BE2' }]}
-                  onPress={() => handleTogglePremium(user)}
-                >
-                  {/* --- MODIFIED: Use custom image for Set/Unset Premium --- */}
-                  <Image source={PREMIUM_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.cardActionButtonText}>
-                    {user.isPremium ? 'Unset Premium' : 'Set Premium'}
-                  </Text>
+                <TouchableOpacity onPress={() => handleTogglePremium(user)}>
+                  <LinearGradient
+                    colors={user.isPremium ? ['#f59e0b', '#d97706'] : ['#8b5cf6', '#7c3aed']}
+                    style={styles.cardActionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Set/Unset Premium --- */}
+                    <Image source={PREMIUM_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.cardActionButtonText}>
+                      {user.isPremium ? 'Unset Premium' : 'Set Premium'}
+                    </Text>
+                  </LinearGradient>
                 </TouchableOpacity>
 
                 {user.isITSupport && (
                   <>
-                    <TouchableOpacity
-                      style={[styles.cardActionButton, { backgroundColor: '#4285F4' }]}
-                      onPress={() => handleOpenTransferModal(user)}
-                    >
-                      {/* --- MODIFIED: Use custom image for Transfer --- */}
-                      <Image source={TRANSFER_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                      {/* --- END MODIFIED --- */}
-                      <Text style={styles.cardActionButtonText}>Transfer</Text>
+                    <TouchableOpacity onPress={() => handleOpenTransferModal(user)}>
+                      <LinearGradient
+                        colors={['#3b82f6', '#1e40af']}
+                        style={styles.cardActionButton}
+                      >
+                        {/* --- MODIFIED: Use custom image for Transfer --- */}
+                        <Image source={TRANSFER_USER_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                        {/* --- END MODIFIED --- */}
+                        <Text style={styles.cardActionButtonText}>Transfer</Text>
+                      </LinearGradient>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.cardActionButton, { backgroundColor: '#FFD700' }]}
-                      onPress={() => handleOpenEvaluationModal(user)}
-                    >
-                      {/* --- MODIFIED: Use custom image for Eval --- */}
-                      <Image source={RATE_HALF_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                      {/* --- END MODIFIED --- */}
-                      <Text style={styles.cardActionButtonText}>Eval</Text>
+                    <TouchableOpacity onPress={() => handleOpenEvaluationModal(user)}>
+                      <LinearGradient
+                        colors={['#fbbf24', '#f59e0b']}
+                        style={styles.cardActionButton}
+                      >
+                        {/* --- MODIFIED: Use custom image for Eval --- */}
+                        <Image source={RATE_HALF_ICON} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                        {/* --- END MODIFIED --- */}
+                        <Text style={styles.cardActionButtonText}>Eval</Text>
+                      </LinearGradient>
                     </TouchableOpacity>
                   </>
                 )}
-                <TouchableOpacity
-                  style={[styles.cardActionButton, { backgroundColor: '#FF3B30' }]}
-                  onPress={() => handleDeleteUser(user.id, user.name)}
-                >
-                  {/* --- MODIFIED: Use custom image for Delete --- */}
-                  <Image source={DELETE_ICON_DASH} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.cardActionButtonText}>Delete</Text>
+                <TouchableOpacity onPress={() => handleDeleteUser(user.id, user.name)}>
+                  <LinearGradient
+                    colors={['#ef4444', '#dc2626']}
+                    style={styles.cardActionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Delete --- */}
+                    <Image source={DELETE_ICON_DASH} style={[styles.customCardActionIcon, { tintColor: '#fff' }]} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.cardActionButtonText}>Delete</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </>
             )}
@@ -693,13 +711,18 @@ const UsersDashboard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Users Dashboard</Text>
         <View style={{ width: 24 }} />
-      </View>
+      </LinearGradient>
 
       <View style={styles.searchSortContainer}>
         <TextInput
@@ -817,11 +840,13 @@ const UsersDashboard = ({ navigation }) => {
             onChangeText={setEvaluationComment}
           />
 
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSaveEvaluation}
-          >
-            <Text style={styles.submitButtonText}>Submit Evaluation</Text>
+          <TouchableOpacity onPress={handleSaveEvaluation}>
+            <LinearGradient
+              colors={['#3b82f6', '#1d4ed8']}
+              style={styles.submitButton}
+            >
+              <Text style={styles.submitButtonText}>Submit Evaluation</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -832,7 +857,7 @@ const UsersDashboard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
   },
   centered: {
     flex: 1,
@@ -840,167 +865,213 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#64748b',
+    fontWeight: '500',
   },
   emptyText: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center', // Centered for better aesthetics
-    paddingHorizontal: 20,
+    color: '#64748b',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    padding: 20,
     paddingTop: 50,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: -0.5,
   },
   searchSortContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+    margin: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
   },
   searchBar: {
     flex: 1,
-    height: 40,
-    borderColor: '#ddd',
+    height: 44,
+    borderColor: '#e2e8f0',
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginRight: 10,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginRight: 12,
     fontSize: 16,
+    backgroundColor: '#f8fafc',
+    color: '#1e293b',
+    fontWeight: '500',
   },
   sortButton: {
-    padding: 5,
+    backgroundColor: '#f1f5f9',
+    padding: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   // --- NEW STYLE for Custom Filter Icon ---
   customFilterIcon: {
-    width: 24, // Match Ionicons size
-    height: 24, // Match Ionicons size
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#0a8fdf', // Match original Ionicons color
+    tintColor: '#3b82f6',
   },
   // --- END NEW STYLE ---
   gridContainer: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   row: {
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   userCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginHorizontal: 5,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
     alignItems: 'center',
-    marginBottom: 10,
-    minHeight: 300, // Adjusted minHeight to accommodate new content
+    marginBottom: 16,
+    minHeight: 320,
     maxWidth: '48%',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   avatarContainer: {
-    marginBottom: 10,
+    marginBottom: 16,
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#ffffff',
   },
   defaultAvatar: {
-    backgroundColor: '#0a8fdf',
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   defaultAvatarText: {
-    color: '#fff',
-    fontSize: 30,
-    fontWeight: 'bold',
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   clockedInDot: {
     position: 'absolute',
-    bottom: 5,
-    right: 5,
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#34C759',
-    borderWidth: 2,
-    borderColor: '#fff',
-    zIndex: 1, // Ensure it's on top
+    bottom: 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#10b981',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    zIndex: 1,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: '#1e293b',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   userEmail: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5,
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 8,
     textAlign: 'center',
+    fontWeight: '500',
   },
   userRole: {
-    fontSize: 12,
-    color: '#555',
-    marginBottom: 5,
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 8,
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   itSupportBadge: {
-    fontSize: 10,
-    color: '#fff',
-    backgroundColor: '#4285F4',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    alignSelf: 'center',
-    marginBottom: 4, // Reduced margin
-  },
-  premiumBadge: {
-    fontSize: 10,
-    color: '#fff',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    fontSize: 11,
+    color: '#ffffff',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     alignSelf: 'center',
     marginBottom: 8,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  premiumBadge: {
+    fontSize: 11,
+    color: '#ffffff',
+    backgroundColor: '#eab308',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'center',
+    marginBottom: 8,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   // NEW: Agent Stats Styles
   agentStatsContainer: {
-    marginTop: 5,
-    marginBottom: 10,
-    alignItems: 'flex-start', // Align text to the left within this container
+    marginTop: 8,
+    marginBottom: 12,
+    alignItems: 'flex-start',
     width: '100%',
-    paddingLeft: 10,
+    paddingLeft: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
   },
   agentStatText: {
     fontSize: 12,
-    color: '#555',
-    marginBottom: 2,
+    color: '#475569',
+    marginBottom: 4,
+    fontWeight: '500',
   },
   agentStatNumber: {
     fontWeight: 'bold',
@@ -1021,27 +1092,45 @@ const styles = StyleSheet.create({
   // END NEW Agent Stats Styles
   editInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 8,
-    marginBottom: 8,
-    fontSize: 14,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 15,
     width: '100%',
     textAlign: 'center',
+    backgroundColor: '#fff',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   // NEW: Toggle Actions Button
   toggleActionsButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 5,
-    marginTop: 5,
-    marginBottom: 10, // Add some space above actions
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   toggleActionsButtonText: {
-    color: '#0a8fdf',
+    color: '#3b82f6',
     fontSize: 13,
     marginLeft: 5,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   // --- NEW STYLE for Custom Toggle Arrow Icons ---
   customToggleArrowIcon: {
@@ -1060,17 +1149,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginBottom: 6,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     width: '90%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   cardActionButtonText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '600',
     marginLeft: 5,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   // --- NEW STYLE for Custom Card Action Icons ---
   customCardActionIcon: {
@@ -1083,19 +1181,31 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
     paddingTop: 50,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   ticketItem: {
     backgroundColor: '#fff',
@@ -1170,24 +1280,44 @@ const styles = StyleSheet.create({
   },
   commentInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 15,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 18,
     marginBottom: 20,
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
+    backgroundColor: '#fff',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   submitButton: {
-    backgroundColor: '#0a8fdf',
-    borderRadius: 8,
-    padding: 15,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 18,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   modalOverlay: {
     flex: 1,
