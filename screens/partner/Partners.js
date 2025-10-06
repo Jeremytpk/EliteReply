@@ -376,9 +376,28 @@ const Partners = () => {
       return { color: '#666', text: 'Pas de promotion', iconColor: '#666', iconName: 'information-circle-outline' };
     }
 
-    const endDate = new Date(partner.promotionEndDate);
+    // Handle different date formats (Firestore timestamp, string, or Date object)
+    let endDate;
+    if (partner.promotionEndDate.toDate) {
+      // Firestore Timestamp
+      endDate = partner.promotionEndDate.toDate();
+    } else if (partner.promotionEndDate.seconds) {
+      // Firestore Timestamp object
+      endDate = new Date(partner.promotionEndDate.seconds * 1000);
+    } else {
+      // String or Date
+      endDate = new Date(partner.promotionEndDate);
+    }
+
+    // Check if date is valid
+    if (isNaN(endDate.getTime())) {
+      console.error('Invalid promotion end date:', partner.promotionEndDate);
+      return { color: '#666', text: 'Date invalide', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
 
     if (endDate < today) {
       return { color: '#FF3B30', text: 'Promotion expirée', iconColor: '#FF3B30', iconName: 'close-circle-outline' };
@@ -386,6 +405,11 @@ const Partners = () => {
 
     const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Ensure diffDays is a valid number
+    if (isNaN(diffDays) || diffDays < 0) {
+      return { color: '#666', text: 'Calcul invalide', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
 
     if (diffDays <= 7) {
       return { color: '#FF9500', text: `Promo: ${diffDays} jours restants`, iconColor: '#FF9500', iconName: 'time-outline' };
