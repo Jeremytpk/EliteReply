@@ -32,6 +32,30 @@ const PartnerDetails = ({ route }) => {
   const [partnerRevenueStats, setPartnerRevenueStats] = useState(null);
   const [revenuesModalLoading, setRevenuesModalLoading] = useState(false);
 
+  // Function to get promotion status with remaining days
+  const getPromotionStatus = (partner) => {
+    if (!partner.estPromu || !partner.promotionEndDate) {
+      return { color: '#666', text: 'Pas de promotion', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
+
+    const endDate = new Date(partner.promotionEndDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (endDate < today) {
+      return { color: '#FF3B30', text: 'Promotion expirée', iconColor: '#FF3B30', iconName: 'close-circle-outline' };
+    }
+
+    const diffTime = endDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 7) {
+      return { color: '#FF9500', text: `${diffDays} jours restants`, iconColor: '#FF9500', iconName: 'time-outline' };
+    } else {
+      return { color: '#34C759', text: `${diffDays} jours restants`, iconColor: '#34C759', iconName: 'checkmark-circle-outline' };
+    }
+  };
+
   const fetchPartner = useCallback(async () => {
     setLoading(true);
     try {
@@ -223,6 +247,20 @@ const PartnerDetails = ({ route }) => {
           <View style={styles.promotionContainer}>
             <Text style={styles.promotionLabel}>Promotion Actuelle:</Text>
             <Text style={styles.promotionText}>{partner.promotion}</Text>
+          </View>
+        )}
+
+        {partner.estPromu && (
+          <View style={styles.promotionStatusContainer}>
+            <Text style={styles.promotionStatusLabel}>Statut de Promotion:</Text>
+            <Text style={[styles.promotionStatusText, { color: getPromotionStatus(partner).color }]}>
+              {getPromotionStatus(partner).text}
+            </Text>
+            {partner.promotionEndDate && (
+              <Text style={styles.promotionEndDateText}>
+                Fin: {new Date(partner.promotionEndDate).toLocaleDateString('fr-FR')}
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -466,6 +504,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     lineHeight: 22,
+  },
+  promotionStatusContainer: {
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  promotionStatusLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#495057',
+    marginBottom: 5,
+  },
+  promotionStatusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  promotionEndDateText: {
+    fontSize: 14,
+    color: '#6c757d',
+    fontStyle: 'italic',
   },
   additionalButtonsContainer: {
     flexDirection: 'column',
