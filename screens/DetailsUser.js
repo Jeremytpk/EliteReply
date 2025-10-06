@@ -10,9 +10,11 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
-  ScrollView // Import ScrollView
+  ScrollView, // Import ScrollView
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
+import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -440,79 +442,93 @@ const DetailsUser = ({ route, navigation }) => {
             <View style={styles.actionsContainer}>
               {user.isITSupport && (
                 <>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => setShowTransferModal(true)}
-                  >
-                    {/* --- MODIFIED: Use custom image for Transfer Ticket --- */}
-                    <Image source={TRANSFER_USER_ICON} style={styles.customActionButtonIcon} />
-                    {/* --- END MODIFIED --- */}
-                    <Text style={styles.actionButtonText}>Transfer Ticket</Text>
+                  <TouchableOpacity onPress={() => setShowTransferModal(true)}>
+                    <LinearGradient
+                      colors={['#3b82f6', '#1e40af']}
+                      style={styles.actionButton}
+                    >
+                      {/* --- MODIFIED: Use custom image for Transfer Ticket --- */}
+                      <Image source={TRANSFER_USER_ICON} style={styles.customActionButtonIcon} />
+                      {/* --- END MODIFIED --- */}
+                      <Text style={styles.actionButtonText}>Transfer Ticket</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => setShowEvaluationModal(true)}
-                  >
-                    {/* --- MODIFIED: Use custom image for Evaluation --- */}
-                    <Image source={RATE_HALF_ICON} style={styles.customActionButtonIcon} />
-                    {/* --- END MODIFIED --- */}
-                    <Text style={styles.actionButtonText}>Evaluation</Text>
+                  <TouchableOpacity onPress={() => setShowEvaluationModal(true)}>
+                    <LinearGradient
+                      colors={['#f59e0b', '#d97706']}
+                      style={styles.actionButton}
+                    >
+                      {/* --- MODIFIED: Use custom image for Evaluation --- */}
+                      <Image source={RATE_HALF_ICON} style={styles.customActionButtonIcon} />
+                      {/* --- END MODIFIED --- */}
+                      <Text style={styles.actionButtonText}>Evaluation</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </>
               )}
 
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: user.isITSupport ? '#FF3B30' : '#34C759' }]}
-                onPress={handleAssignITSupport}
-              >
-                {/* --- MODIFIED: Use custom image for Assign/Remove IT Support --- */}
-                <Image source={REMOVE_USER_ICON} style={styles.customActionButtonIcon} />
-                {/* --- END MODIFIED --- */}
-                <Text style={styles.actionButtonText}>
-                  {user.isITSupport ? 'Remove IT Support' : 'Assign IT Support'}
-                </Text>
+              <TouchableOpacity onPress={handleAssignITSupport}>
+                <LinearGradient
+                  colors={user.isITSupport ? ['#ef4444', '#dc2626'] : ['#10b981', '#059669']}
+                  style={styles.actionButton}
+                >
+                  {/* --- MODIFIED: Use custom image for Assign/Remove IT Support --- */}
+                  <Image source={REMOVE_USER_ICON} style={styles.customActionButtonIcon} />
+                  {/* --- END MODIFIED --- */}
+                  <Text style={styles.actionButtonText}>
+                    {user.isITSupport ? 'Remove IT Support' : 'Assign IT Support'}
+                  </Text>
+                </LinearGradient>
               </TouchableOpacity>
 
               {editMode ? (
                 <>
-                  <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: '#0a8fdf' }]}
-                    onPress={handleSaveChanges}
-                  >
-                    {/* --- MODIFIED: Use custom image for Save Changes --- */}
-                    <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
-                    {/* --- END MODIFIED --- */}
-                    <Text style={styles.actionButtonText}>Save Changes</Text>
+                  <TouchableOpacity onPress={handleSaveChanges}>
+                    <LinearGradient
+                      colors={['#3b82f6', '#1d4ed8']}
+                      style={styles.actionButton}
+                    >
+                      {/* --- MODIFIED: Use custom image for Save Changes --- */}
+                      <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
+                      {/* --- END MODIFIED --- */}
+                      <Text style={styles.actionButtonText}>Save Changes</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: '#FF3B30' }]}
-                    onPress={() => setEditMode(false)}
-                  >
-                    <Ionicons name="close" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Cancel</Text>
+                  <TouchableOpacity onPress={() => setEditMode(false)}>
+                    <LinearGradient
+                      colors={['#ef4444', '#dc2626']}
+                      style={styles.actionButton}
+                    >
+                      <Ionicons name="close" size={20} color="#fff" />
+                      <Text style={styles.actionButtonText}>Cancel</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: '#0a8fdf' }]}
-                  onPress={() => setEditMode(true)}
-                >
-                  {/* --- MODIFIED: Use custom image for Edit --- */}
-                  <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
-                  {/* --- END MODIFIED --- */}
-                  <Text style={styles.actionButtonText}>Edit</Text>
+                <TouchableOpacity onPress={() => setEditMode(true)}>
+                  <LinearGradient
+                    colors={['#3b82f6', '#1d4ed8']}
+                    style={styles.actionButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for Edit --- */}
+                    <Image source={EDIT_ICON} style={styles.customActionButtonIcon} />
+                    {/* --- END MODIFIED --- */}
+                    <Text style={styles.actionButtonText}>Edit</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               )}
 
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: '#FF3B30' }]}
-                onPress={handleDeleteUser}
-              >
-                {/* --- MODIFIED: Use custom image for Delete User --- */}
-                <Image source={DELETE_ICON_USER} style={styles.customActionButtonIcon} />
-                {/* --- END MODIFIED --- */}
-                <Text style={styles.actionButtonText}>Delete User</Text>
+              <TouchableOpacity onPress={handleDeleteUser}>
+                <LinearGradient
+                  colors={['#ef4444', '#dc2626']}
+                  style={styles.actionButton}
+                >
+                  {/* --- MODIFIED: Use custom image for Delete User --- */}
+                  <Image source={DELETE_ICON_USER} style={styles.customActionButtonIcon} />
+                  {/* --- END MODIFIED --- */}
+                  <Text style={styles.actionButtonText}>Delete User</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </ScrollView> {/* End of ScrollView */}
@@ -599,11 +615,13 @@ const DetailsUser = ({ route, navigation }) => {
                 onChangeText={setEvaluationComment}
               />
 
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={handleSaveEvaluation}
-              >
-                <Text style={styles.submitButtonText}>Submit Evaluation</Text>
+              <TouchableOpacity onPress={handleSaveEvaluation}>
+                <LinearGradient
+                  colors={['#3b82f6', '#1d4ed8']}
+                  style={styles.submitButton}
+                >
+                  <Text style={styles.submitButtonText}>Submit Evaluation</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </Modal>
@@ -616,7 +634,7 @@ const DetailsUser = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
   },
   scrollContent: { // New style for ScrollView content container
     flexGrow: 1, // Allows content to grow and enable scrolling
@@ -632,77 +650,110 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e2e8f0',
     paddingTop: 30,
     top: 25,
-    marginBottom: 30
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   userCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     margin: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
   },
   userName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#333',
-    textAlign: 'center', // Center align username
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: '#1e293b',
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   userEmail: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 5,
-    textAlign: 'center', // Center align email
+    color: '#64748b',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   userRole: {
     fontSize: 16,
-    color: '#555',
-    marginBottom: 5,
-    textAlign: 'center', // Center align role
+    color: '#475569',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   itSupportBadge: {
     fontSize: 14,
     color: '#fff',
-    backgroundColor: '#4285F4',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    alignSelf: 'center', // Center align badge
-    marginBottom: 10,
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   userId: {
     fontSize: 12,
-    color: '#999',
-    fontFamily: 'monospace',
-    marginBottom: 10,
-    textAlign: 'center', // Center align user ID
+    color: '#94a3b8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   eruidText: {
     fontSize: 12,
-    color: '#999',
-    fontFamily: 'monospace',
-    marginBottom: 10,
-    textAlign: 'center', // Center align ERUID
+    color: '#94a3b8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   editInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 10,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -712,26 +763,29 @@ const styles = StyleSheet.create({
   },
   statItem: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 16,
+    padding: 18,
     alignItems: 'center',
     flex: 1,
     marginHorizontal: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0a8fdf',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#3b82f6',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 6,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   actionsContainer: {
     marginHorizontal: 15,
@@ -740,10 +794,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a8fdf', // Default background
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   // --- NEW STYLE for Custom Action Button Icons ---
   customActionButtonIcon: {
@@ -757,24 +818,37 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 10, // This will be duplicated if also in customActionButtonIcon, might adjust
+    fontWeight: '600',
+    marginLeft: 10,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   modalContainer: {
     flex: 1,
-    padding: 15,
-    backgroundColor: '#f8f9fa',
+    padding: 20,
+    backgroundColor: '#f5f7fa',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   emptyText: {
     textAlign: 'center',
@@ -783,30 +857,33 @@ const styles = StyleSheet.create({
   },
   ticketItem: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 4,
   },
   ticketTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 6,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   ticketMessage: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+    color: '#64748b',
+    marginBottom: 6,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   ticketTime: {
     fontSize: 12,
-    color: '#999',
+    color: '#94a3b8',
     fontStyle: 'italic',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   modalTicketHeader: {
     flexDirection: 'row',
@@ -857,24 +934,43 @@ const styles = StyleSheet.create({
   },
   commentInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 15,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 18,
     marginBottom: 20,
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
+    backgroundColor: '#fff',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   submitButton: {
-    backgroundColor: '#0a8fdf',
-    borderRadius: 8,
-    padding: 15,
+    borderRadius: 12,
+    padding: 18,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   avatarContainer: {
     alignItems: 'center',
@@ -882,19 +978,28 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
   },
   defaultAvatar: {
-    backgroundColor: '#0a8fdf',
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   defaultAvatarText: {
     color: '#fff',
-    fontSize: 40,
-    fontWeight: 'bold',
+    fontSize: 48,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   clockedInDot: {
     position: 'absolute',
@@ -916,12 +1021,14 @@ const styles = StyleSheet.create({
   },
   timeLabel: {
     fontSize: 14,
-    color: '#555',
+    color: '#475569',
     fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   timeValue: {
     fontSize: 14,
-    color: '#333',
+    color: '#1e293b',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
   centered: {
     flex: 1,
