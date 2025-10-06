@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView, Modal, TextInput, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../firebase';
@@ -38,9 +39,28 @@ const PartnerDetails = ({ route }) => {
       return { color: '#666', text: 'Pas de promotion', iconColor: '#666', iconName: 'information-circle-outline' };
     }
 
-    const endDate = new Date(partner.promotionEndDate);
+    // Handle different date formats (Firestore timestamp, string, or Date object)
+    let endDate;
+    if (partner.promotionEndDate.toDate) {
+      // Firestore Timestamp
+      endDate = partner.promotionEndDate.toDate();
+    } else if (partner.promotionEndDate.seconds) {
+      // Firestore Timestamp object
+      endDate = new Date(partner.promotionEndDate.seconds * 1000);
+    } else {
+      // String or Date
+      endDate = new Date(partner.promotionEndDate);
+    }
+
+    // Check if date is valid
+    if (isNaN(endDate.getTime())) {
+      console.error('Invalid promotion end date:', partner.promotionEndDate);
+      return { color: '#666', text: 'Date invalide', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
 
     if (endDate < today) {
       return { color: '#FF3B30', text: 'Promotion expirée', iconColor: '#FF3B30', iconName: 'close-circle-outline' };
@@ -48,6 +68,11 @@ const PartnerDetails = ({ route }) => {
 
     const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Ensure diffDays is a valid number
+    if (isNaN(diffDays) || diffDays < 0) {
+      return { color: '#666', text: 'Calcul invalide', iconColor: '#666', iconName: 'information-circle-outline' };
+    }
 
     if (diffDays <= 7) {
       return { color: '#FF9500', text: `${diffDays} jours restants`, iconColor: '#FF9500', iconName: 'time-outline' };
@@ -258,7 +283,17 @@ const PartnerDetails = ({ route }) => {
             </Text>
             {partner.promotionEndDate && (
               <Text style={styles.promotionEndDateText}>
-                Fin: {new Date(partner.promotionEndDate).toLocaleDateString('fr-FR')}
+                Fin: {(() => {
+                  let endDate;
+                  if (partner.promotionEndDate.toDate) {
+                    endDate = partner.promotionEndDate.toDate();
+                  } else if (partner.promotionEndDate.seconds) {
+                    endDate = new Date(partner.promotionEndDate.seconds * 1000);
+                  } else {
+                    endDate = new Date(partner.promotionEndDate);
+                  }
+                  return isNaN(endDate.getTime()) ? 'Date invalide' : endDate.toLocaleDateString('fr-FR');
+                })()}
               </Text>
             )}
           </View>
@@ -267,47 +302,79 @@ const PartnerDetails = ({ route }) => {
 
       <View style={styles.additionalButtonsContainer}>
         <TouchableOpacity
-          style={styles.productsButton}
-          onPress={() => navigation.navigate('PartnerPage', { partnerId: partner.id })} // CHANGED HERE
+          onPress={() => navigation.navigate('PartnerPage', { partnerId: partner.id })}
         >
-          <Text style={styles.productsButtonText}>Voir les Produits</Text>
-          <Image source={ARROW_FORWARD_ICON} style={styles.customButtonIcon} />
+          <LinearGradient
+            colors={['#3b82f6', '#1d4ed8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.productsButton}
+          >
+            <Text style={styles.productsButtonText}>Voir les Produits</Text>
+            <Image source={ARROW_FORWARD_ICON} style={styles.customButtonIcon} />
+          </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.documentsButton}
           onPress={() => navigation.navigate('PartnerDoc', {
             partnerId: partner.id,
             partnerName: partner.nom,
             isAdmin: true
           })}
         >
-          <Text style={styles.productsButtonText}>Documents</Text>
-          <Image source={FOLDER_ICON} style={styles.customButtonIcon} />
+          <LinearGradient
+            colors={['#10b981', '#059669']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.documentsButton}
+          >
+            <Text style={styles.productsButtonText}>Documents</Text>
+            <Image source={FOLDER_ICON} style={styles.customButtonIcon} />
+          </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.revenuesButton}
           onPress={fetchPartnerRevenueDetails}
         >
-          <Text style={styles.productsButtonText}>Revenus</Text>
-          <Image source={GRAPHIC_ICON} style={styles.customButtonIcon} />
+          <LinearGradient
+            colors={['#f59e0b', '#d97706']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.revenuesButton}
+          >
+            <Text style={styles.productsButtonText}>Revenus</Text>
+            <Image source={GRAPHIC_ICON} style={styles.customButtonIcon} />
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
       <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity style={styles.editButton} onPress={handleEditPartner}>
-          <Image source={CREATE_ICON} style={styles.customActionButtonIcon} />
-          <Text style={styles.actionButtonText}>Modifier</Text>
+        <TouchableOpacity onPress={handleEditPartner}>
+          <LinearGradient
+            colors={['#eab308', '#f59e0b']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.editButton}
+          >
+            <Image source={CREATE_ICON} style={styles.customActionButtonIcon} />
+            <Text style={styles.actionButtonText}>Modifier</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePartner} disabled={uploading}>
-          {uploading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Image source={TRASH_ICON} style={styles.customActionButtonIcon} />
-          )}
-          <Text style={styles.actionButtonText}>Supprimer Compte</Text>
+        <TouchableOpacity onPress={handleDeletePartner} disabled={uploading}>
+          <LinearGradient
+            colors={['#ef4444', '#dc2626']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.deleteButton}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Image source={TRASH_ICON} style={styles.customActionButtonIcon} />
+            )}
+            <Text style={styles.actionButtonText}>Supprimer Compte</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -377,309 +444,371 @@ const PartnerDetails = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
   },
   scrollContainer: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: 16,
+    paddingBottom: 50,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f7fa',
   },
   logoContainer: {
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   logo: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 4,
+    borderColor: '#ffffff',
   },
   uploadPlaceholder: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 2,
-    borderColor: '#ddd',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 3,
+    borderColor: '#e2e8f0',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffff',
   },
   customLogoPlaceholderIcon: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     resizeMode: 'contain',
-    tintColor: '#ccc',
+    tintColor: '#94a3b8',
   },
   uploadPlaceholderText: {
     fontSize: 14,
-    color: '#999',
-    marginTop: 5,
+    color: '#64748b',
+    marginTop: 8,
+    fontWeight: '500',
   },
   infoContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   name: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: '#1e293b',
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   category: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
+    color: '#64748b',
+    marginBottom: 16,
     textAlign: 'center',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   infoText: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
+    color: '#475569',
+    marginBottom: 12,
+    lineHeight: 24,
+    fontWeight: '400',
   },
   email: {
     fontSize: 16,
-    color: '#0a8fdf',
-    marginBottom: 8,
+    color: '#3b82f6',
+    marginBottom: 12,
     textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   phone: {
     fontSize: 16,
-    color: '#0a8fdf',
-    marginBottom: 8,
+    color: '#3b82f6',
+    marginBottom: 12,
     textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   website: {
     fontSize: 16,
-    color: '#0a8fdf',
-    marginBottom: 8,
+    color: '#3b82f6',
+    marginBottom: 12,
     textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   descriptionContainer: {
-    marginTop: 10,
+    marginTop: 20,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 20,
   },
   descriptionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#555',
-    marginBottom: 5,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 12,
+    letterSpacing: -0.2,
   },
   descriptionText: {
     fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
+    color: '#475569',
+    lineHeight: 26,
+    fontWeight: '400',
   },
   promotionContainer: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: '#e6f7ff',
-    borderRadius: 8,
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#dbeafe',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#91d5ff',
+    borderColor: '#93c5fd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
   },
   promotionLabel: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0a8fdf',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginBottom: 8,
+    letterSpacing: -0.1,
   },
   promotionText: {
     fontSize: 16,
-    color: '#333',
-    lineHeight: 22,
+    color: '#1e293b',
+    lineHeight: 24,
+    fontWeight: '500',
   },
   promotionStatusContainer: {
-    marginTop: 15,
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: '#e2e8f0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
   },
   promotionStatusLabel: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#495057',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+    letterSpacing: -0.1,
   },
   promotionStatusText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 5,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: -0.2,
   },
   promotionEndDateText: {
     fontSize: 14,
-    color: '#6c757d',
-    fontStyle: 'italic',
+    color: '#64748b',
+    fontWeight: '500',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   additionalButtonsContainer: {
     flexDirection: 'column',
-    gap: 10,
-    marginBottom: 20,
+    gap: 16,
+    marginBottom: 24,
   },
   productsButton: {
-    backgroundColor: '#0a8fdf',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
   documentsButton: {
-    backgroundColor: '#4CAF50',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
   revenuesButton: {
-    backgroundColor: '#FF9800',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
   productsButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   customButtonIcon: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
-    tintColor: '#fff',
-    marginLeft: 10,
+    tintColor: '#ffffff',
+    marginLeft: 12,
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 24,
+    gap: 16,
   },
   editButton: {
-    backgroundColor: '#ffc107',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
+    flex: 1,
+    justifyContent: 'center',
+    shadowColor: '#eab308',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
+    flex: 1,
+    justifyContent: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   customActionButtonIcon: {
     width: 20,
     height: 20,
     resizeMode: 'contain',
-    tintColor: '#fff',
+    tintColor: '#ffffff',
+    marginRight: 8,
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   revenuesModalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
   },
   revenuesModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 25,
-    width: '90%',
-    maxHeight: '80%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 28,
+    width: '92%',
+    maxHeight: '85%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
   },
   revenuesModalCloseButton: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 16,
+    right: 16,
     zIndex: 1,
+    backgroundColor: '#fee2e2',
+    borderRadius: 20,
+    padding: 4,
   },
   customModalCloseIcon: {
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     resizeMode: 'contain',
-    tintColor: '#EF4444',
+    tintColor: '#ef4444',
   },
   modalRevenuesTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   modalRevenuesSubtitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
+    color: '#64748b',
+    marginBottom: 28,
     textAlign: 'center',
+    fontWeight: '500',
   },
   modalStatCard: {
-    backgroundColor: '#F0F4F8',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderLeftWidth: 4,
-    borderColor: '#0a8fdf',
+    borderColor: '#3b82f6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   modalStatLabel: {
     fontSize: 16,
-    color: '#444',
+    color: '#334155',
     fontWeight: '600',
     flexShrink: 1,
-    marginRight: 10,
+    marginRight: 12,
+    letterSpacing: -0.1,
   },
   modalStatValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0a8fdf',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#3b82f6',
     textAlign: 'right',
+    letterSpacing: -0.3,
   },
 });
 
