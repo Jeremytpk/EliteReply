@@ -121,6 +121,7 @@
       "ios",
       "android",
       "web"
-    ]
+    ],
+    "owner": "jeremytpk"
   }
 }

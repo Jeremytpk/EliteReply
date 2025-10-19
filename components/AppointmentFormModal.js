@@ -41,6 +41,7 @@ import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 
 import { db, auth, storage } from '../firebase';
+import { sendAppointmentNotification } from '../services/notificationHelpers';
 import moment from 'moment';
 import 'moment/locale/fr';
 
@@ -582,6 +583,31 @@ const AppointmentFormModal = ({
                 }
 
                 Alert.alert("Succès", "Rendez-vous pris avec succès et QR Code généré!");
+            }
+
+            // Send notification for appointment creation/update
+            try {
+                const appointmentData = {
+                    id: primaryAppointmentDocRef.id,
+                    partnerName: selectedPartner.nom,
+                    dateTime: combinedDateTime,
+                    clientNames: validClientNames.map(cn => cn.name),
+                    description: formAppointmentDescription.trim()
+                };
+
+                if (editingAppointment) {
+                    await sendAppointmentNotification.appointmentUpdated(
+                        formClientEmail,
+                        appointmentData
+                    );
+                } else {
+                    await sendAppointmentNotification.appointmentCreated(
+                        formClientEmail,
+                        appointmentData
+                    );
+                }
+            } catch (notificationError) {
+                console.error('Error sending appointment notification:', notificationError);
             }
 
             let message = '';

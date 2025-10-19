@@ -11,6 +11,7 @@ import {
   Image // Import Image component
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
+import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 
@@ -147,7 +148,8 @@ const Users = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0a8fdf" />
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading users...</Text>
       </View>
     );
   }
@@ -162,7 +164,12 @@ const Users = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerContainer}
+      >
         <Text style={styles.header}>Users Management ({filteredUsers.length})</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={toggleSortOrder} style={styles.iconButton}>
@@ -179,7 +186,7 @@ const Users = ({ navigation }) => {
             {/* --- END MODIFIED --- */}
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
@@ -209,12 +216,18 @@ const Users = ({ navigation }) => {
                   )}
                 </View>
                 <TouchableOpacity
-                  style={styles.deleteButton}
                   onPress={() => handleDeleteUser(item.id)}
                 >
-                  {/* --- MODIFIED: Use custom image for delete icon --- */}
-                  <Image source={DELETE_ICON} style={styles.customDeleteIcon} />
-                  {/* --- END MODIFIED --- */}
+                  <LinearGradient
+                    colors={['#ef4444', '#dc2626']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.deleteButton}
+                  >
+                    {/* --- MODIFIED: Use custom image for delete icon --- */}
+                    <Image source={DELETE_ICON} style={styles.customDeleteIcon} />
+                    {/* --- END MODIFIED --- */}
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -229,126 +242,167 @@ const Users = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#f8f9fa',
+    padding: 16,
+    backgroundColor: '#f5f7fa',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f7fa',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '500',
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: -0.5,
   },
   headerButtons: {
     flexDirection: 'row',
+    gap: 12,
   },
   iconButton: {
-    marginLeft: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   // --- NEW STYLE for Custom Header Icons ---
   customHeaderIcon: {
-    width: 24, // Match Ionicons size
-    height: 24, // Match Ionicons size
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: '#0a8fdf', // Match original Ionicons color
+    tintColor: '#ffffff',
   },
   // --- END NEW STYLE ---
   emptyText: {
     textAlign: 'center',
-    marginTop: 20,
-    color: '#666',
+    marginTop: 40,
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '500',
   },
   errorText: {
     textAlign: 'center',
-    marginTop: 20,
-    color: 'red',
+    marginTop: 40,
+    color: '#ef4444',
     fontSize: 18,
+    fontWeight: '600',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    marginBottom: 15,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: '#1e293b',
+    fontWeight: '500',
   },
   userItem: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+    color: '#1e293b',
+    letterSpacing: -0.2,
   },
   userEmail: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+    color: '#64748b',
+    marginBottom: 6,
+    fontWeight: '500',
   },
   userRole: {
     fontSize: 14,
-    color: '#555',
+    color: '#475569',
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   itSupportBadge: {
     fontSize: 12,
-    color: '#fff',
-    backgroundColor: '#4285F4',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    color: '#ffffff',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     alignSelf: 'flex-start',
-    marginTop: 5,
+    marginTop: 8,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   deleteButton: {
-    backgroundColor: '#FF3B30',
-    padding: 8,
-    borderRadius: 5,
-    marginLeft: 10,
+    padding: 12,
+    borderRadius: 12,
+    marginLeft: 16,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
   // --- NEW STYLE for Custom Delete Icon ---
   customDeleteIcon: {
-    width: 20, // Match Ionicons size
-    height: 20, // Match Ionicons size
+    width: 18,
+    height: 18,
     resizeMode: 'contain',
-    tintColor: '#fff', // Match original Ionicons color
+    tintColor: '#ffffff',
   },
   // --- END NEW STYLE ---
 });

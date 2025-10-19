@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SecureStripeCardInput from './SecureStripeCardInput';
-import PayPalPayment from './PayPalPayment';
 
 const PaymentMethodSelector = ({
   amount,
@@ -32,12 +31,7 @@ const PaymentMethodSelector = ({
       icon: 'card-outline',
       color: '#6366f1'
     },
-    {
-      id: 'paypal',
-      name: 'PayPal',
-      icon: 'logo-paypal',
-      color: '#0070ba'
-    },
+    // PayPal option removed
     {
       id: 'cash',
       name: 'Paiement en espèces',
@@ -118,26 +112,7 @@ const PaymentMethodSelector = ({
           </View>
         );
       
-      case 'paypal':
-        return (
-          <View style={styles.paymentInterfaceContainer}>
-            <Text style={styles.sectionTitle}>Paiement PayPal</Text>
-            <Text style={styles.paypalDescription}>
-              Vous serez redirigé vers PayPal pour finaliser votre paiement de{' '}
-              <Text style={styles.amountText}>
-                {amount.toLocaleString('en-US', { style: 'currency', currency: currency })}
-              </Text>
-            </Text>
-            <PayPalPayment
-              amount={amount}
-              currency={currency}
-              description={description}
-              onPaymentSuccess={handlePayPalPaymentSuccess}
-              onPaymentError={onPaymentError}
-              onPaymentCancel={onPaymentCancel}
-            />
-          </View>
-        );
+      // PayPal UI removed
 
       case 'cash':
         return (

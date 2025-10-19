@@ -621,6 +621,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    paddingTop: 40,
+    height: 90,
   },
   backButton: {
     padding: 5,

@@ -25,6 +25,7 @@ import {
   doc,
   getDoc
 } from 'firebase/firestore';
+import { sendSystemNotification, sendPaymentNotification, sendMessageNotification } from '../services/notificationHelpers';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -92,30 +93,7 @@ const AdminScreen = () => {
   const GRAPHIC_ICON = require('../assets/icons/graphic.png'); // New
   // --- END NEW IMPORTS ---
 
-  const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
-    const message = {
-      to: expoPushToken,
-      sound: 'er_notification',
-      title,
-      body,
-      data,
-    };
 
-    try {
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
-      console.log('Push notification sent successfully (AdminScreen)!');
-    } catch (error) {
-      console.error('Failed to send push notification (AdminScreen):', error);
-    }
-  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -181,21 +159,17 @@ const AdminScreen = () => {
 
       if (newUsersToday > 0 && !hasNotifiedTodayForNewUsers) {
         console.log(`[AdminScreen Notifications] Attempting to notify for ${newUsersToday} new users today.`);
-        if (currentAdminData?.expoPushToken) {
-          sendPushNotification(
-            currentAdminData.expoPushToken,
-            "Nouveaux Utilisateurs!",
-            `${newUsersToday} nouveau(x) utilisateur(s) a/ont rejoint aujourd'hui.`,
-            { type: 'admin_new_users', count: newUsersToday }
+        try {
+          await sendSystemNotification.newUsersToday(
+            currentUser.uid,
+            { count: newUsersToday }
           );
           lastNotifiedNewUsersDate.current = new Date();
           await AsyncStorage.setItem('lastNotifiedNewUsersDate', new Date().toISOString());
-        } else {
-            console.warn(`[AdminScreen Notifications] Admin user ${user.uid} has no expoPushToken to send new user notification.`);
+        } catch (notificationError) {
+          console.error('Error sending new users notification:', notificationError);
         }
-      }
-
-      const ticketsQuerySnapshot = await getDocs(collection(db, 'tickets'));
+      }      const ticketsQuerySnapshot = await getDocs(collection(db, 'tickets'));
       const partnersQuerySnapshot = await getDocs(collection(db, 'partners'));
       const surveysQuerySnapshot = await getDocs(collection(db, 'surveys'));
       const paymentsQuerySnapshot = await getDocs(query(collection(db, 'payments'), where('confirmed', '==', false)));
@@ -273,17 +247,18 @@ const AdminScreen = () => {
             const paymentId = change.doc.id;
             if (!notifiedPaymentIds.current.has(paymentId)) {
               console.log(`[AdminScreen Notifications] NEW PENDING PAYMENT DETECTED: ${paymentId}`);
-              const adminUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
-              if (adminUserDoc.exists() && adminUserDoc.data().expoPushToken) {
-                sendPushNotification(
-                  adminUserDoc.data().expoPushToken,
-                  "Nouveau Paiement en Attente!",
-                  `Un paiement de ${paymentData.paymentAmount}$ pour ${paymentData.partnerName} est en attente de confirmation.`,
-                  { type: 'admin_pending_payment', paymentId: paymentId }
+              try {
+                await sendPaymentNotification.pendingPayment(
+                  currentUser.uid,
+                  {
+                    paymentId: paymentId,
+                    amount: paymentData.paymentAmount,
+                    partnerName: paymentData.partnerName
+                  }
                 );
                 notifiedPaymentIds.current.add(paymentId);
-              } else {
-                console.warn(`[AdminScreen Notifications] Admin user ${currentUser.uid} has no expoPushToken or doc doesn't exist for new pending payment notification.`);
+              } catch (notificationError) {
+                console.error('Error sending pending payment notification:', notificationError);
               }
             }
           } else if (change.type === 'removed' || (change.type === 'modified' && change.doc.data().confirmed === true)) {
@@ -309,17 +284,18 @@ const AdminScreen = () => {
 
             if (!notifiedPartnerConvosMsgs.current.has(convoId)) {
               console.log(`[AdminScreen Notifications] NEW UNREAD PARTNER CONVERSATION MESSAGE DETECTED: ${convoId}`);
-              const adminUserDoc = await getDoc(doc(db, 'users', currentUser.uid));
-              if (adminUserDoc.exists() && adminUserDoc.data().expoPushToken) {
-                sendPushNotification(
-                  adminUserDoc.data().expoPushToken,
-                  `Nouveau Message Partenaire!`,
-                  `De ${convoData.partnerName || 'un partenaire'}: "${convoData.lastMessage || 'nouveau message'}"`,
-                  { type: 'admin_partner_chat', partnerId: convoId }
+              try {
+                await sendMessageNotification.partnerMessage(
+                  currentUser.uid,
+                  {
+                    partnerName: convoData.partnerName || 'un partenaire',
+                    message: convoData.lastMessage || 'nouveau message',
+                    partnerId: convoId
+                  }
                 );
                 notifiedPartnerConvosMsgs.current.add(convoId);
-              } else {
-                console.warn(`[AdminScreen Notifications] Admin user ${currentUser.uid} has no expoPushToken or doc doesn't exist for partner convo notification.`);
+              } catch (notificationError) {
+                console.error('Error sending partner message notification:', notificationError);
               }
             }
           } else if (change.type === 'modified' && convoData.unreadBySupport === false) {
@@ -633,7 +609,7 @@ const AdminScreen = () => {
 
               <TouchableOpacity
                 style={styles.modernActionCard}
-                onPress={() => navigation.navigate('PartnerMsg')}
+                onPress={() => navigation.navigate('AdminPartnerChatList')}
               >
                 <View style={[styles.modernActionIcon, { backgroundColor: '#FF9800' }]}>
                   <Image source={MESSAGE_ICON} style={[styles.customActionIcon, { tintColor: '#fff' }]} />

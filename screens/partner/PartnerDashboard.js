@@ -522,6 +522,28 @@ const PartnerDashboard = ({ navigation }) => {
       
       unsubscribes.push(unsubscribeClientChats);
 
+      // Monitor partner-admin chats for unread messages from admin/support
+      const adminChatRef = doc(db, 'partnerAdminChats', partnerId);
+      const unsubscribeAdminChat = onSnapshot(adminChatRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const hasUnreadFromAdmin = data.partnerUnread === true;
+          
+          setHasNewMessages(hasUnreadFromAdmin);
+          
+          if (hasUnreadFromAdmin) {
+            console.log(`Jey: [PartnerDashboard] Unread admin message detected`);
+          } else {
+            console.log(`Jey: [PartnerDashboard] Admin messages marked as read`);
+          }
+        } else {
+          // No chat document exists yet, so no unread messages
+          setHasNewMessages(false);
+        }
+      }, (error) => console.error("Jey: Error listening to admin chat:", error));
+      
+      unsubscribes.push(unsubscribeAdminChat);
+
       const partnerConvoQuery = query(collection(db, 'partnerConversations'), where('id', '==', partnerId));
       const unsubscribeConvo = onSnapshot(partnerConvoQuery, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
@@ -728,11 +750,12 @@ const PartnerDashboard = ({ navigation }) => {
     {
       icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Support ER",
-      value: "24/7",
-      color: "#EA4335",
+      value: hasNewMessages ? "Nouveau!" : "24/7",
+      color: hasNewMessages ? "#FF3B30" : "#EA4335", // Red when new messages
+      hasNewMessages: hasNewMessages,
       onPress: () => {
         if (partnerData?.id && loggedInUserBusinessName) {
-          navigation.navigate('SupportChat', {
+          navigation.navigate('PartnerAdminChat', {
             partnerId: partnerData.id,
             partnerName: loggedInUserBusinessName,
             userType: 'partner'
@@ -929,9 +952,24 @@ const PartnerDashboard = ({ navigation }) => {
                     >
                       <View style={styles.gridStatCardIcon}>
                         {card.icon}
+                        {card.hasNewMessages && (
+                          <View style={styles.messageBadge}>
+                            <Text style={styles.messageBadgeText}>!</Text>
+                          </View>
+                        )}
                       </View>
-                      <Text style={styles.gridStatNumber}>{card.value}</Text>
-                      <Text style={styles.gridStatLabel}>{card.title}</Text>
+                      <Text style={[
+                        styles.gridStatNumber,
+                        card.hasNewMessages && styles.gridStatNumberHighlighted
+                      ]}>
+                        {card.value}
+                      </Text>
+                      <Text style={[
+                        styles.gridStatLabel,
+                        card.hasNewMessages && styles.gridStatLabelHighlighted
+                      ]}>
+                        {card.title}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 ))}
@@ -1218,7 +1256,7 @@ const PartnerDashboard = ({ navigation }) => {
             style={styles.navButton}
             onPress={() => {
               if (partnerData?.id && loggedInUserBusinessName) {
-                navigation.navigate('SupportChat', {
+                navigation.navigate('PartnerAdminChat', {
                   partnerId: partnerData.id,
                   partnerName: loggedInUserBusinessName,
                   userType: 'partner'
@@ -2308,6 +2346,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginTop: 4,
+  },
+  messageBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  messageBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  gridStatNumberHighlighted: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  gridStatLabelHighlighted: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

@@ -413,6 +413,23 @@ const Dashboard = () => {
         setShowRatePartnerModal(false);
         setCurrentRatingRequestId(null);
       }
+    }, (error) => {
+      console.error('Dashboard: ratingRequests onSnapshot error:', error);
+      // Handle Firestore index requirement errors gracefully
+      try {
+        if (error && error.code === 'failed-precondition') {
+          console.warn('Firestore composite index required for ratingRequests query. Create the index from Firebase Console.');
+          if (__DEV__) {
+            Alert.alert(
+              'Firestore Index Requise',
+              'Une index composite est requise pour la requête ratingRequests. Ouvrez la console Firebase pour créer l\'index ou ajustez la requête pour éviter les filtres combinés.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error handling onSnapshot error:', e);
+      }
     });
 
     return () => unsubscribe();
@@ -604,18 +621,21 @@ const Dashboard = () => {
         if (appointmentData.clientRated) {
             Alert.alert("Déjà Évalué", "Ce rendez-vous a déjà été évalué.");
             setIsSubmittingRating(false);
+            // Query only by clientId and status, then filter locally to avoid composite index requirement
             const ratingRequestsQuery = query(
               collection(db, 'ratingRequests'),
               where('clientId', '==', userData.uid),
-              where('codeData', '==', codeDataForRating),
-              where('partnerId', '==', partnerToRateId),
               where('status', 'in', ['pending', 'displayed']),
-              limit(1)
+              orderBy('requestDate', 'desc'),
+              limit(20)
             );
             const querySnapshot = await getDocs(ratingRequestsQuery);
-            if (!querySnapshot.empty) {
-              const requestId = querySnapshot.docs[0].id;
-              await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'completed' });
+            const matchedDoc = querySnapshot.docs.find(d => {
+              const data = d.data();
+              return data.codeData === codeDataForRating && data.partnerId === partnerToRateId;
+            });
+            if (matchedDoc) {
+              await updateDoc(doc(db, 'ratingRequests', matchedDoc.id), { status: 'completed' });
             }
             setShowRatePartnerModal(false);
             setCurrentRatingRequestId(null);
@@ -663,18 +683,21 @@ const Dashboard = () => {
         }
         await updateDoc(doc(db, 'appointments', appointmentDocId), updateAppointmentData);
 
+        // Query only by clientId and status, then filter locally to avoid composite index requirement
         const ratingRequestsQuery = query(
           collection(db, 'ratingRequests'),
           where('clientId', '==', userData.uid),
-          where('codeData', '==', codeDataForRating),
-          where('partnerId', '==', partnerToRateId),
           where('status', 'in', ['pending', 'displayed']),
-          limit(1)
+          orderBy('requestDate', 'desc'),
+          limit(20)
         );
         const querySnapshot = await getDocs(ratingRequestsQuery);
-        if (!querySnapshot.empty) {
-          const requestId = querySnapshot.docs[0].id;
-          await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'completed' });
+        const matchedDoc = querySnapshot.docs.find(d => {
+          const data = d.data();
+          return data.codeData === codeDataForRating && data.partnerId === partnerToRateId;
+        });
+        if (matchedDoc) {
+          await updateDoc(doc(db, 'ratingRequests', matchedDoc.id), { status: 'completed' });
         }
 
         setShowRatePartnerModal(false);

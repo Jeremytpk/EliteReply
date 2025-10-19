@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { collection, addDoc, setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { APP_CATEGORIES } from '../constants/APP_CATEGORIES';
+import { sendTicketNotification } from '../services/notificationHelpers';
 
 const UserRequest = ({ navigation }) => {
   // Check if the platform is web and return the message early
@@ -171,6 +172,21 @@ const UserRequest = ({ navigation }) => {
         createdAt: serverTimestamp(),
         type: 'text'
       });
+
+      // Send notifications to IT Support agents
+      try {
+        await sendTicketNotification.newTicket({
+          id: ticketId,
+          category: formData.category,
+          message: formData.message,
+          userId: user.uid,
+          userName: userData?.name || user?.displayName || 'Client',
+          userIsPremium: userData?.isPremium || false,
+        });
+      } catch (notificationError) {
+        console.error('Error sending notifications:', notificationError);
+        // Continue with the flow even if notifications fail
+      }
 
       Alert.alert(
         'Demande soumise!',

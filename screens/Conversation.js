@@ -59,6 +59,7 @@ import {
     auth,
     storage
 } from '../firebase';
+import { sendMessageNotification } from '../services/notificationHelpers';
 import {
     Ionicons,
     MaterialIcons
@@ -356,29 +357,7 @@ const Conversation = ({
         }
     }, [ticketId, navigation]);
 
-    const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
-        const message = {
-            to: expoPushToken,
-            sound: 'er_notification',
-            title,
-            body,
-            data,
-        };
-        try {
-            await fetch('https://exp.host/--/api/v2/push/send', {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'Accept-encoding': 'gzip, deflate',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(message),
-            });
-            console.log('Push notification sent successfully from Conversation.js!');
-        } catch (error) {
-            console.error('Failed to send push notification from Conversation.js:', error);
-        }
-    };
+
 
 
     // Ticket info subscription
@@ -1456,6 +1435,26 @@ const Conversation = ({
 
             updateTypingStatus(false);
 
+            // Send notification for regular text messages
+            if (type === 'text' && messageToSend.trim()) {
+                try {
+                    const recipientId = isITSupport ? ticketInfo?.userId : ticketInfo?.assignedTo;
+                    if (recipientId && recipientId !== currentUser?.uid) {
+                        await sendMessageNotification.textMessage(
+                            recipientId,
+                            {
+                                senderName: currentUser?.displayName || (isITSupport ? 'Agent' : 'Client'),
+                                message: messageToSend,
+                                ticketId: ticketId,
+                                ticketCategory: ticketInfo?.category
+                            }
+                        );
+                    }
+                } catch (notificationError) {
+                    console.error('Error sending message notification:', notificationError);
+                }
+            }
+
             await mettreAJourConversation(messageToSend, currentUser?.uid);
 
         } catch (error) {
@@ -1636,14 +1635,18 @@ const Conversation = ({
                 lastMessageSender: currentUser.uid,
             });
 
-            const clientUserDoc = await getDoc(doc(db, 'users', actualClientUid));
-            if (clientUserDoc.exists() && clientUserDoc.data().expoPushToken) {
-                sendPushNotification(
-                    clientUserDoc.data().expoPushToken,
-                    `Nouvelle suggestion de partenaire!`,
-                    `${currentUser.displayName || 'Votre agent'} vous a envoyé des suggestions de partenaires.`,
-                    { type: 'ticket_partner_suggestion', ticketId: ticketId }
+            // Send notification about partner suggestion
+            try {
+                await sendMessageNotification.partnerSuggestion(
+                    actualClientUid,
+                    {
+                        senderName: currentUser.displayName || 'Votre agent',
+                        ticketId: ticketId,
+                        partners: selectedPartnersForSuggestion
+                    }
                 );
+            } catch (notificationError) {
+                console.error('Error sending partner suggestion notification:', notificationError);
             }
 
             setShowPartnerSelectionModal(false);
@@ -1702,14 +1705,19 @@ const Conversation = ({
             setProductSearchQuery('');
             setSelectedProduct(null);
 
-            const clientUserDoc = await getDoc(doc(db, 'users', actualClientUid));
-            if (clientUserDoc.exists() && clientUserDoc.data().expoPushToken) {
-                sendPushNotification(
-                    clientUserDoc.data().expoPushToken,
-                    `Détails de produit de ${product.partnerName ?? 'un partenaire'}!`,
-                    `${currentUser.displayName || 'Votre agent'} vous a envoyé des détails sur ${product.name ?? 'un produit'}.`,
-                    { type: 'ticket_product_details', ticketId: ticketId }
+            // Send notification about product details
+            try {
+                await sendMessageNotification.productDetails(
+                    actualClientUid,
+                    {
+                        senderName: currentUser.displayName || 'Votre agent',
+                        ticketId: ticketId,
+                        productName: product.name,
+                        partnerName: product.partnerName
+                    }
                 );
+            } catch (notificationError) {
+                console.error('Error sending product details notification:', notificationError);
             }
 
         } catch (error) {

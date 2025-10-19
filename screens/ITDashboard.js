@@ -38,6 +38,7 @@ import {
   arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { sendTicketNotification } from '../services/notificationHelpers';
 
 // Responsive design helper function
 const getResponsiveValues = () => {
@@ -672,6 +673,22 @@ const ITDashboard = () => {
         createdAt: serverTimestamp(),
         type: 'system_message'
       });
+
+      // Send notification to user that agent has taken over
+      try {
+        await sendTicketNotification.ticketAssigned(
+          {
+            id: ticket.id,
+            userId: ticket.userId,
+            category: ticket.category,
+          },
+          {
+            name: userData?.name || currentUser.displayName || 'Agent',
+          }
+        );
+      } catch (notificationError) {
+        console.error('Error sending ticket assignment notifications:', notificationError);
+      }
 
       if (inAppNotification && inAppNotification.ticketId === ticket.id) {
           setInAppNotification(null);

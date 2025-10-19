@@ -12,6 +12,7 @@ import { Audio } from 'expo-av';
 import Constants from 'expo-constants'; // Import Constants to access app.json config
 import * as ExpoLinking from 'expo-linking'; // Use Expo's Linking module
 import { StripeProvider } from './utils/StripeWrapper';
+import { NotificationProvider } from './contexts/NotificationContext';
 
 import { db, auth } from './firebase';
 import { STRIPE_PUBLISHABLE_KEY } from './config/stripe';
@@ -59,6 +60,8 @@ import PartnerChat from './screens/partner/PartnerChat';
 import PartnerMsg from './screens/partner/PartnerMsg';
 import Loading from './screens/Loading';
 import SupportChat from './screens/partner/SupportChat';
+import PartnerAdminChat from './screens/partner/PartnerAdminChat';
+import AdminPartnerChatList from './screens/partner/AdminPartnerChatList';
 import Datas from './screens/Datas';
 import Graphic from './screens/Graphic';
 import UsersDashboard from './screens/UsersDashboard';
@@ -86,6 +89,7 @@ import ClientCart from './screens/ClientCart';
 import PartnerPayment from './screens/PartnerPayment';
 import PartnerChatList from './screens/partner/PartnerChatList';
 import PartnerClientChat from './screens/partner/PartnerClientChat';
+import CustomHeader from './components/CustomHeader';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -310,10 +314,24 @@ export default function App() {
   const navigationRef = useRef(); // Global navigation ref
 
   // Helper function for in-app navigation
-  const handleInAppNavigation = (type, ticketId, surveyId, appointmentId) => {
+  const handleInAppNavigation = (type, ticketId, surveyId, appointmentId, partnerId, partnerName) => {
     if (navigationRef.current) {
       if (type === 'message' && ticketId) {
         navigationRef.current.dispatch(StackActions.replace('Conversation', { ticketId }));
+      } else if (type === 'partner_admin_chat' && partnerId) {
+        // Navigate to partner-admin chat
+        navigationRef.current.dispatch(StackActions.replace('PartnerAdminChat', { 
+          partnerId, 
+          partnerName: partnerName || `Partenaire ${partnerId}`,
+          userType: 'admin' 
+        }));
+      } else if (type === 'admin_partner_chat' && partnerId) {
+        // Navigate to partner-admin chat from partner perspective
+        navigationRef.current.dispatch(StackActions.replace('PartnerAdminChat', { 
+          partnerId, 
+          partnerName: partnerName || `Partenaire ${partnerId}`,
+          userType: 'partner' 
+        }));
       } else if (type === 'survey' && surveyId) {
         navigationRef.current.dispatch(StackActions.replace('SurveyResponses', { surveyId }));
       } else if (type === 'appointment_client_confirmed' || type === 'appointment_partner_new') {
@@ -393,7 +411,7 @@ export default function App() {
     // 4. Notification response listener (user taps notification)
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification tapped/interacted with:', response.notification.request.content.data);
-      const { link, type, ticketId, surveyId, appointmentId } = response.notification.request.content.data;
+      const { link, type, ticketId, surveyId, appointmentId, partnerId, partnerName } = response.notification.request.content.data;
       if (type === 'message' && currentUserId) {
         updateDoc(doc(db, 'users', currentUserId), {
             lastSeenMessages: serverTimestamp()
@@ -405,11 +423,11 @@ export default function App() {
           .catch(err => {
             console.error('Failed to open deep link:', link, err);
             Alert.alert('Erreur', 'Impossible d\'ouvrir le lien. Veuillez réessayer.');
-            handleInAppNavigation(type, ticketId, surveyId, appointmentId);
+            handleInAppNavigation(type, ticketId, surveyId, appointmentId, partnerId, partnerName);
           });
       } else {
         console.warn('Notification received without a deep link. Attempting in-app navigation.');
-        handleInAppNavigation(type, ticketId, surveyId, appointmentId);
+        handleInAppNavigation(type, ticketId, surveyId, appointmentId, partnerId, partnerName);
       }
     });
 
@@ -448,7 +466,14 @@ export default function App() {
           console.log('Navigation container is ready!');
         }}
       >
-      <Stack.Navigator initialRouteName="Loading">
+        <NotificationProvider navigation={navigationRef.current}>
+      <Stack.Navigator
+        initialRouteName="Loading"
+        screenOptions={{
+          header: (props) => <CustomHeader {...props} />,
+          headerTitleAlign: 'center'
+        }}
+      >
         <Stack.Screen
           name="Loading"
           component={Loading}
@@ -523,6 +548,16 @@ export default function App() {
           name="SupportChat"
           component={SupportChat}
           options={{ headerShown: false, title: "Message", headerTitleAlign:'center' }}
+        />
+        <Stack.Screen
+          name="PartnerAdminChat"
+          component={PartnerAdminChat}
+          options={{ headerShown: false, title: "Support", headerTitleAlign:'center' }}
+        />
+        <Stack.Screen
+          name="AdminPartnerChatList"
+          component={AdminPartnerChatList}
+          options={{ headerShown: false, title: "Messages Partenaires", headerTitleAlign:'center' }}
         />
         <Stack.Screen name="ClientCart"
         component={ClientCart}
@@ -696,8 +731,8 @@ export default function App() {
         <Stack.Screen name="PartnerChatList"
         component={PartnerChatList} options={{ headerShown: false, title: 'Messages', headerTitleAlign: 'center' }} />
 
-        <Stack.Screen name="PartnerClientChat"
-        component={PartnerClientChat} options={{ headerShown: false, title: 'Discussion Client', headerTitleAlign: 'center' }} />
+  <Stack.Screen name="PartnerClientChat"
+  component={PartnerClientChat} options={{ headerShown: true, title: 'Discussion Client', headerTitleAlign: 'center' }} />
 
         <Stack.Screen
           name="Payments"
@@ -793,6 +828,7 @@ export default function App() {
           options={{ headerShown: true }}
         />
       </Stack.Navigator>
+        </NotificationProvider>
       </NavigationContainer>
     </StripeProvider>
   );

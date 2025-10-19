@@ -242,15 +242,6 @@ const PartnerClientChat = ({ route }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Chargement...</Text>
-        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#25D366" />
           <Text style={styles.loadingText}>Chargement de la conversation...</Text>
@@ -266,31 +257,6 @@ const PartnerClientChat = ({ route }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerInfo}>
-            <Image 
-              source={{ uri: clientData?.displayAvatar || clientAvatar || 'https://via.placeholder.com/40' }}
-              style={styles.headerAvatar}
-            />
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>{clientData?.displayName || clientName || 'Client'}</Text>
-              <Text style={styles.headerSubtitle}>Client</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.infoButton}>
-            <Ionicons name="information-circle-outline" size={24} color="#25D366" />
-          </TouchableOpacity>
-        </View>
-
         {/* Messages List */}
         <FlatList
           ref={flatListRef}
@@ -357,42 +323,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
-    marginTop: 30,
-    height: 80
   },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  headerInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  infoButton: {
-    padding: 8,
-  },
+  /* header and header-related styles removed; global CustomHeader is used */
   messagesList: {
     flex: 1,
     backgroundColor: '#f5f5f5',

@@ -130,9 +130,47 @@ const PartnerMsg = () => {
     conversation.partnerName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const navigateToChat = (partnerId, partnerName) => {
-    navigation.navigate('PartnerAdminChat', { partnerId, partnerName, userType: 'admin' });
-  };  const deleteConversation = async (partnerId, partnerName) => {
+  const navigateToChat = async (partnerId, partnerName) => {
+    try {
+      // Mark as read in the main conversation document
+      const conversationRef = doc(db, 'partnerConversations', partnerId);
+      await updateDoc(conversationRef, {
+        unreadBySupport: false, 
+      });
+
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const userConvoStateRef = doc(db, 'users', currentUser.uid, 'partnerConversationStates', partnerId);
+
+        const messagesQuery = query(
+          collection(db, 'partnerConversations', partnerId, 'messages'),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const messagesSnap = await getDocs(messagesQuery);
+        const lastMessageTimestamp = messagesSnap.empty ? serverTimestamp() : messagesSnap.docs[0].data().createdAt;
+
+        // --- FIX: Use setDoc with merge: true to create if not exists, or update ---
+        await setDoc(userConvoStateRef, {
+          lastRead: lastMessageTimestamp,
+          partnerId: partnerId, // Ensure these fields exist if creating
+          partnerName: partnerName, // Ensure these fields exist if creating
+        }, { merge: true }); // Crucial for creating if doc doesn't exist
+        // --- END FIX ---
+      }
+      
+      // Remove from notified tickets set once agent engages with it
+      if (notifiedPartnerConvosRef.current.has(partnerId)) {
+          notifiedPartnerConvosRef.current.delete(partnerId);
+      }
+
+    } catch (error) {
+      console.error('Erreur lors du marquage des messages comme lus :', error);
+    }
+    navigation.navigate('SupportChat', { partnerId, partnerName, userType: 'support' });
+  };
+
+  const deleteConversation = async (partnerId, partnerName) => {
     Alert.alert(
       'Confirmer la suppression',
       `Êtes-vous sûr de vouloir supprimer la conversation avec ${partnerName} ? Cela supprimera tous les messages associés.`,

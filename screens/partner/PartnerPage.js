@@ -794,9 +794,13 @@ const PartnerPage = ({ route }) => {
           {/* Logo and basic info section */}
           <View style={styles.stickyLogoSection}>
             <View style={styles.logoContainer}>
-              <Image 
-                source={{ uri: partner.logo }} 
-                style={[styles.stickyPartnerLogo, isHeaderCollapsed && styles.stickyPartnerLogoSmall]} 
+              <Image
+                source={
+                  partner?.logo ? { uri: partner.logo } :
+                  partner?.profileImage ? { uri: partner.profileImage } :
+                  require('../../assets/images/Profile.png')
+                }
+                style={[styles.stickyPartnerLogo, isHeaderCollapsed && styles.stickyPartnerLogoSmall]}
               />
               {!isHeaderCollapsed && (
                 <View style={styles.verifiedBadge}>
@@ -900,7 +904,7 @@ const PartnerPage = ({ route }) => {
                   onPress={() => navigation.navigate('ClientPartnerChat', {
                     partnerId: partnerId,
                     partnerName: partner.nom,
-                    partnerLogo: partner.logo
+                    partnerLogo: partner.logo || partner.profileImage || null
                   })}
                 >
                   <Ionicons name="chatbubble-outline" size={18} color="#0a8fdf" />
@@ -934,7 +938,7 @@ const PartnerPage = ({ route }) => {
                 onPress={() => navigation.navigate('ClientPartnerChat', {
                   partnerId: partnerId,
                   partnerName: partner.nom,
-                  partnerLogo: partner.logo
+                  partnerLogo: partner.logo || partner.profileImage || null
                 })}
               >
                 <Ionicons name="chatbubble-outline" size={16} color="#0a8fdf" />

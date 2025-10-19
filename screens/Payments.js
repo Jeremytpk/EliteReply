@@ -27,6 +27,7 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { sendPaymentNotification } from '../services/notificationHelpers';
 // No longer need MaterialIcons or Ionicons directly if replacing them all with custom images
 // import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -63,30 +64,7 @@ const PaymentsScreen = () => {
 
   const notifiedFinancialUpdatePartners = useRef(new Set());
 
-  const sendPushNotification = async (expoPushToken, title, body, data = {}) => {
-    const message = {
-      to: expoPushToken,
-      sound: 'er_notification',
-      title,
-      body,
-      data,
-    };
 
-    try {
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
-      console.log('Push notification sent successfully!');
-    } catch (error) {
-      console.error('Failed to send push notification:', error);
-    }
-  };
 
   const formatDateTime = (timestamp) => {
     if (!timestamp) return 'N/A';
@@ -191,15 +169,18 @@ const PaymentsScreen = () => {
                     const isNewTransaction = !prevLatestTransactionDate || transactionDate > prevLatestTransactionDate;
                     if (isNewTransaction && !notifiedFinancialUpdatePartners.current.has(partnerId)) {
                         console.log(`NEW FINANCIAL UPDATE DETECTED for partner: ${partner.nom}`); // Changed to nom
-                        const adminDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
-                        if (adminDocSnap.exists() && adminDocSnap.data().expoPushToken) {
-                            sendPushNotification(
-                                adminDocSnap.data().expoPushToken,
-                                "Mise à jour financière partenaire!",
-                                `Nouvelle transaction enregistrée pour ${partner.nom}.`, // Changed to nom
-                                { type: 'partner_payment_update', partnerId: partner.id }
+                        try {
+                            await sendPaymentNotification.financialUpdate(
+                                currentUser.uid,
+                                {
+                                    partnerName: partner.nom,
+                                    partnerId: partner.id,
+                                    transactionAmount: '0' // We can enhance this with actual amount if needed
+                                }
                             );
                             notifiedFinancialUpdatePartners.current.add(partnerId);
+                        } catch (notificationError) {
+                            console.error('Error sending financial update notification:', notificationError);
                         }
                     }
                 }
@@ -553,13 +534,11 @@ const PaymentsScreen = () => {
       {paymentsList.length === 0 ? (
         <Text style={styles.noData}>Aucun paiement enregistré pour le moment.</Text>
       ) : (
-        <FlatList
-          data={paymentsList}
-          keyExtractor={item => item.id}
-          renderItem={renderPaymentItem}
-          scrollEnabled={false} // Disable FlatList scrolling as it's inside a ScrollView
-          contentContainerStyle={styles.paymentsListContainer}
-        />
+        <View style={styles.paymentsListContainer}>
+          {paymentsList.map(item => (
+            <React.Fragment key={item.id}>{renderPaymentItem({ item })}</React.Fragment>
+          ))}
+        </View>
       )}
 
       {/* Partner Details Modal */}

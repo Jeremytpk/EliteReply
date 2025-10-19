@@ -196,7 +196,7 @@ const ClientPartnerChat = ({ route }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
@@ -275,23 +275,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 50 : 12,
+    // Use a smaller paddingTop so header doesn't get pushed too far down on iOS
+    paddingTop: Platform.OS === 'ios' ? 20 : 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
-    marginTop: 40,
-    height: 80
+    // Remove large fixed marginTop which caused overlap/extra spacing
+    height: Platform.OS === 'ios' ? 92 : 74,
   },
   backButton: {
     padding: 8,
     marginRight: 8,
+    top: 15
   },
   headerInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    top: 15
   },
   headerAvatar: {
     width: 40,

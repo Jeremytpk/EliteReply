@@ -7,7 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build": "expo build:web"
+    "build": "expo build:web",
+    "create-firestore-index": "node scripts/create_firestore_index.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -68,7 +69,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "google-auth-library": "^9.0.0"
   },
   "private": true,
   "expo": {
