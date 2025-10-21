@@ -65,7 +65,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Your app needs access to your location to provide personalized services.",
-        "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition."
+        "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.yourcompany.elitereply",
       "buildNumber": "1.0.0"

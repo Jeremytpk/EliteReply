@@ -22,6 +22,11 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "production-ios-local": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "credentialsSource": "local"
     }
   },
   "submit": {
