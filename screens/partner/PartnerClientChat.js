@@ -242,6 +242,7 @@ const PartnerClientChat = ({ route }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Global header will render here */}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#25D366" />
           <Text style={styles.loadingText}>Chargement de la conversation...</Text>
@@ -257,6 +258,8 @@ const PartnerClientChat = ({ route }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        {/* Global header will render here */}
+
         {/* Messages List */}
         <FlatList
           ref={flatListRef}
@@ -323,8 +326,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
+    paddingTop: Platform.OS === 'ios' ? 12 : 0,
+    height: Platform.OS === 'ios' ? 80 : 64,
   },
-  /* header and header-related styles removed; global CustomHeader is used */
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  backButtonVisible: {
+    backgroundColor: 'blue',
+    borderRadius: 8,
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  infoButton: {
+    padding: 8,
+  },
   messagesList: {
     flex: 1,
     backgroundColor: '#f5f5f5',

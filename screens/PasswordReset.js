@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 // --- Jey's Addition: Import analytics and logEvent ---
 import { analytics, logEvent } from '../firebase';
 // --- End Jey's Addition ---
+import SafeAreaScreen from '../components/SafeAreaScreen';
 
 const PasswordReset = ({ route }) => {
   const { email: initialEmail } = route.params || {};
@@ -30,21 +31,21 @@ const PasswordReset = ({ route }) => {
   const handleSendResetEmail = async () => {
     if (!email.trim()) {
       setError('Veuillez entrer votre adresse email');
-      // --- Jey's Addition: Log validation error ---
-      logEvent(analytics, 'password_reset_validation_error', {
-          error_type: 'missing_email'
-      });
+    // --- Jey's Addition: Log validation error ---
+    logEvent('password_reset_validation_error', {
+      error_type: 'missing_email'
+    });
       // --- End Jey's Addition ---
       return;
     }
 
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
-      // --- Jey's Addition: Log validation error ---
-      logEvent(analytics, 'password_reset_validation_error', {
-          error_type: 'invalid_email_format',
-          email_attempted: email
-      });
+    // --- Jey's Addition: Log validation error ---
+    logEvent('password_reset_validation_error', {
+      error_type: 'invalid_email_format',
+      email_attempted: email
+    });
       // --- End Jey's Addition ---
       return;
     }
@@ -64,10 +65,10 @@ const PasswordReset = ({ route }) => {
         }]
       );
 
-      // --- Jey's Addition: Log successful password reset request ---
-      logEvent(analytics, 'password_reset_email_sent', {
-          email: email
-      });
+    // --- Jey's Addition: Log successful password reset request ---
+    logEvent('password_reset_email_sent', {
+      email: email
+    });
       // --- End Jey's Addition ---
 
     } catch (err) {
@@ -97,13 +98,13 @@ const PasswordReset = ({ route }) => {
       
       setError(errorMessage);
 
-      // --- Jey's Addition: Log password reset failure ---
-      logEvent(analytics, 'password_reset_failed', {
-          error_code: err.code,
-          error_type: errorType,
-          error_message: errorMessage,
-          email_attempted: email
-      });
+    // --- Jey's Addition: Log password reset failure ---
+    logEvent('password_reset_failed', {
+      error_code: err.code,
+      error_type: errorType,
+      error_message: errorMessage,
+      email_attempted: email
+    });
       // --- End Jey's Addition ---
     } finally {
       setResetLoading(false);
@@ -111,71 +112,73 @@ const PasswordReset = ({ route }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaScreen style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../assets/images/logoVide.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={styles.header}>
-          <Text style={styles.title}>Réinitialiser le mot de passe</Text>
-          <Text style={styles.subtitle}>
-            Entrez votre adresse email pour recevoir un lien de réinitialisation
-          </Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/logoVide.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
-        ) : null}
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="exemple@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!resetLoading}
-          />
-        </View>
+          <View style={styles.header}>
+            <Text style={styles.title}>Réinitialiser le mot de passe</Text>
+            <Text style={styles.subtitle}>
+              Entrez votre adresse email pour recevoir un lien de réinitialisation
+            </Text>
+          </View>
 
-        <TouchableOpacity
-          style={[styles.resetButton, resetLoading && styles.buttonDisabled]}
-          onPress={handleSendResetEmail}
-          disabled={resetLoading}
-        >
-          {resetLoading ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Text style={styles.resetButtonText}>Envoyer l'email de réinitialisation</Text>
-          )}
-        </TouchableOpacity>
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
-        <TouchableOpacity
-          style={styles.backContainer}
-          onPress={() => navigation.goBack()}
-          disabled={resetLoading}
-        >
-          <Text style={styles.backToLogin}>Retour à la connexion</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="exemple@email.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!resetLoading}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.resetButton, resetLoading && styles.buttonDisabled]}
+            onPress={handleSendResetEmail}
+            disabled={resetLoading}
+          >
+            {resetLoading ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={styles.resetButtonText}>Envoyer l'email de réinitialisation</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backContainer}
+            onPress={() => navigation.goBack()}
+            disabled={resetLoading}
+          >
+            <Text style={styles.backToLogin}>Retour à la connexion</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaScreen>
   );
 };
 

@@ -1202,6 +1202,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
     paddingBottom: 20,
+    bottom: 20,
   },
   headerGradient: {
     paddingTop: 45,

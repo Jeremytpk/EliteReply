@@ -90,6 +90,7 @@ import PartnerPayment from './screens/PartnerPayment';
 import PartnerChatList from './screens/partner/PartnerChatList';
 import PartnerClientChat from './screens/partner/PartnerClientChat';
 import CustomHeader from './components/CustomHeader';
+import SafeAreaScreen from './components/SafeAreaScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -466,6 +467,7 @@ export default function App() {
           console.log('Navigation container is ready!');
         }}
       >
+        <SafeAreaScreen>
         <NotificationProvider navigation={navigationRef.current}>
       <Stack.Navigator
         initialRouteName="Loading"
@@ -829,6 +831,7 @@ export default function App() {
         />
       </Stack.Navigator>
         </NotificationProvider>
+        </SafeAreaScreen>
       </NavigationContainer>
     </StripeProvider>
   );

@@ -21,6 +21,8 @@ import { useNavigation } from '@react-navigation/native';
 // --- Jey's Addition: Import analytics and logEvent ---
 import { analytics, logEvent } from '../firebase'; // Ensure these are exported from your firebase.js
 // --- End Jey's Addition ---
+// Safe area wrapper
+import SafeAreaScreen from '../components/SafeAreaScreen';
 
 const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png');
 const EYE_HIDE_ICON = require('../assets/icons/eye_hide.png');
@@ -44,10 +46,10 @@ const Login = () => {
           routes: [{ name: 'Loading' }],
         });
         // --- Jey's Addition: Log automatic redirect on already logged in ---
-        logEvent(analytics, 'auto_login_redirect', {
-            user_id: user.uid,
-            email: user.email // Be cautious with PII, but for internal analytics, often acceptable
-        });
+    logEvent('auto_login_redirect', {
+      user_id: user.uid,
+      email: user.email // Be cautious with PII, but for internal analytics, often acceptable
+    });
         // --- End Jey's Addition ---
       }
     });
@@ -58,11 +60,11 @@ const Login = () => {
     if (!email.trim() || !password.trim()) {
       setError('Veuillez remplir tous les champs');
       // --- Jey's Addition: Log validation error ---
-      logEvent(analytics, 'login_validation_error', {
-          error_type: 'missing_fields',
-          email_provided: !!email.trim(),
-          password_provided: !!password.trim()
-      });
+    logEvent('login_validation_error', {
+      error_type: 'missing_fields',
+      email_provided: !!email.trim(),
+      password_provided: !!password.trim()
+    });
       // --- End Jey's Addition ---
       return;
     }
@@ -70,16 +72,42 @@ const Login = () => {
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
       // --- Jey's Addition: Log validation error ---
-      logEvent(analytics, 'login_validation_error', {
-          error_type: 'invalid_email_format',
-          email_attempted: email
-      });
+    logEvent('login_validation_error', {
+      error_type: 'invalid_email_format',
+      email_attempted: email
+    });
       // --- End Jey's Addition ---
       return;
     }
 
     setLoading(true);
     setError('');
+
+    // Quick internet connectivity check before calling Firebase
+    const checkInternet = async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch('https://clients3.google.com/generate_204', { method: 'GET', signal: controller.signal });
+        clearTimeout(timeout);
+        return resp && resp.status === 204;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const online = await checkInternet();
+    if (!online) {
+      setError('Problème de connexion internet');
+      logEvent('login_failed', {
+        method: 'email_and_password',
+        error_code: 'network_unreachable',
+        error_type: 'network_unreachable',
+        email_attempted: email
+      });
+      setLoading(false);
+      return;
+    }
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -90,11 +118,11 @@ const Login = () => {
       });
 
       // --- Jey's Addition: Log successful login event ---
-      logEvent(analytics, 'login', {
-          method: 'email_and_password',
-          user_id: userCredential.user.uid,
-          email: userCredential.user.email // Again, be cautious with PII
-      });
+    logEvent('login', {
+      method: 'email_and_password',
+      user_id: userCredential.user.uid,
+      email: userCredential.user.email // Again, be cautious with PII
+    });
       // --- End Jey's Addition ---
 
     } catch (err) {
@@ -108,9 +136,9 @@ const Login = () => {
     if (!email.trim()) {
       setError('Veuillez entrer votre adresse email pour réinitialiser le mot de passe');
       // --- Jey's Addition: Log password reset validation error ---
-      logEvent(analytics, 'password_reset_validation_error', {
-          error_type: 'missing_email'
-      });
+    logEvent('password_reset_validation_error', {
+      error_type: 'missing_email'
+    });
       // --- End Jey's Addition ---
       return;
     }
@@ -118,10 +146,10 @@ const Login = () => {
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
       // --- Jey's Addition: Log password reset validation error ---
-      logEvent(analytics, 'password_reset_validation_error', {
-          error_type: 'invalid_email_format',
-          email_attempted: email
-      });
+    logEvent('password_reset_validation_error', {
+      error_type: 'invalid_email_format',
+      email_attempted: email
+    });
       // --- End Jey's Addition ---
       return;
     }
@@ -161,16 +189,18 @@ const Login = () => {
       default:
         errorType = error.code || 'unknown_firebase_error';
     }
-    setError(errorMessage);
+  setError(errorMessage);
+  // Log full error object to console to aid debugging
+  console.error('Login error object:', error);
 
     // --- Jey's Addition: Log login failure event ---
-    logEvent(analytics, 'login_failed', {
-        method: 'email_and_password',
-        error_code: error.code,
-        error_type: errorType,
-        error_message: errorMessage,
-        email_attempted: email // Log the attempted email (be mindful of PII policies)
-    });
+  logEvent('login_failed', {
+    method: 'email_and_password',
+    error_code: error.code,
+    error_type: errorType,
+    error_message: errorMessage,
+    email_attempted: email // Log the attempted email (be mindful of PII policies)
+  });
     // --- End Jey's Addition ---
   };
 
@@ -179,107 +209,109 @@ const Login = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaScreen style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../assets/images/logoVide.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={styles.header}>
-          <Text style={styles.title}>Connexion</Text>
-          <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/images/logoVide.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
-        ) : null}
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="exemple@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading && !resetLoading}
-          />
-        </View>
+          <View style={styles.header}>
+            <Text style={styles.title}>Connexion</Text>
+            <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
+          </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Mot de passe</Text>
-          <View style={styles.passwordInputContainer}>
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Email</Text>
             <TextInput
-              style={styles.passwordInput}
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={secureTextEntry}
+              style={styles.input}
+              placeholder="exemple@email.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
               editable={!loading && !resetLoading}
             />
-            <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={toggleSecureEntry}
-              disabled={loading || resetLoading}
-            >
-              <Image
-                source={secureTextEntry ? EYE_HIDE_ICON : EYE_OUTLINE_ICON}
-                style={styles.customEyeIcon}
-              />
-            </TouchableOpacity>
           </View>
-        </View>
 
-        <TouchableOpacity
-          style={styles.forgotPasswordContainer}
-          onPress={handlePasswordReset}
-          disabled={loading || resetLoading}
-        >
-          {resetLoading ? (
-            <ActivityIndicator color="#0A8FDF" size="small" />
-          ) : (
-            <Text style={styles.forgotPasswordText}>Mot de passe oublié?</Text>
-          )}
-        </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Mot de passe</Text>
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={secureTextEntry}
+                editable={!loading && !resetLoading}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={toggleSecureEntry}
+                disabled={loading || resetLoading}
+              >
+                <Image
+                  source={secureTextEntry ? EYE_HIDE_ICON : EYE_OUTLINE_ICON}
+                  style={styles.customEyeIcon}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-        <TouchableOpacity
-          style={[styles.loginButton, (loading || resetLoading) && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading || resetLoading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Text style={styles.buttonText}>Se connecter</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Pas encore de compte?</Text>
           <TouchableOpacity
-            onPress={() => navigation.navigate('Signup')}
+            style={styles.forgotPasswordContainer}
+            onPress={handlePasswordReset}
             disabled={loading || resetLoading}
           >
-            <Text style={styles.signupLink}>Créer un compte</Text>
+            {resetLoading ? (
+              <ActivityIndicator color="#0A8FDF" size="small" />
+            ) : (
+              <Text style={styles.forgotPasswordText}>Mot de passe oublié?</Text>
+            )}
           </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <TouchableOpacity
+            style={[styles.loginButton, (loading || resetLoading) && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading || resetLoading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Se connecter</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Pas encore de compte?</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Signup')}
+              disabled={loading || resetLoading}
+            >
+              <Text style={styles.signupLink}>Créer un compte</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaScreen>
   );
 };
 
@@ -287,11 +319,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
-    bottom: 10,
+    bottom: 25,
+    //paddingTop: 50,
+    //paddingBottom: 25,
   },
   scrollContainer: {
     paddingHorizontal: 24,
-    paddingBottom: 10,
+    //paddingBottom: 10,
     paddingTop: 10,
 
   },

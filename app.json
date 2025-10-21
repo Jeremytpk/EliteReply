@@ -68,7 +68,7 @@
         "NSMicrophoneUsageDescription": "EliteReply needs access to your microphone for voice commands and speech recognition.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.yourcompany.elitereply",
+      "bundleIdentifier": "com.jeremytpk.elitereply",
       "buildNumber": "1.0.0"
     },
     "android": {
