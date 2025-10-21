@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:796596006633:android:3b441a438edd66876b0a78",
+        "mobilesdk_app_id": "1:796596006633:android:666dcf6138774d9a6b0a78",
         "android_client_info": {
-          "package_name": "com.yourcompany.elitereply"
+          "package_name": "com.jeremytpk.elitereply"
         }
       },
       "oauth_client": [],

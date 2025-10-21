@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.yourcompany.elitereply</string>
+	<string>com.jeremytpk.elitereply</string>
 	<key>PROJECT_ID</key>
 	<string>elitereply-bd74d</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,7 +25,7 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:796596006633:ios:051ae2c1ac486d1a6b0a78</string>
+	<string>1:796596006633:ios:42357afaad77c54c6b0a78</string>
 	<key>DATABASE_URL</key>
 	<string>https://elitereply-bd74d-default-rtdb.firebaseio.com</string>
 </dict>
