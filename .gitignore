@@ -63,3 +63,5 @@ OpenAIConfig.js
  
 # Local credentials
 certs/
+# Local OpenAI dev key (do not commit)
+OpenAIConf.js
