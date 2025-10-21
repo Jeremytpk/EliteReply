@@ -3,7 +3,7 @@
 /.expo-shared/
 /web-build/
 /android/
-/ios/
+# DELETED /ios/ to allow native project to be committed
 /npm-debug.*
 /yarn-debug.*
 /yarn-error.log
@@ -60,3 +60,6 @@ GoogleService-Info.plist # <--- IMPORTANT: DO NOT UPLOAD YOUR ACTUAL FIREBASE CO
 
 # Open AI config (if it holds your key directly)
 OpenAIConfig.js
+ 
+# Local credentials
+certs/
