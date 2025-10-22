@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>elitereply</string>
-          <string>com.yourcompany.elitereply</string>
+          <string>com.jeremytpk.elitereply</string>
         </array>
       </dict>
       <dict>
