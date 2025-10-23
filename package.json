@@ -10,7 +10,8 @@
     "build": "expo build:web",
     "build:ios:local": "eas build --platform ios --profile production-ios-local --local",
     "submit:ios": "eas submit --platform ios",
-    "create-firestore-index": "node scripts/create_firestore_index.js"
+    "create-firestore-index": "node scripts/create_firestore_index.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -73,7 +74,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "google-auth-library": "^9.0.0"
+    "google-auth-library": "^9.0.0",
+    "patch-package": "^6.5.1"
   },
   "private": true,
   "expo": {
