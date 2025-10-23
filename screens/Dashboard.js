@@ -304,8 +304,7 @@ const Dashboard = () => {
     const q = query(
       collection(db, 'ratingRequests'),
       where('clientId', '==', user.uid),
-      orderBy('requestDate', 'desc'),
-      limit(10) // Get more results since we'll filter in memory
+      limit(50) // Get more results since we'll filter and sort in memory
     );
 
     const unsubscribe = onSnapshot(q, async (querySnapshot) => {
@@ -345,27 +344,31 @@ const Dashboard = () => {
             return;
         }
 
-        const appointmentQuery = query(
-            collection(db, 'appointments'),
-            where('codeData', '==', appointmentCodeData),
-            where('partnerId', '==', requestedPartnerId),
-            where('clientId', '==', user.uid),
-            limit(1)
-        );
+    // To avoid a composite index requirement, fetch recent appointments for this client
+    // and filter locally for matching codeData and partnerId.
+    const appointmentQuery = query(
+      collection(db, 'appointments'),
+      where('clientId', '==', user.uid),
+      limit(50)
+    );
 
-        const appointmentSnapshots = await getDocs(appointmentQuery);
-        console.log("Dashboard: Appointment lookup results count:", appointmentSnapshots.docs.length);
+    const appointmentSnapshotsAll = await getDocs(appointmentQuery);
+    const matchedAppointments = appointmentSnapshotsAll.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(d => d.codeData === appointmentCodeData && d.partnerId === requestedPartnerId);
 
-        if (appointmentSnapshots.empty) {
-            console.log("Dashboard: No matching appointment found for rating request, marking as invalid_appointment_link:", ratingRequest);
-            await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'invalid_appointment_link' });
-            setShowRatePartnerModal(false);
-            setCurrentRatingRequestId(null);
-            return;
-        }
+    console.log("Dashboard: Appointment lookup results count (after local filter):", matchedAppointments.length);
 
-        const rdvDoc = appointmentSnapshots.docs[0];
-        const rdvData = rdvDoc.data();
+    if (!matchedAppointments || matchedAppointments.length === 0) {
+      console.log("Dashboard: No matching appointment found for rating request, marking as invalid_appointment_link:", ratingRequest);
+      await updateDoc(doc(db, 'ratingRequests', requestId), { status: 'invalid_appointment_link' });
+      setShowRatePartnerModal(false);
+      setCurrentRatingRequestId(null);
+      return;
+    }
+
+    const rdvDoc = matchedAppointments[0];
+    const rdvData = rdvDoc;
         console.log("Dashboard: Found matching appointment:", rdvData);
 
         if (rdvData.clientRated) {
@@ -626,8 +629,7 @@ const Dashboard = () => {
               collection(db, 'ratingRequests'),
               where('clientId', '==', userData.uid),
               where('status', 'in', ['pending', 'displayed']),
-              orderBy('requestDate', 'desc'),
-              limit(20)
+              limit(50)
             );
             const querySnapshot = await getDocs(ratingRequestsQuery);
             const matchedDoc = querySnapshot.docs.find(d => {
@@ -688,8 +690,7 @@ const Dashboard = () => {
           collection(db, 'ratingRequests'),
           where('clientId', '==', userData.uid),
           where('status', 'in', ['pending', 'displayed']),
-          orderBy('requestDate', 'desc'),
-          limit(20)
+          limit(50)
         );
         const querySnapshot = await getDocs(ratingRequestsQuery);
         const matchedDoc = querySnapshot.docs.find(d => {

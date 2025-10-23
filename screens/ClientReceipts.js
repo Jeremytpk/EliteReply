@@ -44,8 +44,7 @@ const ClientReceipts = ({ navigation }) => {
     const paymentsQuery = query(
       collection(db, 'payments'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(100) // Get more results since we'll filter in memory
+      limit(100) // Get more results since we'll filter and sort in memory
     );
 
     const unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
@@ -58,13 +57,13 @@ const ClientReceipts = ({ navigation }) => {
         }
       });
       
-      // Sort by createdAt descending and limit to 50
+      // Sort by createdAt descending and limit to 50 (client-side)
       userReceipts.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
         return dateB - dateA;
       });
-      
+
       setReceipts(userReceipts.slice(0, 50));
       setLoading(false);
     });

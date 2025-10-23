@@ -50,11 +50,8 @@ import 'moment/locale/fr';
 
 moment.locale('fr');
 
-import { OPENAI_API_KEY } from '../OpenAIConfig';
-
-import OpenAI from 'openai';
-
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+import { OPENAI_API_KEY } from '@env';
+import { openaiClient, callWithRetry } from '../services/openaiClient';
 
 const Conversation = ({ route, navigation }) => {
   const {
@@ -596,12 +593,12 @@ const Conversation = ({ route, navigation }) => {
       });
 
       console.log("DEBUG: Sending request to OpenAI...");
-      const response = await openai.chat.completions.create({
+      const response = await callWithRetry(() => openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: openaiMessages,
         max_tokens: 150,
         temperature: 0.7,
-      });
+      }), { retries: 3, minDelay: 500 });
       console.log("DEBUG: OpenAI API response received:", response);
 
       const jeyText = response.choices[0]?.message?.content?.trim();

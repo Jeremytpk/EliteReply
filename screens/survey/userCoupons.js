@@ -63,8 +63,7 @@ const UserCoupons = () => {
         // Using only userId filter to avoid composite index requirement
         const q = query(
           collection(db, 'surveyResult'),
-          where('userId', '==', currentUser.uid),
-          orderBy('timestamp', 'desc')
+          where('userId', '==', currentUser.uid)
         );
 
         const querySnapshot = await getDocs(q);
@@ -77,6 +76,14 @@ const UserCoupons = () => {
             fetchedCoupons.push({ id: doc.id, ...data });
           }
         });
+
+        // Client-side sort by timestamp desc if available
+        fetchedCoupons.sort((a, b) => {
+          const aTime = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp || 0).getTime();
+          const bTime = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp || 0).getTime();
+          return bTime - aTime;
+        });
+
         setCoupons(fetchedCoupons);
 
       } catch (error) {

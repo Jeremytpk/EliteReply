@@ -9,6 +9,7 @@ import {
   Platform
 } from 'react-native';
 import { CardField, useStripe } from '../utils/StripeWrapper';
+import { formatAmount } from '../utils/currency';
 import { Ionicons } from '@expo/vector-icons';
 import { createPaymentIntent } from '../config/stripe';
 
@@ -201,7 +202,7 @@ const SecureStripeCardInput = ({ onPaymentSuccess, loading, amount, orderInfo, u
           <View style={styles.payButtonContent}>
             <Ionicons name="card" size={20} color="#fff" />
             <Text style={styles.payButtonText}>
-              Payer {amount ? `$${amount.toFixed(2)}` : ''}
+              Payer {amount ? `$${formatAmount(amount)}` : ''}
             </Text>
           </View>
         )}

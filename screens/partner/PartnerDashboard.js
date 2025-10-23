@@ -66,6 +66,7 @@ const STORE_ICON = require('../../assets/icons/store.png');
 // --- END NEW IMPORTS ---
 
 import { sendPushNotification } from '../../services/notifications';
+import { formatAmount } from '../../utils/currency';
 
 // Responsive design helper function
 const getResponsiveValues = () => {
@@ -395,22 +396,36 @@ const PartnerDashboard = ({ navigation }) => {
       const documentsSnapshot = await getDocs(documentsQuery);
       const documentsCount = documentsSnapshot.size;
 
+      // Build revenue from partner appointments (sum of "Votre Total" displayed in RdvConfirm)
+      // This avoids relying solely on partner-specific revenue transaction subcollection
+      // and ensures the dashboard 'Revenus' reflects (paymentAmount - commissionCalculated)
       let revenueGenerated = 0;
       let commissionEarned = 0;
-      const revenueTransactionsQuery = query(
-          collection(db, 'partners', partnerId, 'revenue_transactions')
-      );
-      const revenueTransactionsSnapshot = await getDocs(revenueTransactionsQuery);
 
-      revenueTransactionsSnapshot.forEach(doc => {
-          const transaction = doc.data();
-          if (typeof transaction.amountReceived === 'number' && typeof transaction.commissionAmount === 'number') {
-              revenueGenerated += (transaction.amountReceived - transaction.commissionAmount);
-              commissionEarned += transaction.commissionAmount;
-          } else if (typeof transaction.amountReceived === 'number') {
-              revenueGenerated += transaction.amountReceived;
+      // Query appointments for this partner and compute totals client-side
+      try {
+        const partnerApptsQuery = query(
+          collection(db, 'appointments'),
+          where('partnerId', '==', partnerId)
+        );
+        const partnerApptsSnapshot = await getDocs(partnerApptsQuery);
+
+        partnerApptsSnapshot.forEach(aDoc => {
+          const appt = aDoc.data();
+          // Consider only completed appointments with a recorded payment
+          const isCompleted = appt.status === 'completed' || appt.paymentRecorded === true;
+          const paymentAmount = typeof appt.paymentAmount === 'number' ? appt.paymentAmount : (appt.amountReceived && typeof appt.amountReceived === 'number' ? appt.amountReceived : null);
+          const commission = typeof appt.commissionCalculated === 'number' ? appt.commissionCalculated : (typeof appt.commissionAmount === 'number' ? appt.commissionAmount : 0);
+
+          if (isCompleted && paymentAmount !== null && !Number.isNaN(paymentAmount)) {
+            const partnerTotal = paymentAmount - (commission || 0);
+            revenueGenerated += partnerTotal;
+            commissionEarned += (commission || 0);
           }
-      });
+        });
+      } catch (apptError) {
+        console.warn('Unable to compute revenue from appointments:', apptError);
+      }
 
       setDashboardData(prevData => ({
         ...prevData,
@@ -736,16 +751,18 @@ const PartnerDashboard = ({ navigation }) => {
     {
       icon: <Image source={MONEY_BILL_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
       title: "Revenus",
-      value: `${dashboardData.revenueGenerated.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
+      // Ensure we always display a formatted amount string
+      value: formatAmount(dashboardData.revenueGenerated, { symbol: '$' }),
       color: "#FBBC05",
       onPress: () => navigation.navigate('RdvConfirm')
     },
     {
-      icon: <Image source={MONEY_COMMISSION_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
-      title: "Commission",
-      value: `${dashboardData.commissionEarned.toLocaleString('fr-FR', { style: 'currency', currency: 'USD' })}`,
+      icon: <Image source={RATE_FULL_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
+      title: "Avis Clients",
+      // Show number of reviews received
+      value: reviews?.length || 0,
       color: "#9C27B0",
-      onPress: () => navigation.navigate('RdvConfirm')
+      // Intentionally non-clickable: no onPress handler
     },
     {
       icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
@@ -876,7 +893,7 @@ const PartnerDashboard = ({ navigation }) => {
           </View>
           <View style={styles.quickStatDivider} />
           <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatNumber}>${dashboardData.revenueGenerated.toFixed(0)}</Text>
+            <Text style={styles.quickStatNumber}>{formatAmount(dashboardData.revenueGenerated, { symbol: '$' })}</Text>
             <Text style={styles.quickStatLabel}>Revenus</Text>
           </View>
         </View>
@@ -1050,7 +1067,7 @@ const PartnerDashboard = ({ navigation }) => {
                 >
                   <Text style={styles.paymentSummaryLabel}>Revenus Nets</Text>
                   <Text style={styles.paymentSummaryValue}>
-                    ${dashboardData.revenueGenerated.toFixed(2)}
+                    {formatAmount(dashboardData.revenueGenerated, { symbol: '$' })}
                   </Text>
                 </LinearGradient>
               </View>
@@ -1060,9 +1077,9 @@ const PartnerDashboard = ({ navigation }) => {
                   colors={['#9C27B0', '#8E24AA']}
                   style={styles.paymentCardGradient}
                 >
-                  <Text style={styles.paymentSummaryLabel}>Commission ER</Text>
+                  <Text style={styles.paymentSummaryLabel}>Avis</Text>
                   <Text style={styles.paymentSummaryValue}>
-                    ${dashboardData.commissionEarned.toFixed(2)}
+                    {reviews?.length || 0}
                   </Text>
                 </LinearGradient>
               </View>

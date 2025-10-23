@@ -60,24 +60,28 @@ const UserRdv = () => {
       const q = query(
         collectionGroup(db, 'rdv_reservation'),
         where('clientId', '==', currentUser.uid),
-        where('status', 'in', ['scheduled', 'rescheduled']),
-        orderBy('appointmentDateTime', 'desc')
+        where('status', 'in', ['scheduled', 'rescheduled'])
       );
 
       const querySnapshot = await getDocs(q);
-      const fetchedAppointments = [];
+      let fetchedAppointments = [];
       querySnapshot.forEach((document) => {
         const data = document.data();
-        // Crucial: The full document path is needed for deletion, especially for collection groups.
-        // We'll try to infer it from the collection group structure.
-        // Assuming the path is partners/{partnerId}/rdv_reservation/{appointmentId}
-        const partnerId = document.ref.parent.parent.id; // Get partnerId from the ref path
+        const partnerId = document.ref.parent.parent?.id || null; // Get partnerId from the ref path if available
         fetchedAppointments.push({ 
             id: document.id, 
             partnerId: partnerId, // Save partnerId for deletion
             ...data 
         });
       });
+
+      // Client-side sort by appointmentDateTime desc
+      fetchedAppointments = fetchedAppointments.sort((a, b) => {
+        const aTime = a.appointmentDateTime?.toDate ? a.appointmentDateTime.toDate().getTime() : new Date(a.appointmentDateTime || 0).getTime();
+        const bTime = b.appointmentDateTime?.toDate ? b.appointmentDateTime.toDate().getTime() : new Date(b.appointmentDateTime || 0).getTime();
+        return bTime - aTime;
+      });
+
       setAppointments(fetchedAppointments);
 
     } catch (error) {

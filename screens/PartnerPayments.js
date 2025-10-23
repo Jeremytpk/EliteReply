@@ -76,8 +76,7 @@ const PartnerPayments = ({ navigation }) => {
     try {
       const paymentsQuery = query(
         collection(db, 'payments'),
-        where('partnerId', '==', currentPartner.id),
-        orderBy('createdAt', 'desc')
+        where('partnerId', '==', currentPartner.id)
       );
 
       const unsubscriber = onSnapshot(paymentsQuery, (snapshot) => {
@@ -90,6 +89,8 @@ const PartnerPayments = ({ navigation }) => {
             updatedAt: doc.data().updatedAt?.toDate() || new Date(),
           });
         });
+        // Client-side sort by createdAt desc
+        paymentsData.sort((a, b) => b.createdAt - a.createdAt);
         setPayments(paymentsData);
         setLoading(false);
         setRefreshing(false);

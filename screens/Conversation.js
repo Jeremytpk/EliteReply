@@ -74,10 +74,9 @@ import 'moment/locale/fr';
 
 moment.locale('fr');
 
-import {
-    OPENAI_API_KEY
-} from '../OpenAIConf';
+import { OPENAI_API_KEY } from '@env';
 import OpenAI from 'openai';
+import { openaiClient, callWithRetry } from '../services/openaiClient';
 
 import AppointmentFormModal from '../components/AppointmentFormModal';
 
@@ -896,11 +895,9 @@ const Conversation = ({
 
     // Jey's AI response logic
     const getJeyResponse = useCallback(async (conversationHistory, isInitialMessage = false, intentOverride = null, selectedPartner = null) => {
-        const openai = new OpenAI({
-            apiKey: OPENAI_API_KEY
-        });
+        // use the shared openai client
 
-        if (!OPENAI_API_KEY || OPENAI_API_KEY === 'sk-YOUR_ACTUAL_API_KEY_HERE') {
+            if (!OPENAI_API_KEY || OPENAI_API_KEY === 'sk-YOUR_ACTUAL_API_KEY_HERE' || !openaiClient) {
             Alert.alert('Erreur API', 'Clé API OpenAI non configurée. Veuillez ajouter votre clé.');
             await updateDoc(doc(db, 'tickets', ticketId), {
                 status: 'escalated_to_agent',
@@ -1133,7 +1130,7 @@ const Conversation = ({
                 currentSystemPromptContent += `\n${categorySpecificInstruction}`;
             }
 
-            const response = await openai.chat.completions.create({
+            const response = await callWithRetry(() => openaiClient.chat.completions.create({
                 model: "gpt-3.5-turbo",
                 messages: [{
                     "role": "system",
@@ -1141,7 +1138,7 @@ const Conversation = ({
                 }, ...openaiMessages],
                 max_tokens: 250,
                 temperature: 0.7,
-            });
+            }), { retries: 3, minDelay: 500 });
 
             const jeyText = response.choices[0]?.message?.content?.trim();
 

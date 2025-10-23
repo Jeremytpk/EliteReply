@@ -131,22 +131,24 @@ const RdvConfirm = () => {
 
     setLoading(true);
     try {
-      // Using only partnerId filter to avoid composite index requirement
+      // Query: only filter by partnerId (no orderBy) to avoid composite index requirement.
+      // We'll perform status filtering and ordering on the client side.
       const rdvsQuery = query(
         collection(db, 'appointments'),
-        where('partnerId', '==', currentPartnerId),
-        orderBy('appointmentDateTime', 'desc')
+        where('partnerId', '==', currentPartnerId)
       );
       const rdvQuerySnapshot = await getDocs(rdvsQuery);
-      
-      // Filter for confirmed/completed status in memory to avoid composite index
-      const fetchedRdvs = [];
-      rdvQuerySnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.status === 'confirmed' || data.status === 'completed') {
-          fetchedRdvs.push({ id: doc.id, ...data });
-        }
-      });
+
+      // Client-side filter for confirmed/completed and sort by appointmentDateTime desc
+      const fetchedRdvs = rdvQuerySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(item => item.status === 'confirmed' || item.status === 'completed')
+        .sort((a, b) => {
+          const aTime = a.appointmentDateTime?.toDate ? a.appointmentDateTime.toDate().getTime() : new Date(a.appointmentDateTime || 0).getTime();
+          const bTime = b.appointmentDateTime?.toDate ? b.appointmentDateTime.toDate().getTime() : new Date(b.appointmentDateTime || 0).getTime();
+          return bTime - aTime; // descending
+        });
+
       setRdvs(fetchedRdvs);
 
     } catch (error) {
