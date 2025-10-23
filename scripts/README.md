@@ -1,0 +1,1 @@
+# Deployment scripts\n\nUse deploy_jeyproxy.sh to create Secret Manager secret and deploy the jeyProxy function with secret mapping. See the script header for usage.
