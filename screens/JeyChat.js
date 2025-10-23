@@ -50,8 +50,7 @@ import 'moment/locale/fr';
 
 moment.locale('fr');
 
-import { OPENAI_API_KEY } from '@env';
-import { openaiClient, callWithRetry } from '../services/openaiClient';
+import callJeyProxy from '../services/jeyProxy';
 
 const Conversation = ({ route, navigation }) => {
   const {
@@ -506,28 +505,7 @@ const Conversation = ({ route, navigation }) => {
 
   const getJeyResponse = useCallback(async (conversationHistory, isInitialMessage = false) => {
     console.log(`DEBUG: getJeyResponse called. Is initial message: ${isInitialMessage}.`);
-    if (!OPENAI_API_KEY || OPENAI_API_KEY === 'sk-YOUR_ACTUAL_API_KEY_HERE') {
-      console.error('ERROR: OpenAI API Key is missing or default (or still placeholder).');
-      Alert.alert('Erreur API', 'Clé API OpenAI non configurée. Veuillez ajouter votre clé.');
-      await updateDoc(doc(db, 'tickets', ticketId), {
-          status: 'escalated_to_agent',
-          isAgentRequested: true,
-          lastUpdated: serverTimestamp(),
-      });
-      await updateDoc(doc(db, 'conversations', ticketId), {
-          status: 'escalated_to_agent',
-          isAgentRequested: true,
-          lastUpdated: serverTimestamp(),
-      });
-      await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
-          texte: `Jey rencontre un problème de configuration interne et a escaladé votre demande à un agent humain. Un agent prendra le relais sous peu.`,
-          expediteurId: 'systeme',
-          nomExpediteur: 'Système',
-          createdAt: serverTimestamp(),
-          type: 'text'
-      });
-      return "Désolé, je ne suis pas configuré correctement pour le moment et je ne peux pas vous assister. Votre demande a été escaladée à un agent humain.";
-    }
+  // OpenAI requests are now proxied to the secure backend (jeyProxy). Server-side will validate API key and handle errors.
 
     if (isITSupport) {
         console.log("DEBUG: Current user is IT Support, Jey will not respond.");
@@ -592,16 +570,31 @@ const Conversation = ({ route, navigation }) => {
         content: currentJeyContent,
       });
 
-      console.log("DEBUG: Sending request to OpenAI...");
-      const response = await callWithRetry(() => openaiClient.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: openaiMessages,
-        max_tokens: 150,
-        temperature: 0.7,
-      }), { retries: 3, minDelay: 500 });
-      console.log("DEBUG: OpenAI API response received:", response);
-
-      const jeyText = response.choices[0]?.message?.content?.trim();
+      console.log("DEBUG: Sending request to backend jeyProxy...");
+      let proxyResp;
+      try {
+        console.debug('JeyChat: calling jeyProxy, uid=', auth.currentUser && auth.currentUser.uid);
+        proxyResp = await callJeyProxy(openaiMessages, {
+          systemPrompt: currentJeyContent,
+          max_tokens: 150,
+          temperature: 0.7
+        });
+        console.log("DEBUG: jeyProxy response received:", proxyResp);
+      } catch (err) {
+        console.error('JeyChat: jeyProxy call failed:', err && (err.message || err));
+        if (err && err.status) console.error('JeyChat: jeyProxy status:', err.status, 'code:', err.code, 'details:', err.details);
+        // Insert a system message so the failure is visible in the conversation
+        await addDoc(collection(db, 'tickets', ticketId, 'messages'), {
+          texte: 'Jey failed to respond (backend error).',
+          expediteurId: 'system',
+          nomExpediteur: 'System',
+          createdAt: serverTimestamp(),
+          type: 'system',
+          meta: { jeyProxyError: { message: err && err.message, status: err && err.status, details: err && err.details } }
+        });
+        return;
+      }
+      const jeyText = proxyResp?.data?.choices?.[0]?.message?.content?.trim();
       console.log("DEBUG: Jey's raw response text:", jeyText);
 
       const lowerCaseJeyText = jeyText.toLowerCase();

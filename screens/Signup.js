@@ -271,7 +271,7 @@ const Signup = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: 'white',
     paddingTop: 40,
     paddingBottom: 25,
 

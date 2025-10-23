@@ -583,7 +583,7 @@ export default function App() {
         <Stack.Screen
           name="FAQ"
           component={FAQ}
-          options={{ headerShown: true, title: '' ,headerTitleAlign: 'center', }}
+          options={{ headerShown: true, title: 'FAQ' ,headerTitleAlign: 'center', }}
         />
         <Stack.Screen
           name="News"

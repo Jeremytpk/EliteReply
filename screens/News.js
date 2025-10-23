@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import NewsEditorModal from '../components/NewsEditorModal';
 import { getFirestore, collection, doc, addDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'; 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app } from '../firebase';
@@ -82,22 +84,77 @@ const News = ({ route }) => {
   }, []);
 
   const pickPoster = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need access to your photos to select an image for the news post.');
-      return;
-    }
+    // Offer the user a choice: Take Photo, Pick from Gallery, or Pick a File
+    const pickFromCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Camera permission is required to take a photo.');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (result && (result.canceled === false || result.uri)) {
+          const uri = result.assets ? result.assets[0].uri : result.uri;
+          setNewNews({...newNews, poster: uri});
+        }
+      } catch (err) {
+        console.error('Camera pick error:', err);
+        Alert.alert('Error', 'Unable to open camera');
+      }
+    };
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3], 
-      quality: 0.8,
-    });
+    const pickFromGallery = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'We need access to your photos to select an image for the news post.');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (result && (result.canceled === false || result.uri)) {
+          const uri = result.assets ? result.assets[0].uri : result.uri;
+          setNewNews({...newNews, poster: uri});
+        }
+      } catch (err) {
+        console.error('Gallery pick error:', err);
+        Alert.alert('Error', 'Unable to open gallery');
+      }
+    };
 
-    if (!result.canceled) {
-      setNewNews({...newNews, poster: result.assets[0].uri});
-    }
+    const pickFromFile = async () => {
+      try {
+        const res = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
+        if (res.type === 'success' && res.uri) {
+          setNewNews({...newNews, poster: res.uri});
+        }
+      } catch (err) {
+        console.error('File pick error:', err);
+        Alert.alert('Error', 'Unable to pick file');
+      }
+    };
+
+    // Cross-platform choice dialog
+    Alert.alert(
+      'Select image source',
+      'Choose where to get the news image from',
+      [
+        { text: 'Take Photo', onPress: pickFromCamera },
+        { text: 'Gallery', onPress: pickFromGallery },
+        { text: 'File', onPress: pickFromFile },
+        { text: 'Cancel', style: 'cancel' }
+      ],
+      { cancelable: true }
+    );
   };
 
   const uploadPoster = async (uri) => {
@@ -260,88 +317,17 @@ const News = ({ route }) => {
             <Ionicons name="add" size={28} color="white" />
           </TouchableOpacity>
 
-          <Modal
-            animationType="slide"
-            transparent={true}
+          <NewsEditorModal
             visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <ScrollView contentContainerStyle={styles.modalContent}> 
-                <Text style={styles.modalTitle}>Add New News Article</Text> 
-                
-                <TextInput
-                  style={styles.input}
-                  placeholder="Title"
-                  placeholderTextColor="#999"
-                  value={newNews.title}
-                  onChangeText={(text) => setNewNews({...newNews, title: text})}
-                />
-                
-                <TextInput
-                  style={[styles.input, styles.descriptionInput]}
-                  placeholder="Short Description"
-                  placeholderTextColor="#999"
-                  multiline
-                  numberOfLines={3} 
-                  value={newNews.description}
-                  onChangeText={(text) => setNewNews({...newNews, description: text})}
-                />
-
-                <TextInput
-                  style={[styles.input, styles.moreInfoInput]} 
-                  placeholder="Detailed Information (Blog Content)"
-                  placeholderTextColor="#999"
-                  multiline
-                  numberOfLines={8} 
-                  value={newNews.moreInformation}
-                  onChangeText={(text) => setNewNews({...newNews, moreInformation: text})}
-                />
-                
-                <TouchableOpacity 
-                  style={styles.imagePickerButton}
-                  onPress={pickPoster} 
-                  disabled={uploading} 
-                >
-                  {newNews.poster ? ( 
-                    <Image 
-                      source={{ uri: newNews.poster }} 
-                      style={styles.imagePreviewInButton} 
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    uploading ? (
-                      <ActivityIndicator size="small" color="#0a8fdf" />
-                    ) : (
-                      <Text style={styles.imagePickerText}>Select Poster Image</Text> 
-                    )
-                  )}
-                </TouchableOpacity>
-                
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setModalVisible(false)}
-                    disabled={loading || uploading}
-                  >
-                    <Text style={styles.buttonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.submitButton]}
-                    onPress={handleAddNews}
-                    disabled={loading || uploading} 
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text style={styles.buttonText}>Publish Article</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </Modal>
+            onClose={() => setModalVisible(false)}
+            newNews={newNews}
+            setNewNews={setNewNews}
+            pickPoster={pickPoster}
+            uploading={uploading}
+            loading={loading}
+            handleAddNews={handleAddNews}
+            styles={styles}
+          />
         </>
       )}
     </View>

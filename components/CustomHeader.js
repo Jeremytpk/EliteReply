@@ -43,8 +43,8 @@ const CustomHeader = ({ navigation, route, options, back }) => {
 
 const styles = StyleSheet.create({
   container: {
-    height: Platform.OS === 'ios' ? 88 : 64,
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    height: Platform.OS === 'ios' ? 48 : 40,
+    paddingTop: Platform.OS === 'ios' ? 10 : 0,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,

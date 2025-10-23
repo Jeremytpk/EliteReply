@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { v4 as uuidv4 } from 'uuid';
 import { Ionicons } from '@expo/vector-icons';
 import AppointmentFormModal from '../../components/AppointmentFormModal';
+import COUNTRIES, { countryCodeToFlag } from '../../components/Countries';
 
 // Custom icons
 const ADD_CIRCLE_OUTLINE_ICON = require('../../assets/icons/add_circle.png');
@@ -105,6 +106,25 @@ const PartnerPage = ({ route }) => {
   
   // State for header expansion/collapse
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+
+  // Return a display string for partner country (flag + name) or null
+  const getCountryDisplay = (partner) => {
+    if (!partner) return null;
+    const raw = (partner.pays || partner.country || '').toString().trim();
+    if (!raw) return null;
+
+    const maybeCode = raw.length <= 3 ? raw.toUpperCase() : null;
+    if (maybeCode) {
+      const found = COUNTRIES.find(c => c.code === maybeCode);
+      if (found) return `${found.flag} ${found.name}`;
+      return `${countryCodeToFlag(maybeCode)} ${maybeCode}`;
+    }
+
+    const foundByName = COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase());
+    if (foundByName) return `${foundByName.flag} ${foundByName.name}`;
+
+    return raw;
+  };
 
 
   const fetchUserData = useCallback(async () => {
@@ -828,6 +848,12 @@ const PartnerPage = ({ route }) => {
                   </TouchableOpacity>
                 )}
               </View>
+              {/* Country display: show only the country value right under the business name */}
+              {(partner?.pays || partner?.country) && (
+                <View style={styles.headerCountryRow}>
+                  <Text style={styles.headerCountryValue}>{getCountryDisplay(partner)}</Text>
+                </View>
+              )}
               
               {!isHeaderCollapsed && isHeaderExpanded && (
                 <>
@@ -1390,6 +1416,25 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 6,
     fontWeight: '500',
+  },
+  headerCountryRow: {
+    alignItems: 'center',
+    //marginTop: 6,
+    right: 50,
+    bottom: 10,
+  },
+  headerCountryLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  headerCountryValue: {
+    fontSize: 14,
+    color: '#0b3b6f',
+    fontWeight: '700',
+    marginTop: 2,
   },
   ratingContainer: {
     flexDirection: 'row',

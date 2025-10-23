@@ -318,22 +318,26 @@ const Login = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    bottom: 25,
+    backgroundColor: 'white',
+    bottom: 45,
+    //top: 25,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
     //paddingTop: 50,
-    //paddingBottom: 25,
+    paddingBottom: -25,
   },
   scrollContainer: {
     paddingHorizontal: 24,
     //paddingBottom: 10,
     paddingTop: 10,
-
   },
   logoContainer: {
     alignItems: 'center',
     marginBottom: 40,
     marginTop: 10,
-    top: 30
+    top: 10
 
   },
   logo: {
@@ -343,14 +347,14 @@ const styles = StyleSheet.create({
     top: 60,
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 22,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: 8,
-    marginTop: 70,
+    marginTop: 60,
     textAlign: 'center',
   },
   subtitle: {
@@ -443,7 +447,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 40
+    marginBottom: 40,
   },
   footerText: {
     color: '#64748B',

@@ -65,7 +65,7 @@ const Deconnection = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EBF3F8',
+    backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

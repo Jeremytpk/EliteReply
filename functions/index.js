@@ -1513,3 +1513,201 @@ exports.testReceiptEmail = onRequest({
     });
   }
 });
+
+// --- OpenAI Proxy for Jey (secure backend) ---
+// Load .env for local testing/emulator. In production Cloud Functions use environment variables or Secret Manager.
+try {
+  // eslint-disable-next-line global-require
+  const dotenv = require('dotenv');
+  dotenv.config();
+  console.log('functions: dotenv loaded for local env');
+} catch (e) {
+  // ignore if dotenv not installed in production
+}
+
+// ----------------------------------------------------------------------
+// *** START OF CRITICAL FIXES FOR OPENAI LIBRARY SYNTAX ***
+// ----------------------------------------------------------------------
+// 1. UPDATED IMPORT: Use only the top-level 'OpenAI' class for modern library versions
+const { OpenAI } = require('openai');
+
+// Utility: simple exponential backoff
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const callOpenAIWithRetries = async (openai, payload, { retries = 3, minDelay = 500 } = {}) => {
+  let attempt = 0;
+  while (attempt < retries) {
+    try {
+      // 2. UPDATED API CALL: Use the modern SDK function structure
+      const resp = await openai.chat.completions.create(payload);
+      return resp; // The modern SDK returns the response object, not resp.data
+    } catch (err) {
+      attempt++;
+      const isRetryable = !err.response || err.response.status >= 500 || err.response.status === 429;
+      console.error(`OpenAI chat.completions.create failed (attempt ${attempt}):`, err.message || err);
+      if (!isRetryable || attempt >= retries) throw err;
+      await delay(minDelay * Math.pow(2, attempt));
+    }
+  }
+};
+
+// Simple per-user rate limit: max 30 requests per 60 seconds
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 30;
+
+exports.jeyProxy = onRequest({
+  cors: {
+    origin: [
+      'http://localhost:19000',
+      'http://localhost:8081',
+      /https:\/\/.*\.web\.app$/,
+      /https:\/\/.*\.firebaseapp\.com$/
+    ],
+    methods: ['POST', 'OPTIONS']
+  },
+  secrets: ["OPENAI_API_KEY"] // CRITICAL CONFIG FIX: Binding the secret
+}, async (req, res) => {
+  console.log('*** jeyProxy Triggered ***');
+  
+  // TEMPORARY DEBUG LINE (Kept to force deploy)
+  console.log('JeyProxy: Checking for updated configuration (v2.1)'); 
+  
+  if (req.method === 'OPTIONS') return res.status(200).send('ok');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const idToken = req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.split('Bearer ')[1] : null;
+
+    if (!idToken) {
+      console.warn('jeyProxy: missing Authorization Bearer token');
+      return res.status(401).json({ error: 'Unauthorized: Missing ID token', details: 'Missing Authorization Bearer token in request headers' });
+    }
+
+    // Verify Firebase ID token
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(idToken);
+      console.log('jeyProxy: verified idToken for uid=', decoded.uid);
+    } catch (err) {
+      console.error('jeyProxy: token verification failed:', err && err.code, err && err.message);
+      // Provide the code/message to help debug token/project mismatches (safe for logs)
+      return res.status(401).json({ error: 'Unauthorized: Invalid ID token', details: err && err.message, code: err && err.code });
+    }
+
+    const uid = decoded.uid;
+
+    // Rate limiting using Firestore document per user
+    const rlRef = db.collection('_internal').doc(`rate_limit_jey_${uid}`);
+    const now = Date.now();
+    // Rate limit transaction with a small retry loop to avoid transient transaction failures
+    const MAX_RL_TRANSACTION_ATTEMPTS = 2;
+    let rlAttempt = 0;
+    try {
+      while (rlAttempt < MAX_RL_TRANSACTION_ATTEMPTS) {
+        try {
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(rlRef);
+            if (!snap.exists) {
+              tx.set(rlRef, { windowStart: now, count: 1 });
+            } else {
+              const data = snap.data();
+              if (now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
+                tx.set(rlRef, { windowStart: now, count: 1 });
+              } else {
+                if ((data.count || 0) >= RATE_LIMIT_MAX) {
+                  // Use HttpsError so caller can detect resource-exhausted
+                  throw new functions.https.HttpsError('resource-exhausted', 'Rate limit exceeded');
+                }
+                tx.update(rlRef, { count: (data.count || 0) + 1 });
+              }
+            }
+          });
+          // success - break the retry loop
+          break;
+        } catch (innerErr) {
+          rlAttempt++;
+          // If it's a resource-exhausted HttpsError, rethrow immediately
+          if (innerErr && innerErr.code === 'resource-exhausted') {
+            throw innerErr;
+          }
+          console.warn(`jeyProxy: rate-limit transaction attempt ${rlAttempt} failed:`, innerErr && innerErr.message);
+          if (rlAttempt >= MAX_RL_TRANSACTION_ATTEMPTS) {
+            // rethrow so outer catch handles it
+            throw innerErr;
+          }
+          // small backoff before retry
+          await delay(200);
+        }
+      }
+    } catch (rlErr) {
+      if (rlErr && rlErr.code === 'resource-exhausted') {
+        console.log('jeyProxy: user exceeded rate limit');
+        return res.status(429).json({ error: 'Rate limit exceeded' });
+      }
+      console.error('jeyProxy: Rate limit transaction error:', rlErr && (rlErr.stack || rlErr.message || rlErr));
+      return res.status(500).json({ error: 'Rate limit check failed', details: rlErr && (rlErr.message || String(rlErr)) });
+    }
+
+    const { messages, max_tokens = 250, temperature = 0.7, systemPrompt } = req.body;
+    if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'Invalid messages array' });
+
+    let openaiKey = process.env.OPENAI_API_KEY; // Reads the bound secret first
+    let openaiKeySource = 'env (Secret)';
+    
+    // Fallback logic kept for legacy config or other scenarios
+    if (!openaiKey) {
+      try {
+        const cfg = functions.config && functions.config();
+        if (cfg && cfg.openai) {
+          // Check for all possible legacy config names
+          openaiKey = cfg.openai.api_key || cfg.openai.apikey || cfg.openai.key || null; 
+          openaiKeySource = 'functions.config (legacy)';
+        }
+      } catch (e) {
+        console.warn('jeyProxy: functions.config() not available or failed', e && e.message);
+      }
+    }
+
+    if (!openaiKey) {
+      console.error('jeyProxy: OpenAI API key not found in env (Secret) or functions.config (Legacy)');
+      // Allow a guarded dev fallback for local testing
+      const isEmulator = !!process.env.FIREBASE_AUTH_EMULATOR_HOST || !!process.env.FIREBASE_FIRESTORE_EMULATOR_HOST;
+      const allowDev = process.env.JEY_ALLOW_DEV_FALLBACK === '1';
+      if (isEmulator || allowDev) {
+        console.log('jeyProxy: returning guarded development response for Jey (emulator or JEY_ALLOW_DEV_FALLBACK=1)');
+        return res.json({ success: true, data: {
+          id: 'dev-fake-response',
+          object: 'chat.completion',
+          choices: [
+            { index: 0, message: { role: 'assistant', content: 'Bonjour, je suis Jey (mode développement). Voici une réponse de test.' }, finish_reason: 'stop' }
+          ],
+          usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+        }});
+      }
+      return res.status(500).json({ error: 'OpenAI API key not configured on functions environment' });
+    }
+    console.log(`jeyProxy: using OpenAI key from ${openaiKeySource}`);
+
+    // 3. UPDATED INITIALIZATION: Use the modern OpenAI constructor directly
+    const openai = new OpenAI({ apiKey: openaiKey });
+
+    const payload = {
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'system', content: systemPrompt || 'You are Jey, assistant for EliteReply. Speak French.' }, ...messages],
+      max_tokens,
+      temperature
+    };
+
+    // The function call now uses the corrected callOpenAIWithRetries, which uses the modern API method.
+    const openaiResp = await callOpenAIWithRetries(openai, payload, { retries: 3, minDelay: 500 });
+
+    // Return the full model response object (trim large fields)
+    return res.json({ success: true, data: openaiResp });
+  } catch (error) {
+    console.error('jeyProxy error:', error);
+    if (error instanceof functions.https.HttpsError) {
+      return res.status(429).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});

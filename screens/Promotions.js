@@ -14,6 +14,7 @@ import {
   Image // Import Image
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // Keep Ionicons/Feather if still used elsewhere
+import * as ImagePicker from 'expo-image-picker';
 // --- MODIFIED: Import db and storage directly from your firebase.js ---
 import { db, storage } from '../firebase'; // Assuming 'db' and 'storage' are exported from firebase.js
 // --- END MODIFIED ---
@@ -26,6 +27,7 @@ const IMAGE_EMPTY_STATE_ICON = require('../assets/icons/promos.png'); // For emp
 const ADD_ICON_PROMO = require('../assets/icons/add_circle.png'); // For add button
 const CLOSE_ICON = require('../assets/icons/close_circle.png'); // For modal close button
 const IMAGE_PICKER_ICON = require('../assets/icons/image.png'); // For image picker button
+import PromotionEditorModal from '../components/PromotionEditorModal'; // Import the new modal component
 // --- END NEW IMPORTS ---
 
 // --- MODIFIED: Add 'navigation' as a prop ---

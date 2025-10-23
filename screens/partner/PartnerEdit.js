@@ -12,6 +12,8 @@ import {
   ScrollView,
   SafeAreaView,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { db, storage } from '../../firebase'; // Assuming firebase.js is in parent directory
@@ -20,6 +22,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import moment from 'moment';
+import COUNTRIES, { countryCodeToFlag } from '../../components/Countries';
 
 const PartnerEdit = ({ route, navigation }) => {
   const { partnerId } = route.params;
@@ -48,6 +51,11 @@ const PartnerEdit = ({ route, navigation }) => {
   const [adresse, setAdresse] = useState(''); // NEW
   const [siteWeb, setSiteWeb] = useState(''); // NEW
 
+  // Country selection
+  const [country, setCountry] = useState('');
+  const [countryModalVisible, setCountryModalVisible] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+
 
   useEffect(() => {
     const fetchPartnerDetails = async () => {
@@ -75,6 +83,7 @@ const PartnerEdit = ({ route, navigation }) => {
           setAdresse(data.adresse || ''); // NEW: Populate adresse
           setSiteWeb(data.siteWeb || ''); // NEW: Populate siteWeb
           setCurrentLogoUrl(data.logo || null); // Use 'logo' field
+          setCountry(data.pays || data.country || '');
 
           // Populate promotion states
           setIsPromoted(data.estPromu || false);
@@ -204,8 +213,8 @@ const PartnerEdit = ({ route, navigation }) => {
 
       const partnerRef = doc(db, 'partners', partnerId);
       const updateData = {
-        name: nom.trim(),
-        category: categorie.trim(),
+        nom: nom.trim(), // Use 'nom' for consistency in DB if client uses 'name'
+        categorie: categorie.trim(), // Use 'categorie'
         ceo: ceo.trim(),
         manager: manager.trim(),
         description: description.trim(),
@@ -218,6 +227,19 @@ const PartnerEdit = ({ route, navigation }) => {
         // Promotion fields
         estPromu: isPromoted,
       };
+      
+      // Ensure that fields like 'name' and 'category' are preserved in case the DB is using English keys
+      // While the states are in French, the database keys were loaded/saved with what appears to be a mix.
+      // Assuming a strict DB structure using English keys for global data:
+      updateData.name = nom.trim();
+      updateData.category = categorie.trim();
+      
+      // Handle data cleanup if values are empty after trim
+      Object.keys(updateData).forEach(key => {
+        if (typeof updateData[key] === 'string' && updateData[key] === '') {
+          updateData[key] = deleteField();
+        }
+      });
 
       if (isPromoted) {
         // Recalculate promotion end date if duration changed or if it was null
@@ -231,6 +253,12 @@ const PartnerEdit = ({ route, navigation }) => {
         updateData.promotionDuration = deleteField();
         updateData.promotionStartDate = deleteField();
         updateData.promotionEndDate = deleteField();
+      }
+      // Persist country (pays) or remove if empty
+      if (country) {
+        updateData.pays = country;
+      } else {
+        updateData.pays = deleteField();
       }
       
       await updateDoc(partnerRef, updateData);
@@ -253,18 +281,76 @@ const PartnerEdit = ({ route, navigation }) => {
       </View>
     );
   }
+  
+  const filteredCountries = COUNTRIES.filter(c => 
+    c.name.toLowerCase().includes(countrySearch.trim().toLowerCase()) || 
+    c.code.toLowerCase().includes(countrySearch.trim().toLowerCase())
+  );
+  
+  const renderCountryItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.countryModalItem}
+      onPress={() => {
+        setCountry(item.code);
+        setCountryModalVisible(false);
+        setCountrySearch(''); // Clear search on selection
+      }}
+    >
+      <Text style={styles.countryFlag}>{item.flag}</Text>
+      <Text style={styles.countryName}>{item.name}</Text>
+      <Ionicons name={item.code === country ? "checkmark-circle" : "ellipse-outline"} size={20} color={item.code === country ? "#34C759" : "#D1D5DB"} />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollViewContent}>
-        <View style={styles.header}>
+      <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#2D3748" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Modifier Partenaire</Text>
           <View style={{ width: 24 }} /> {/* Placeholder for consistent spacing */}
         </View>
+        
+        {/* Country selection modal - Full Screen for better UX */}
+        <Modal
+          animationType="slide"
+          transparent={false}
+          visible={countryModalVisible}
+          onRequestClose={() => {setCountryModalVisible(false); setCountrySearch('');}}
+        >
+          <SafeAreaView style={styles.countryModalContainer}>
+            <View style={styles.countryModalHeader}>
+              <TouchableOpacity onPress={() => {setCountryModalVisible(false); setCountrySearch('');}}>
+                <Ionicons name="close" size={28} color="#2D3748" />
+              </TouchableOpacity>
+              <Text style={styles.countryModalTitle}>Sélectionnez un pays</Text>
+              <View style={{ width: 28 }} />
+            </View>
+            
+            <View style={styles.countryModalSearchBar}>
+              <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+              <TextInput
+                placeholder="Rechercher par nom ou code..."
+                placeholderTextColor="#9CA3AF"
+                value={countrySearch}
+                onChangeText={setCountrySearch}
+                style={styles.countryModalSearchInput}
+              />
+            </View>
+            
+            <FlatList
+              data={filteredCountries}
+              keyExtractor={(item) => item.code}
+              renderItem={renderCountryItem}
+              ItemSeparatorComponent={() => <View style={styles.countryModalSeparator} />}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+            />
+          </SafeAreaView>
+        </Modal>
 
+      <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        
         <View style={styles.card}>
           <TouchableOpacity onPress={pickImage} style={styles.imagePickerContainer}>
             <Image
@@ -285,8 +371,18 @@ const PartnerEdit = ({ route, navigation }) => {
           <TextInput style={[styles.input, styles.descriptionInput]} placeholder="Description" multiline value={description} onChangeText={setDescription} />
           <TextInput style={styles.input} placeholder="Email" keyboardType="email-address" value={email} onChangeText={setEmail} />
           <TextInput style={styles.input} placeholder="Numéro de téléphone" keyboardType="phone-pad" value={numeroTelephone} onChangeText={setNumeroTelephone} />
-          <TextInput style={styles.input} placeholder="Adresse" value={adresse} onChangeText={setAdresse} /> {/* NEW: Input for adresse */}
-          <TextInput style={styles.input} placeholder="Site Web" keyboardType="url" autoCapitalize="none" value={siteWeb} onChangeText={setSiteWeb} /> {/* NEW: Input for siteWeb */}
+          <TextInput style={styles.input} placeholder="Adresse" value={adresse} onChangeText={setAdresse} /> 
+          <TextInput style={styles.input} placeholder="Site Web" keyboardType="url" autoCapitalize="none" value={siteWeb} onChangeText={setSiteWeb} /> 
+
+          <View style={{ marginBottom: 15 }}>
+            <Text style={styles.modalLabel}>Pays</Text>
+            <TouchableOpacity style={styles.countrySelectInput} onPress={() => setCountryModalVisible(true)}>
+              <Text style={styles.countrySelectText}>
+                {country ? `${countryCodeToFlag(country)}  ${COUNTRIES.find(c => c.code === country)?.name || country}` : 'Sélectionner un pays'}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
 
 
           <Text style={styles.sectionHeading}>Statut de Promotion</Text>
@@ -352,8 +448,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F4F8',
   },
   scrollViewContent: {
-    padding: 20,
-    paddingTop: Platform.OS === 'android' ? 30 : 0,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    paddingTop: 10,
   },
   loadingContainer: {
     flex: 1,
@@ -370,7 +467,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    padding: 15,
+    backgroundColor: 'white', // Ensure header background is clean
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backButton: {
     padding: 8,
@@ -407,10 +507,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: '#4a6bff', // Changed background color to primary
     borderRadius: 18,
     padding: 8,
     color: 'white',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   imageUploadIndicator: {
     position: 'absolute',
@@ -428,6 +531,22 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
     backgroundColor: '#F9FAFB',
+    color: '#333',
+  },
+  countrySelectInput: { // New style for the selection input
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#F9FAFB',
+    color: '#333',
+  },
+  countrySelectText: {
+    fontSize: 16,
     color: '#333',
   },
   descriptionInput: {
@@ -498,7 +617,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
-  modalLabel: { // Re-using style for consistency with Payments modal
+  modalLabel: { 
     fontSize: 16,
     fontWeight: '600',
     color: '#2D3748',
@@ -519,6 +638,62 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: '#333',
+  },
+  
+  // --- Country Modal Styles ---
+  countryModalContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  countryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  countryModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2D3748',
+  },
+  countryModalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    margin: 15,
+  },
+  countryModalSearchInput: {
+    flex: 1,
+    height: 45,
+    fontSize: 16,
+    color: '#333',
+  },
+  countryModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F8',
+  },
+  countryFlag: {
+    fontSize: 24,
+    marginRight: 15,
+  },
+  countryName: {
+    flex: 1,
+    fontSize: 17,
+    color: '#2D3748',
+  },
+  countryModalSeparator: {
+    height: 1,
+    backgroundColor: '#F0F4F8',
+    marginHorizontal: 0,
   },
 });
 

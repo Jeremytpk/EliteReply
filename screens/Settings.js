@@ -340,7 +340,7 @@ const Paramètres = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EBF3F8',
+    backgroundColor: 'white',
   },
   contentContainer: {
     padding: 20,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EBF3F8',
     borderRadius: 20,
     paddingVertical: 30,
     paddingHorizontal: 25,

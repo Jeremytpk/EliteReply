@@ -1146,7 +1146,7 @@ const Dashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#f4f4f4',
+    backgroundColor: 'white',
     padding: 20,
     //marginTop: 18,
   },
@@ -1159,7 +1159,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    //marginBottom: 4,
+    bottom: 20,
   },
   greetingAndPremiumContainer: {
     flexDirection: 'row',
@@ -1183,7 +1184,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   profileButton: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: 'white',
     borderRadius: 20,
     padding: 8,
   },
@@ -1281,7 +1282,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4',
     borderRadius: 12,
     padding: 16,
     width: '48%',
@@ -1319,7 +1320,7 @@ const styles = StyleSheet.create({
   },
   optionCard: {
     width: '48%',
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -1348,7 +1349,7 @@ const styles = StyleSheet.create({
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f4f4f4',
+    backgroundColor: 'white',
     padding: 12,
     borderRadius: 8,
     marginTop: -30,

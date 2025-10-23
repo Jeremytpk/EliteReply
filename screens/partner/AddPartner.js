@@ -18,6 +18,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'; // Keep Ionicons/MaterialIcons if still used elsewhere
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import COUNTRIES, { countryCodeToFlag } from '../../components/Countries';
 import { db, storage } from '../../firebase'; // Ensure storage is imported
 import { collection, doc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore'; // Removed getFirestore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Removed getStorage
@@ -38,6 +39,11 @@ const CLOSE_ICON = require('../../assets/icons/close_circle.png');
 const AddPartner = () => {
   const navigation = useNavigation();
 
+  // Country picker state
+  const [country, setCountry] = useState(''); // store ISO code, e.g. 'FR'
+  const [countryModalVisible, setCountryModalVisible] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+
   const [businessName, setBusinessName] = useState('');
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState(''); // This will now hold the category ID
@@ -55,6 +61,11 @@ const AddPartner = () => {
   const getCategoryInfo = (categoryId) => {
     return APP_CATEGORIES.find(cat => cat.id === categoryId) || { name: 'Sélectionnez une catégorie', icon: 'category' };
   };
+
+  const filteredCountries = COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(countrySearch.trim().toLowerCase()) ||
+    c.code.toLowerCase().includes(countrySearch.trim().toLowerCase())
+  );
 
   useEffect(() => {
     (async () => {
@@ -234,6 +245,17 @@ const AddPartner = () => {
           </View>
 
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Pays</Text>
+            <TouchableOpacity
+              style={[styles.input, styles.categorySelectButton]}
+              onPress={() => setCountryModalVisible(true)}
+            >
+              <Text style={{ fontSize: 18 }}>{country ? `${countryCodeToFlag(country)}  ${country}` : 'Sélectionner un pays'}</Text>
+              <Image source={ARROW_DROP_DOWN_ICON} style={styles.customDropdownIcon} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email <Text style={styles.required}>*</Text></Text>
             <TextInput
               style={styles.input}
@@ -350,6 +372,50 @@ const AddPartner = () => {
                   {category === item.id && (
                     <Image source={CHECK_CIRCLE_ICON} style={styles.customModalCheckIcon} />
                   )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Country selection modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={countryModalVisible}
+        onRequestClose={() => setCountryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { width: '95%', maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sélectionnez un pays</Text>
+              <TouchableOpacity onPress={() => setCountryModalVisible(false)}>
+                <Image source={CLOSE_ICON} style={styles.customModalCloseIcon} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+              <TextInput
+                placeholder="Rechercher un pays"
+                value={countrySearch}
+                onChangeText={setCountrySearch}
+                style={[styles.input, { marginBottom: 8 }]}
+              />
+            </View>
+            <FlatList
+              data={filteredCountries}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalCategoryItem}
+                  onPress={() => {
+                    setCountry(item.code);
+                    setCountryModalVisible(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 18, marginRight: 12 }}>{countryCodeToFlag(item.code)}</Text>
+                  <Text style={styles.modalCategoryText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
               ItemSeparatorComponent={() => <View style={styles.separator} />}

@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '../../firebase';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigation } from '@react-navigation/native';
+import COUNTRIES, { countryCodeToFlag } from '../../components/Countries';
 
 // --- NEW: Import your custom icons ---
 const ARROW_FORWARD_ICON = require('../../assets/icons/arrow_forward.png'); // For products/documents/revenues buttons
@@ -223,6 +224,29 @@ const PartnerDetails = ({ route }) => {
     }
   };
 
+  // Return a display string for partner country (flag + name) or null
+  const getCountryDisplay = (partner) => {
+    if (!partner) return null;
+    const raw = (partner.pays || partner.country || '').toString().trim();
+    if (!raw) return null;
+
+    // If looks like an ISO code (2 letters) use code lookup
+    const maybeCode = raw.length <= 3 ? raw.toUpperCase() : null;
+    if (maybeCode) {
+      const found = COUNTRIES.find(c => c.code === maybeCode);
+      if (found) return `${found.flag} ${found.name}`;
+      // fallback to emoji flag + code
+      return `${countryCodeToFlag(maybeCode)} ${maybeCode}`;
+    }
+
+    // otherwise try to match by name (case-insensitive)
+    const foundByName = COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase());
+    if (foundByName) return `${foundByName.flag} ${foundByName.name}`;
+
+    // final fallback: return raw string
+    return raw;
+  };
+
 
   if (loading || !partner) {
     return (
@@ -249,6 +273,12 @@ const PartnerDetails = ({ route }) => {
       <View style={styles.infoContainer}>
         <Text style={styles.name}>{partner.nom}</Text>
         <Text style={styles.category}>Catégorie: {partner.categorie}</Text>
+        {(partner.pays || partner.country) && (
+          <View style={styles.countryRow}>
+            <Text style={styles.countryLabel}>Pays</Text>
+            <Text style={styles.countryValue}>{getCountryDisplay(partner)}</Text>
+          </View>
+        )}
         {partner.ceo && <Text style={styles.infoText}>CEO: {partner.ceo}</Text>}
         {partner.manager && <Text style={styles.infoText}>Manager: {partner.manager}</Text>}
         {partner.adresse && <Text style={styles.infoText}>Adresse: {partner.adresse}</Text>}
@@ -520,7 +550,7 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 16,
     color: '#64748b',
-    marginBottom: 16,
+    marginBottom: 10,
     textAlign: 'center',
     fontWeight: '500',
     textTransform: 'uppercase',
@@ -628,6 +658,24 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     alignSelf: 'flex-start',
+  },
+  countryRow: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 28,
+  },
+  countryLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  countryValue: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '700',
   },
   additionalButtonsContainer: {
     flexDirection: 'column',
