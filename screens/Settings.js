@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 
 // --- NEW: Import your custom icons ---
 const USER_ICON = require('../assets/icons/user.png');
@@ -29,11 +29,69 @@ const LOGOUT_ICON = require('../assets/icons/logout.png');
 const RIGHT_ENTER_ICON = require('../assets/icons/right_enter.png');
 // --- END NEW IMPORTS ---
 
+// --- JEY'S NEW COMPONENT: Professional Step Tracker ---
+const StepTracker = ({ status }) => {
+  const steps = [
+    { id: 'pending', name: 'Soumis', color: '#FF9500', icon: 'time' },
+    { id: 'on_work', name: 'Évaluation', color: '#007AFF', icon: 'cube' },
+    { id: 'accepted', name: 'Accepté', color: '#34C759', icon: 'checkmark-circle' },
+    { id: 'rejected', name: 'Rejeté', color: '#EF4444', icon: 'close-circle' },
+  ];
+
+  const currentStatusIndex = steps.findIndex(step => step.id === status);
+  
+  return (
+    <View style={stepTrackerStyles.trackerContainer}>
+      {steps.map((step, index) => {
+        let isActive = index <= currentStatusIndex;
+        let isRejected = status === 'rejected' && index === 3;
+        let finalColor = isRejected ? step.color : (isActive && status !== 'rejected' ? step.color : '#A0AEC0');
+        let isFinalActive = isRejected || (status !== 'rejected' && index === currentStatusIndex);
+        
+        // Handle rejected status coloring for previous steps
+        if (status === 'rejected' && index < 3) {
+            finalColor = '#A0AEC0'; // Previous steps are greyed out if rejected
+            isActive = false;
+        }
+
+        return (
+          <View key={step.id} style={stepTrackerStyles.stepWrapper}>
+            <View style={stepTrackerStyles.stepIndicator}>
+              <Ionicons
+                name={step.icon}
+                size={22}
+                color={finalColor}
+              />
+              {/* Line connector (excluding the last step) */}
+              {index < steps.length - 1 && (
+                <View style={[
+                  stepTrackerStyles.connectorLine,
+                  { backgroundColor: isActive && status !== 'rejected' ? step.color : '#E2E8F0' },
+                  isFinalActive && stepTrackerStyles.connectorActive,
+                ]} />
+              )}
+            </View>
+            <Text style={[stepTrackerStyles.stepText, { color: finalColor, fontWeight: isFinalActive ? '700' : '500' }]}>
+              {step.name}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+// --- END JEY'S NEW COMPONENT ---
+
 const Paramètres = () => {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [applicationData, setApplicationData] = useState(null);
+  const [loadingApplication, setLoadingApplication] = useState(false);
+  
+  // --- JEY'S NEW STATE: Toggle visibility for application details ---
+  const [isApplicationSectionOpen, setIsApplicationSectionOpen] = useState(false);
 
   // --- States for Change Password Modal ---
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -81,6 +139,62 @@ const Paramètres = () => {
       fetchUserData();
     }
   }, [isFocused]);
+
+  // Real-time application listener for the current user's email (updates UI when status changes)
+  useEffect(() => {
+    if (!auth.currentUser || !auth.currentUser.email) return;
+    const userEmail = auth.currentUser.email.toLowerCase();
+    setLoadingApplication(true);
+
+    // Listen for applications where applicantInfo.email == userEmail
+    const q1 = query(collection(db, 'applications'), where('applicantInfo.email', '==', userEmail));
+    const unsub1 = onSnapshot(q1, snapshot => {
+      let found = null;
+      snapshot.forEach(d => {
+        found = { id: d.id, ...d.data() };
+      });
+      if (found) {
+        setApplicationData(found);
+        setLoadingApplication(false);
+      }
+    }, err => {
+      console.error('Error listening to applications (nested email):', err);
+    });
+
+    // Also listen for applications where top-level email == userEmail (in case data stored differently)
+    const q2 = query(collection(db, 'applications'), where('email', '==', userEmail));
+    const unsub2 = onSnapshot(q2, snapshot => {
+      let found = null;
+      snapshot.forEach(d => {
+        found = { id: d.id, ...d.data() };
+      });
+      if (found) {
+        setApplicationData(found);
+        setLoadingApplication(false);
+      }
+    }, err => {
+      console.error('Error listening to applications (top-level email):', err);
+    });
+
+    // If neither query returns anything within a short time, clear loading flag
+    const fallback = setTimeout(() => setLoadingApplication(false), 2000);
+
+    return () => {
+      unsub1();
+      unsub2();
+      clearTimeout(fallback);
+    };
+  }, [userData]);
+
+  const formatDateShort = (d) => {
+    try {
+      const date = d && d.toDate ? d.toDate() : (d ? new Date(d) : null);
+      if (!date) return 'N/A';
+      return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) {
+      return 'N/A';
+    }
+  };
 
   // --- Handle Password Change ---
   const handleChangePassword = async () => {
@@ -149,32 +263,37 @@ const Paramètres = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Enhanced Profile Section */}
-      <View style={styles.profileCard}>
-        {profileImageSource ? (
-          <Image
-            source={profileImageSource}
-            style={styles.profileImage}
-          />
-        ) : (
-          <View style={styles.profileImagePlaceholder}>
-            <Ionicons name="person" size={70} color="#E0F2F7" />
-          </View>
-        )}
+      {/* Enhanced Profile Section (Refined for Professional & Friendly Look) */}
+      <View style={styles.profileCardFriendly}>
+        <View style={styles.avatarWrapper}>
+          {profileImageSource ? (
+            <Image source={profileImageSource} style={styles.profileImageSmall} />
+          ) : (
+            <View style={styles.profileImagePlaceholderSmall}>
+              <Ionicons name="person" size={36} color="#fff" />
+            </View>
+          )}
+        </View>
 
-        <View style={styles.userInfoContainer}>
-          <Text style={styles.userName}>{userData?.name || 'Utilisateur Inconnu'}</Text>
-          {userData?.email && <Text style={styles.userEmail}>{userData.email}</Text>}
+        <View style={styles.userInfoContainerRow}>
+          <Text style={styles.userNameGreeting}>
+            Bonjour,{' '}
+            <Text style={styles.userNameFriendly}>
+              {userData?.name ? userData.name.split(' ')[0] : 'Utilisateur'}
+            </Text>
+            ! 👋
+          </Text>
+          {userData?.email && <Text style={styles.userEmailRow}>{userData.email}</Text>}
 
           {(userData?.role === 'ITSupport' || userData?.role === 'Admin') && (
-            <View style={styles.roleDetailsContainer}>
+            <View style={styles.roleDetailsInline}>
               {userData?.department && (
-                <Text style={styles.userDetail}>
+                <Text style={styles.userDetailInline}>
                   <Ionicons name="briefcase-outline" size={14} color="#6B7280" /> {userData.department}
                 </Text>
               )}
               {userData?.position && (
-                <Text style={styles.userDetail}>
+                <Text style={styles.userDetailInline}>
                   <Ionicons name="cube-outline" size={14} color="#6B7280" /> {userData.position}
                 </Text>
               )}
@@ -182,6 +301,62 @@ const Paramètres = () => {
           )}
         </View>
       </View>
+
+      {/* Application Progress Section (Now Collapsible) */}
+      {applicationData && (
+        <View style={styles.settingsSection}>
+          <TouchableOpacity
+            style={styles.sectionTitleContainer}
+            onPress={() => setIsApplicationSectionOpen(!isApplicationSectionOpen)}
+          >
+            {/* JEY'S IMPROVEMENT: More professional title and toggle icon */}
+            <Text style={styles.sectionTitle}>Suivi de Candidature Partenaire</Text>
+            <Ionicons
+              name={isApplicationSectionOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={24}
+              color="#2D3748"
+            />
+          </TouchableOpacity>
+
+          {loadingApplication ? (
+            <ActivityIndicator size="small" color="#0a8fdf" style={{ marginTop: 10 }} />
+          ) : (
+            <>
+              {/* Professional Stepper UI visible when the section is closed (Default behavior) */}
+              {!isApplicationSectionOpen && (
+                <StepTracker status={applicationData.status} />
+              )}
+              
+              {/* Detailed Card visible only when the section is open */}
+              {isApplicationSectionOpen && (
+                <View style={styles.applicationCard}>
+                  <Text style={styles.applicationBusiness}>{applicationData.businessInfo?.businessName || applicationData.businessName || 'Mon Entreprise'}</Text>
+                  <View style={styles.applicationRow}>
+                    <Text style={styles.applicationLabel}>Statut Actuel:</Text>
+                    <Text style={styles.applicationValue}>
+                      {(applicationData.status && applicationData.status.charAt(0).toUpperCase() + applicationData.status.slice(1)) || 'Inconnu'}
+                    </Text>
+                  </View>
+                  <View style={styles.applicationRow}>
+                    <Text style={styles.applicationLabel}>Soumis le:</Text>
+                    <Text style={styles.applicationValue}>{formatDateShort(applicationData.createdAt)}</Text>
+                  </View>
+                  <View style={styles.applicationRow}>
+                    <Text style={styles.applicationLabel}>Dernière mise à jour:</Text>
+                    <Text style={styles.applicationValue}>{formatDateShort(applicationData.updatedAt)}</Text>
+                  </View>
+
+                  <View style={{ marginTop: 15, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 15 }}>
+                    <Text style={styles.applicationBusiness}>Progression Visuelle</Text>
+                    <StepTracker status={applicationData.status} />
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
+
 
       {/* Account Settings Section */}
       <View style={styles.settingsSection}>
@@ -225,8 +400,8 @@ const Paramètres = () => {
           onPress={() => navigation.navigate('ClientReceipts')}
         >
           <View style={styles.settingItemContent}>
-            <Ionicons name="receipt-outline" size={24} color="#28a745" />
-            <Text style={styles.settingText}>    Mes Reçus</Text>
+            <Ionicons name="receipt-outline" size={24} color="#28a745" style={{ marginRight: 18 }} />
+            <Text style={styles.settingText}>Mes Reçus</Text>
           </View>
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
         </TouchableOpacity>
@@ -337,6 +512,43 @@ const Paramètres = () => {
 };
 
 
+const stepTrackerStyles = StyleSheet.create({
+  trackerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 5,
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  stepWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stepIndicator: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    zIndex: 2,
+    marginBottom: 8,
+  },
+  connectorLine: {
+    position: 'absolute',
+    height: 3,
+    width: '100%',
+    left: '50%',
+    top: 10, // Center vertically based on icon size (22/2)
+    zIndex: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  stepText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 5,
+    maxWidth: 60,
+  },
+});
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -357,71 +569,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
   },
-  profileCard: {
-    backgroundColor: '#EBF3F8',
-    borderRadius: 20,
-    paddingVertical: 30,
-    paddingHorizontal: 25,
-    alignItems: 'center',
-    marginBottom: 35,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  profileImage: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 4,
-    borderColor: '#0a8fdf',
-    marginBottom: 20,
-  },
-  profileImagePlaceholder: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: '#0a8fdf',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  userInfoContainer: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  userName: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#2D3748',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#718096',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  roleDetailsContainer: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-    width: '80%',
-    alignItems: 'center',
-  },
-  userDetail: {
-    fontSize: 14,
-    color: '#4A5568',
-    marginBottom: 5,
-    textAlign: 'center',
+  // --- JEY'S UPDATED PROFILE CARD STYLE (Friendly & Professional) ---
+  profileCardFriendly: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#F7F9FF', 
+    borderRadius: 15,
+    marginBottom: 30,
+    shadowColor: '#3B82F6', 
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
   },
+  avatarWrapper: {
+    marginRight: 15,
+    borderWidth: 2,
+    borderColor: '#0a8fdf', 
+    borderRadius: 100, 
+    padding: 2, 
+  },
+  profileImageSmall: {
+    width: 65,
+    height: 65,
+    borderRadius: 100, 
+    resizeMode: 'cover',
+  },
+  profileImagePlaceholderSmall: {
+    width: 65,
+    height: 65,
+    borderRadius: 100,
+    backgroundColor: '#0a8fdf',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userInfoContainerRow: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  userNameGreeting: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4B5563',
+    marginBottom: 2,
+  },
+  userNameFriendly: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  userEmailRow: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  roleDetailsInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  userDetailInline: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginRight: 10,
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  // --- END PROFILE CARD STYLES ---
+
   settingsSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 15,
@@ -433,14 +650,19 @@ const styles = StyleSheet.create({
     elevation: 6,
     padding: 20,
   },
-  sectionTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#2D3748',
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 18,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E2E8F0',
+  },
+  sectionTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#2D3748',
   },
   settingItem: {
     flexDirection: 'row',
@@ -453,9 +675,6 @@ const styles = StyleSheet.create({
   settingItemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  settingIcon: {
-    marginRight: 18,
   },
   settingIconCustom: {
     width: 22,
@@ -557,6 +776,35 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
+  },
+  applicationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  applicationBusiness: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  applicationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  applicationLabel: {
+    color: '#6B7280',
+  },
+  applicationValue: {
+    color: '#111827',
+    fontWeight: '600',
   },
 });
 

@@ -608,7 +608,7 @@ export default function App() {
         <Stack.Screen
           name="Settings"
           component={Settings}
-          options={{ headerShown: true, title: 'Parametres', headerTitleAlign: 'center' }}
+          options={{ headerShown: true, title: 'Paramètres', headerTitleAlign: 'center' }}
         />
         <Stack.Screen
           name="Deconnection"

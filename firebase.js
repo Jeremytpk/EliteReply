@@ -1,9 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
-import { getAuth, setPersistence } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 import { Platform } from 'react-native';
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // --- Jey's Update: Conditional Analytics Import ---
 let getAnalytics, logEvent, isSupported;
@@ -33,22 +33,42 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 
-// Conditionally set persistence based on platform using dynamic import()
-if (Platform.OS !== 'web') {
-  (async () => { // Use an async IIFE to await the dynamic import
-    try {
-      // Dynamic import for React Native persistence
-      const { getReactNativePersistence } = await import("firebase/auth/react-native");
-      setPersistence(auth, getReactNativePersistence(ReactNativeAsyncStorage))
-        .catch((error) => {
-          console.error("Error setting persistence for React Native:", error);
-        });
-    } catch (e) {
-      console.warn("Could not load firebase/auth/react-native. This is expected on web, but indicates an issue on native if 'firebase' package is not correctly set up for React Native:", e);
-    }
-  })(); // Immediately invoked
+// Initialize auth with React Native persistence on native platforms.
+// This uses initializeAuth + getReactNativePersistence(AsyncStorage) which is the recommended approach
+// to ensure persistence is configured before auth state is resolved.
+let auth;
+if (Platform.OS === 'web') {
+  // Web/platforms where initializeAuth is not applicable
+  auth = getAuth(app);
+} else {
+  // Dynamically import react-native auth helpers at runtime. If the module is not present,
+  // fall back to the standard getAuth(). This avoids Metro bundler failing on a static import
+  // when the package path is not resolvable in the project.
+  try {
+    // eslint-disable-next-line no-undef
+    (async () => {
+      try {
+        const rnAuth = await import('firebase/auth/react-native');
+        if (rnAuth && typeof rnAuth.initializeAuth === 'function' && typeof rnAuth.getReactNativePersistence === 'function') {
+          auth = rnAuth.initializeAuth(app, {
+            persistence: rnAuth.getReactNativePersistence(AsyncStorage),
+          });
+          console.log('Firebase initializeAuth with React Native persistence configured');
+          return;
+        }
+      } catch (errImport) {
+        console.warn("Could not dynamically import 'firebase/auth/react-native':", errImport);
+      }
+
+      // Fallback if dynamic import failed or helpers not available
+      auth = getAuth(app);
+      console.log('Fallback to getAuth() (no React Native persistence configured)');
+    })();
+  } catch (outerErr) {
+    console.warn('Unexpected error setting up React Native auth persistence, falling back to getAuth:', outerErr);
+    auth = getAuth(app);
+  }
 }
 
 const storage = getStorage(app);

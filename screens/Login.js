@@ -19,7 +19,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 
 // --- Jey's Addition: Import analytics and logEvent ---
-import { analytics, logEvent } from '../firebase'; // Ensure these are exported from your firebase.js
+// Ensure 'analytics' and 'logEvent' are correctly exported from your firebase.js
+import { analytics, logEvent } from '../firebase'; 
 // --- End Jey's Addition ---
 // Safe area wrapper
 import SafeAreaScreen from '../components/SafeAreaScreen';
@@ -46,10 +47,12 @@ const Login = () => {
           routes: [{ name: 'Loading' }],
         });
         // --- Jey's Addition: Log automatic redirect on already logged in ---
-    logEvent('auto_login_redirect', {
-      user_id: user.uid,
-      email: user.email // Be cautious with PII, but for internal analytics, often acceptable
-    });
+        logEvent('auto_login_redirect', {
+          user_id: user.uid,
+          // Be cautious with PII, but for internal analytics, often acceptable
+          // Using user.email here provides clarity on the redirected user.
+          email: user.email 
+        });
         // --- End Jey's Addition ---
       }
     });
@@ -60,11 +63,11 @@ const Login = () => {
     if (!email.trim() || !password.trim()) {
       setError('Veuillez remplir tous les champs');
       // --- Jey's Addition: Log validation error ---
-    logEvent('login_validation_error', {
-      error_type: 'missing_fields',
-      email_provided: !!email.trim(),
-      password_provided: !!password.trim()
-    });
+      logEvent('login_validation_error', {
+        error_type: 'missing_fields',
+        email_provided: !!email.trim(),
+        password_provided: !!password.trim()
+      });
       // --- End Jey's Addition ---
       return;
     }
@@ -72,10 +75,10 @@ const Login = () => {
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
       // --- Jey's Addition: Log validation error ---
-    logEvent('login_validation_error', {
-      error_type: 'invalid_email_format',
-      email_attempted: email
-    });
+      logEvent('login_validation_error', {
+        error_type: 'invalid_email_format',
+        email_attempted: email
+      });
       // --- End Jey's Addition ---
       return;
     }
@@ -88,6 +91,7 @@ const Login = () => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
+        // Using a standard endpoint for connectivity check
         const resp = await fetch('https://clients3.google.com/generate_204', { method: 'GET', signal: controller.signal });
         clearTimeout(timeout);
         return resp && resp.status === 204;
@@ -118,11 +122,11 @@ const Login = () => {
       });
 
       // --- Jey's Addition: Log successful login event ---
-    logEvent('login', {
-      method: 'email_and_password',
-      user_id: userCredential.user.uid,
-      email: userCredential.user.email // Again, be cautious with PII
-    });
+      logEvent('login', {
+        method: 'email_and_password',
+        user_id: userCredential.user.uid,
+        email: userCredential.user.email 
+      });
       // --- End Jey's Addition ---
 
     } catch (err) {
@@ -136,9 +140,9 @@ const Login = () => {
     if (!email.trim()) {
       setError('Veuillez entrer votre adresse email pour réinitialiser le mot de passe');
       // --- Jey's Addition: Log password reset validation error ---
-    logEvent('password_reset_validation_error', {
-      error_type: 'missing_email'
-    });
+      logEvent('password_reset_validation_error', {
+        error_type: 'missing_email'
+      });
       // --- End Jey's Addition ---
       return;
     }
@@ -146,10 +150,10 @@ const Login = () => {
     if (!email.includes('@')) {
       setError('Veuillez entrer une adresse email valide');
       // --- Jey's Addition: Log password reset validation error ---
-    logEvent('password_reset_validation_error', {
-      error_type: 'invalid_email_format',
-      email_attempted: email
-    });
+      logEvent('password_reset_validation_error', {
+        error_type: 'invalid_email_format',
+        email_attempted: email
+      });
       // --- End Jey's Addition ---
       return;
     }
@@ -189,18 +193,18 @@ const Login = () => {
       default:
         errorType = error.code || 'unknown_firebase_error';
     }
-  setError(errorMessage);
-  // Log full error object to console to aid debugging
-  console.error('Login error object:', error);
+    setError(errorMessage);
+    // Log full error object to console to aid debugging
+    console.error('Login error object:', error);
 
     // --- Jey's Addition: Log login failure event ---
-  logEvent('login_failed', {
-    method: 'email_and_password',
-    error_code: error.code,
-    error_type: errorType,
-    error_message: errorMessage,
-    email_attempted: email // Log the attempted email (be mindful of PII policies)
-  });
+    logEvent('login_failed', {
+      method: 'email_and_password',
+      error_code: error.code,
+      error_type: errorType,
+      error_message: errorMessage,
+      email_attempted: email // Log the attempted email (be mindful of PII policies)
+    });
     // --- End Jey's Addition ---
   };
 

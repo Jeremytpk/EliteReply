@@ -9,16 +9,16 @@ import {
   Alert,
   Animated,
   Easing,
-  // Platform is no longer needed as location logic is removed
 } from 'react-native';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
-// * Location import removed *
 
 const Loading = () => {
   const navigation = useNavigation();
   const scaleAnim = useRef(new Animated.Value(0)).current;
+  // Jey's Addition: Track if navigation has already occurred to prevent race conditions.
+  const isNavigating = useRef(false);
 
   useEffect(() => {
     // Logo animation sequence
@@ -39,21 +39,17 @@ const Loading = () => {
       ])
     ).start();
 
-    const checkUserAndRedirect = async () => {
-      const user = auth.currentUser;
+    const redirectWithUser = async (user) => {
+      // Jey's Safety Check: Prevent navigating multiple times
+      if (isNavigating.current) return;
 
       if (user) {
         try {
-          // Update lastLogin timestamp without location data
-          await updateDoc(doc(db, 'users', user.uid), {
+          // Best-effort update lastLogin; do not block navigation
+          updateDoc(doc(db, 'users', user.uid), {
             lastLogin: serverTimestamp(),
-          });
-        } catch (updateError) {
-          console.error("Error updating lastLogin:", updateError);
-          // Don't block navigation if just the timestamp update fails
-        }
+          }).catch(e => console.warn('Failed updating lastLogin:', e));
 
-        try {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -63,37 +59,36 @@ const Loading = () => {
             if (userData.isAdmin) routeName = 'AdminScreen';
             if (userData.isPartner) routeName = 'PartnerDashboard';
 
-            navigation.reset({
-              index: 0,
-              routes: [{ name: routeName }],
-            });
-          } else {
-            await auth.signOut();
-            Alert.alert('Erreur', 'Compte non trouvé. Veuillez vous inscrire.');
-            navigation.replace('Login');
+            // Small delay to let the animation play a bit
+            setTimeout(() => {
+              isNavigating.current = true; // Set flag right before navigation
+              navigation.reset({ index: 0, routes: [{ name: routeName }] });
+            }, 800);
+            return;
           }
         } catch (err) {
-          console.error("Erreur lors de la redirection de l'utilisateur:", err);
-          if (err.code === "permission-denied") {
-            Alert.alert(
-              'Oops !',
-              "Impossible d'accéder aux données utilisateur. Veuillez contacter le support."
-            );
+          console.error('Error resolving user doc during startup redirect:', err);
+          if (err.code === 'permission-denied') {
+            Alert.alert('Oops !', "Impossible d'accéder aux données utilisateur. Veuillez contacter le support.");
           }
-          await auth.signOut();
-          navigation.replace('Login');
+          // Continue to fallback if user data fails to load
         }
-      } else {
-        navigation.replace('Login');
+      }
+
+      // Fallback: no user or user data resolution failed
+      if (!isNavigating.current) {
+        isNavigating.current = true; // Set flag
+        // Delay slightly less to speed up redirection for logged-out users
+        setTimeout(() => navigation.replace('Login'), 400); 
       }
     };
 
-    // Add a small delay before checking/redirecting to allow animation to start
-    const redirectTimeout = setTimeout(() => {
-        checkUserAndRedirect();
-    }, 2000); // 2-second delay to see the animation
+    // Jey's Refinement: Attach listener directly. It fires immediately with the persisted state.
+    const unsub = auth.onAuthStateChanged(redirectWithUser);
 
-    return () => clearTimeout(redirectTimeout); // Clear timeout if component unmounts
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   return (

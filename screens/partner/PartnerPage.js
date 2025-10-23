@@ -1222,16 +1222,6 @@ const PartnerPage = ({ route }) => {
               </View>
 
               {/* Manual Amount */}
-              <View style={styles.quickPaymentInputGroup}>
-                <Text style={styles.quickPaymentLabel}>Montant</Text>
-                <TextInput
-                  style={styles.quickPaymentInput}
-                  placeholder="0.00"
-                  value={paymentAmount}
-                  onChangeText={setPaymentAmount}
-                  keyboardType="numeric"
-                />
-              </View>
 
               {/* Add Items Section */}
               <View style={styles.quickPaymentInputGroup}>

@@ -12,6 +12,8 @@ import {
   ScrollView,
   Image,
   Linking,
+  Platform,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { 
@@ -28,6 +30,8 @@ import { db } from '../firebase';
 
 const PartnerApplications = ({ navigation }) => {
   const [applications, setApplications] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userEmails, setUserEmails] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState(null);
@@ -36,8 +40,26 @@ const PartnerApplications = ({ navigation }) => {
 
   useEffect(() => {
     const unsubscribe = fetchApplications();
+    loadUserEmails();
     return () => unsubscribe && unsubscribe();
   }, []);
+
+  // Load all user emails into a Set for quick existence checks
+  const loadUserEmails = async () => {
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const emails = new Set();
+      usersSnapshot.forEach(u => {
+        const data = u.data();
+        if (data && data.email) {
+          emails.add(String(data.email).toLowerCase());
+        }
+      });
+      setUserEmails(emails);
+    } catch (err) {
+      console.error('Error loading user emails:', err);
+    }
+  };
 
   const fetchApplications = () => {
     try {
@@ -344,6 +366,25 @@ const PartnerApplications = ({ navigation }) => {
     setModalVisible(true);
   };
 
+  // Filter applications by name or email (case-insensitive)
+  const filteredApplications = applications.filter((app) => {
+    if (!searchQuery || searchQuery.trim() === '') return true;
+    const q = searchQuery.toLowerCase();
+
+    const firstName = (app.applicantInfo?.firstName || app.firstName || '').toString().toLowerCase();
+    const lastName = (app.applicantInfo?.lastName || app.lastName || '').toString().toLowerCase();
+    const email = (app.applicantInfo?.email || app.email || '').toString().toLowerCase();
+
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    return (
+      fullName.includes(q) ||
+      firstName.includes(q) ||
+      lastName.includes(q) ||
+      email.includes(q)
+    );
+  });
+
   const renderApplicationItem = ({ item }) => {
     return (
       <TouchableOpacity
@@ -358,6 +399,11 @@ const PartnerApplications = ({ navigation }) => {
             <Text style={styles.applicantEmail}>
               {item.applicantInfo?.email || item.email}
             </Text>
+            {((item.applicantInfo?.email || item.email) && userEmails.has((item.applicantInfo?.email || item.email).toLowerCase())) ? (
+              <View style={[styles.emailIndicator, { backgroundColor: '#4CAF50' }]} />
+            ) : (
+              <View style={[styles.emailIndicator, { backgroundColor: '#BDBDBD' }]} />
+            )}
           </View>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status || 'pending') }]}>
             <Ionicons
@@ -421,7 +467,14 @@ const PartnerApplications = ({ navigation }) => {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Email:</Text>
-            <Text style={styles.infoValue}>{selectedApplication.applicantInfo?.email || selectedApplication.email}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.infoValue}>{selectedApplication.applicantInfo?.email || selectedApplication.email}</Text>
+              {((selectedApplication.applicantInfo?.email || selectedApplication.email) && userEmails.has((selectedApplication.applicantInfo?.email || selectedApplication.email).toLowerCase())) ? (
+                <View style={[styles.emailIndicator, { backgroundColor: '#4CAF50', marginLeft: 8 }]} />
+              ) : (
+                <View style={[styles.emailIndicator, { backgroundColor: '#BDBDBD', marginLeft: 8 }]} />
+              )}
+            </View>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Téléphone:</Text>
@@ -544,7 +597,24 @@ const PartnerApplications = ({ navigation }) => {
         <View style={styles.placeholder} />
       </View>
 
-      {applications.length === 0 ? (
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher par nom ou email"
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity style={styles.clearButton} onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {filteredApplications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="person-add-outline" size={80} color="#ccc" />
           <Text style={styles.emptyText}>Aucune candidature trouvée</Text>
@@ -554,7 +624,7 @@ const PartnerApplications = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={applications}
+          data={filteredApplications}
           renderItem={renderApplicationItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
@@ -621,8 +691,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    paddingTop: 40,
-    height: 90,
+    height: Platform.OS === 'ios' ? 48 : 50,
+    paddingTop: Platform.OS === 'ios' ? 10 : 0,
   },
   backButton: {
     padding: 5,
@@ -637,6 +707,27 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     padding: 15,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: '#f8f9fa',
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#333',
+    elevation: 1,
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 6,
   },
   applicationCard: {
     backgroundColor: '#fff',
@@ -668,6 +759,12 @@ const styles = StyleSheet.create({
   applicantEmail: {
     fontSize: 14,
     color: '#667eea',
+  },
+  emailIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginLeft: 8,
   },
   statusBadge: {
     flexDirection: 'row',
