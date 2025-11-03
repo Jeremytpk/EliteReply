@@ -15,7 +15,7 @@ import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons'; // Keep Ionicons if still used elsewhere
-import * as Location from 'expo-location';
+// import * as Location from 'expo-location'; // Removed: No location required
 
 // --- NEW: Import your custom icons ---
 const EYE_OUTLINE_ICON = require('../assets/icons/eye_outline.png'); // For open eye
@@ -34,8 +34,7 @@ const Signup = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // New state for location data
-  const [locationData, setLocationData] = useState(null);
+  // Removed: No location data needed
 
   const handleSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -62,41 +61,7 @@ const Signup = ({ navigation }) => {
     setError('');
 
     try {
-      // 1. Request location permission
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Permission d\'accès à la localisation refusée.');
-        setLoading(false);
-        return;
-      }
-
-      // 2. Get current location
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      console.log('User Location:', currentLocation);
-
-      // 3. Reverse Geocode (replace with your chosen API)
-      let geocodedAddress = await Location.reverseGeocodeAsync({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      });
-
-      let userCountry = '';
-      let userCity = '';
-      let userContinent = 'Unknown'; // Placeholder
-
-      if (geocodedAddress && geocodedAddress.length > 0) {
-        userCountry = geocodedAddress[0].country || '';
-        userCity = geocodedAddress[0].city || geocodedAddress[0].subregion || '';
-      }
-
-      setLocationData({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-        country: userCountry,
-        city: userCity,
-        continent: userContinent,
-      });
-
+      // Only create user, no location logic
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
       const userData = {
@@ -107,14 +72,8 @@ const Signup = ({ navigation }) => {
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
         role: email.endsWith('@elitereply.com') ? 'support' : 'user',
-        profileCompleted: false,
-        location: {
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          country: userCountry,
-          city: userCity,
-          continent: userContinent,
-        }
+        profileCompleted: false
+        // Removed: location field
       };
 
       await setDoc(doc(db, 'users', userCredential.user.uid), userData);
