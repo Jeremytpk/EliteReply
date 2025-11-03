@@ -91,6 +91,7 @@ import PartnerChatList from './screens/partner/PartnerChatList';
 import PartnerClientChat from './screens/partner/PartnerClientChat';
 import CustomHeader from './components/CustomHeader';
 import SafeAreaScreen from './components/SafeAreaScreen';
+import ClientPayments from './screens/partner/ClientPayments';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -828,6 +829,11 @@ export default function App() {
           name="Graphic"
           component={Graphic}
           options={{ headerShown: true }}
+        />
+        <Stack.Screen
+          name="ClientPayments"
+          component={ClientPayments}
+          options={{ headerShown: true, title: 'Paiements', headerTitleAlign: 'center' }}
         />
       </Stack.Navigator>
         </NotificationProvider>

@@ -1,3 +1,27 @@
+// Helper to fetch payment count for a partner
+const usePaymentCount = (partnerId) => {
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const db = getFirestore(firebaseApp);
+        const paymentsRef = collection(db, 'payments');
+        let querySnapshot;
+        if (partnerId) {
+          const q = query(paymentsRef, where('partnerId', '==', partnerId));
+          querySnapshot = await getDocs(q);
+        } else {
+          querySnapshot = await getDocs(paymentsRef);
+        }
+        setCount(querySnapshot.size);
+      } catch (e) {
+        setCount(0);
+      }
+    };
+    fetchCount();
+  }, [partnerId]);
+  return count;
+};
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -109,6 +133,11 @@ const ProgressBar = ({ progress, color }) => {
 };
 
 const PartnerDashboard = ({ navigation }) => {
+  const [paymentsCount, setPaymentsCount] = useState(0);
+  const paymentCount = usePaymentCount(partnerData?.id);
+  useEffect(() => {
+    setPaymentsCount(paymentCount);
+  }, [paymentCount]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -756,13 +785,13 @@ const PartnerDashboard = ({ navigation }) => {
       color: "#FBBC05",
       onPress: () => navigation.navigate('RdvConfirm')
     },
+
     {
-      icon: <Image source={RATE_FULL_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
-      title: "Avis Clients",
-      // Show number of reviews received
-      value: reviews?.length || 0,
+      icon: <Image source={CREDIT_CARD_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
+      title: "Paiements",
+      //value: paymentsCount,
       color: "#9C27B0",
-      // Intentionally non-clickable: no onPress handler
+      onPress: () => navigation.navigate('ClientPayments', { partnerId: partnerData?.id })
     },
     {
       icon: <Image source={SUPPORT_ER_ICON} style={[styles.customStatIcon, { tintColor: '#fff' }]} />,
@@ -1071,7 +1100,20 @@ const PartnerDashboard = ({ navigation }) => {
                   </Text>
                 </LinearGradient>
               </View>
-              
+
+              <View style={styles.paymentSummaryCard}>
+                <LinearGradient
+                  colors={['#1976d2', '#64b5f6']}
+                  style={styles.paymentCardGradient}
+                >
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Image source={CREDIT_CARD_ICON} style={[styles.actionIcon, { tintColor: '#fff' }]} />
+                    <Text style={styles.paymentSummaryLabel}>Paiements</Text>
+                  </View>
+                  <Text style={styles.paymentSummaryValue}>{/* {paymentsCount} */}</Text>
+                </LinearGradient>
+              </View>
+
               <View style={styles.paymentSummaryCard}>
                 <LinearGradient
                   colors={['#9C27B0', '#8E24AA']}
@@ -2398,6 +2440,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  CREDIT_CARD_ICON: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
 });
 
