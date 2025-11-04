@@ -39,7 +39,10 @@ jobs:
         token: ${{ secrets.EXPO_TOKEN }}
         
     - name: Install dependencies
-      run: npm ci
+      run: |
+        # Remove package-lock.json to avoid conflicts and install fresh
+        rm -f package-lock.json
+        npm install
       
     - name: Setup credentials files
       run: |

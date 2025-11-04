@@ -53,7 +53,9 @@ jobs:
         
     - name: Install dependencies
       run: |
-        npm ci
+        # Remove package-lock.json to avoid conflicts and install fresh
+        rm -f package-lock.json
+        npm install
         npm install -g @expo/eas-cli
         
     - name: Setup credentials files

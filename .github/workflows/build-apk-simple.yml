@@ -1,0 +1,160 @@
+name: Build APK (Simple)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build APK with Expo
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+        build-tools: '34.0.0'
+        
+    - name: Install dependencies (clean)
+      run: |
+        echo "🧹 Cleaning npm cache and lock file..."
+        npm cache clean --force
+        rm -f package-lock.json
+        echo "📦 Installing fresh dependencies..."
+        npm install
+        
+    - name: Install Expo CLI
+      run: npm install -g @expo/cli
+      
+    - name: Setup credentials files
+      run: |
+        # Create minimal google-services.json if not exists
+        if [ ! -f "google-services.json" ]; then
+          echo "Creating placeholder google-services.json"
+          echo '{"project_info":{"project_number":"placeholder","project_id":"placeholder"}}' > google-services.json
+        fi
+        
+    - name: Expo prebuild
+      run: |
+        echo "🏗️ Running Expo prebuild..."
+        npx expo prebuild --platform android --clear
+        
+    - name: Build APK with Gradle
+      run: |
+        echo "📱 Building APK..."
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleRelease --no-daemon --parallel
+        
+    - name: Find and upload APK
+      run: |
+        echo "🔍 Looking for generated APK..."
+        find android -name "*.apk" -type f
+        
+        APK_PATH=$(find android -name "*.apk" -path "*/outputs/apk/*" | grep -v unaligned | head -1)
+        
+        if [ -n "$APK_PATH" ]; then
+          echo "📱 Found APK at: $APK_PATH"
+          mkdir -p apk-output
+          cp "$APK_PATH" apk-output/elitereply-simple.apk
+          ls -la apk-output/
+        else
+          echo "❌ No APK found!"
+          find android -name "*.apk" -type f
+          exit 1
+        fi
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: elitereply-simple-${{ github.run_number }}
+        path: apk-output/elitereply-simple.apk
+        retention-days: 30
+        
+    - name: Create Release (main branch only)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.0-simple-${{ github.run_number }}
+        name: Simple APK Build ${{ github.run_number }}
+        body: |
+          ## 📱 EliteReply APK (Simple Build)
+          
+          **Build Details:**
+          - Commit: `${{ github.sha }}`
+          - Run: #${{ github.run_number }}
+          - Built with: Expo prebuild + Gradle
+          
+          **Installation:**
+          1. Download the APK file below
+          2. Enable "Install from unknown sources" on your Android device
+          3. Install the APK
+          
+          > 💡 This is a simple build without EAS dependency.
+        files: apk-output/elitereply-simple.apk
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Comment PR with APK
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const { owner, repo } = context.repo;
+          const { number: pull_number } = context.payload.pull_request;
+          
+          let apkSize = 'Unknown';
+          try {
+            const stats = fs.statSync('apk-output/elitereply-simple.apk');
+            apkSize = `${(stats.size / 1024 / 1024).toFixed(2)} MB`;
+          } catch (e) {
+            // APK size unknown
+          }
+          
+          const comment = `## 📱 Simple APK Build Complete!
+          
+          Your APK has been successfully built and is ready for testing.
+          
+          **Build Details:**
+          - Commit: \`${context.sha.substring(0, 7)}\`
+          - Run: #${{ github.run_number }}
+          - APK Size: ${apkSize}
+          - Method: Expo prebuild + Gradle
+          
+          **Download:**
+          [📥 Download from Workflow Artifacts](https://github.com/${owner}/${repo}/actions/runs/${{ github.run_id }})
+          
+          **Installation:**
+          1. Download the APK from artifacts
+          2. Enable "Install from unknown sources" on Android
+          3. Install and test
+          
+          > 💡 This is a simplified build that doesn't require EAS tokens.`;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pull_number,
+            body: comment
+          });

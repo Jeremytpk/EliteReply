@@ -19,9 +19,10 @@ jobs:
         cache: 'npm'
         
     - name: Install dependencies
-      run: npm ci
-      
-    - name: Check project structure
+      run: |
+        # Remove package-lock.json to avoid conflicts and install fresh
+        rm -f package-lock.json
+        npm install    - name: Check project structure
       run: |
         echo "📁 Project Structure Check"
         echo "=========================="
