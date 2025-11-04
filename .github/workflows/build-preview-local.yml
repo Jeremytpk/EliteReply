@@ -1,0 +1,200 @@
+name: Build Preview APK (Local)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile to use'
+        required: true
+        default: 'preview-local'
+        type: choice
+        options:
+          - preview-local
+          - development-local
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  build:
+    name: Build APK Locally
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+        build-tools: '34.0.0'
+        
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        expo-version: latest
+        eas-version: latest
+        token: ${{ secrets.EXPO_TOKEN || 'dummy-token' }}
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install -g @expo/eas-cli
+        
+    - name: Setup credentials files
+      run: |
+        # Use existing files or create from secrets
+        if [ -f "google-services.json" ]; then
+          echo "✅ Using existing google-services.json"
+        elif [ ! -z "$GOOGLE_SERVICES_SECRET" ]; then
+          echo "$GOOGLE_SERVICES_SECRET" > google-services.json
+          echo "✅ Created google-services.json from secret"
+        else
+          echo "⚠️  No google-services.json found"
+        fi
+        
+        if [ -f "credentials.json" ]; then
+          echo "✅ Using existing credentials.json"
+        elif [ ! -z "$CREDENTIALS_SECRET" ]; then
+          echo "$CREDENTIALS_SECRET" > credentials.json  
+          echo "✅ Created credentials.json from secret"
+        else
+          echo "⚠️  No credentials.json found"
+        fi
+      env:
+        GOOGLE_SERVICES_SECRET: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        CREDENTIALS_SECRET: ${{ secrets.CREDENTIALS_JSON }}
+        
+    - name: Build APK with EAS Local
+      run: |
+        BUILD_PROFILE="${{ github.event.inputs.profile || 'preview-local' }}"
+        echo "🚀 Building locally with profile: $BUILD_PROFILE"
+        
+        # Build locally
+        eas build --platform android --profile $BUILD_PROFILE --local --non-interactive --clear-cache
+        
+    - name: Find and rename APK
+      run: |
+        # Find the generated APK
+        APK_PATH=$(find . -name "*.apk" -path "*/build/outputs/apk/*" | head -1)
+        
+        if [ -z "$APK_PATH" ]; then
+          echo "❌ No APK found!"
+          find . -name "*.apk" -type f
+          exit 1
+        fi
+        
+        echo "📱 Found APK at: $APK_PATH"
+        
+        # Copy and rename APK
+        cp "$APK_PATH" "./elitereply-preview-local.apk"
+        
+        # Get file info
+        ls -la elitereply-preview-local.apk
+        echo "✅ APK ready for upload"
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: elitereply-preview-local-${{ github.run_number }}
+        path: elitereply-preview-local.apk
+        retention-days: 30
+        
+    - name: Create GitHub Release
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v1.0.0-preview-local-${{ github.run_number }}
+        release_name: Preview Local Build ${{ github.run_number }}
+        body: |
+          ## 📱 EliteReply Preview Build (Local)
+          
+          **Build Details:**
+          - Profile: `${{ github.event.inputs.profile || 'preview-local' }}`
+          - Commit: `${{ github.sha }}`
+          - Run: #${{ github.run_number }}
+          - Built with: EAS Local Build
+          
+          **Installation:**
+          1. Download the APK file below
+          2. Enable "Install from unknown sources" on your Android device
+          3. Install the APK
+          
+          > 💡 This is a preview build for testing purposes.
+        draft: false
+        prerelease: true
+        
+    - name: Upload Release Asset
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./elitereply-preview-local.apk
+        asset_name: elitereply-preview-local.apk
+        asset_content_type: application/vnd.android.package-archive
+        
+    - name: Comment PR with download link
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const { owner, repo } = context.repo;
+          const { number: pull_number } = context.payload.pull_request;
+          
+          // Get APK size
+          let apkSize = '';
+          try {
+            const stats = fs.statSync('./elitereply-preview-local.apk');
+            apkSize = `${(stats.size / 1024 / 1024).toFixed(2)} MB`;
+          } catch (e) {
+            apkSize = 'Unknown';
+          }
+          
+          const comment = `## 📱 Preview APK Built Successfully! (Local Build)
+          
+          Your APK has been built locally and is ready for testing.
+          
+          **Build Details:**
+          - Profile: \`${{ github.event.inputs.profile || 'preview-local' }}\`
+          - Commit: \`${context.sha.substring(0, 7)}\`
+          - Run: #${{ github.run_number }}
+          - APK Size: ${apkSize}
+          - Built with: EAS Local Build
+          
+          **Download:** 
+          - [Workflow Artifacts](https://github.com/${owner}/${repo}/actions/runs/${{ github.run_id }})
+          
+          **Testing Instructions:**
+          1. Download the APK from the artifacts above
+          2. Enable "Install from unknown sources" on your Android device  
+          3. Install and test the app
+          
+          > 💡 The APK will be available for 30 days. Local builds are faster but may have different characteristics than cloud builds.`;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pull_number,
+            body: comment
+          });

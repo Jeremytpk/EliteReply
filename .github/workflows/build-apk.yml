@@ -1,0 +1,103 @@
+name: Build Preview APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile to use'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - preview-local
+          - development
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        expo-version: latest
+        eas-version: latest
+        token: ${{ secrets.EXPO_TOKEN }}
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Setup EAS local builds
+      run: |
+        npm install -g @expo/eas-cli
+        
+    - name: Create Google Services JSON
+      run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > google-services.json
+      
+    - name: Create credentials.json
+      run: echo '${{ secrets.CREDENTIALS_JSON }}' > credentials.json
+      
+    - name: Build APK with EAS
+      run: |
+        BUILD_PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+        echo "Building with profile: $BUILD_PROFILE"
+        eas build --platform android --profile $BUILD_PROFILE --non-interactive --wait
+        
+    - name: Download APK
+      run: |
+        # Get the latest build URL
+        BUILD_ID=$(eas build:list --platform=android --status=finished --limit=1 --json | jq -r '.[0].id')
+        BUILD_URL=$(eas build:list --platform=android --status=finished --limit=1 --json | jq -r '.[0].artifacts.buildUrl')
+        
+        # Download the APK
+        curl -L -o elitereply-preview.apk "$BUILD_URL"
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: elitereply-preview-${{ github.run_number }}
+        path: elitereply-preview.apk
+        retention-days: 30
+        
+    - name: Comment PR with download link
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const { number: pull_number } = context.payload.pull_request;
+          
+          const comment = `## 📱 Preview APK Built Successfully!
+          
+          Your APK has been built and is ready for testing.
+          
+          **Build Details:**
+          - Profile: \`${{ github.event.inputs.profile || 'preview' }}\`
+          - Commit: \`${context.sha.substring(0, 7)}\`
+          - Run: #${{ github.run_number }}
+          
+          **Download:** Check the [workflow artifacts](https://github.com/${owner}/${repo}/actions/runs/${{ github.run_id }}) to download the APK.
+          
+          > 💡 The APK will be available for 30 days.`;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pull_number,
+            body: comment
+          });

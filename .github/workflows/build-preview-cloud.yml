@@ -1,0 +1,180 @@
+name: Build Preview APK (Cloud)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile to use'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - development
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build APK with EAS Cloud
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        expo-version: latest
+        eas-version: latest
+        token: ${{ secrets.EXPO_TOKEN }}
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Setup credentials files
+      run: |
+        # Create google-services.json if secret exists
+        if [ ! -z "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > google-services.json
+        else
+          echo "⚠️  GOOGLE_SERVICES_JSON secret not found, using existing file"
+        fi
+        
+        # Create credentials.json if secret exists  
+        if [ ! -z "${{ secrets.CREDENTIALS_JSON }}" ]; then
+          echo '${{ secrets.CREDENTIALS_JSON }}' > credentials.json
+        else
+          echo "⚠️  CREDENTIALS_JSON secret not found, using existing file"
+        fi
+        
+    - name: Build APK with EAS Cloud
+      run: |
+        BUILD_PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+        echo "🚀 Building with profile: $BUILD_PROFILE"
+        
+        # Start the build
+        eas build --platform android --profile $BUILD_PROFILE --non-interactive --no-wait --json > build_result.json
+        
+        # Extract build ID
+        BUILD_ID=$(cat build_result.json | jq -r '.[0].id')
+        echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+        echo "📋 Build started with ID: $BUILD_ID"
+        
+        # Wait for build to complete (with timeout)
+        echo "⏳ Waiting for build to complete..."
+        TIMEOUT=1800  # 30 minutes
+        ELAPSED=0
+        INTERVAL=30
+        
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          BUILD_STATUS=$(eas build:view $BUILD_ID --json | jq -r '.status')
+          echo "Build status: $BUILD_STATUS (${ELAPSED}s elapsed)"
+          
+          if [ "$BUILD_STATUS" = "FINISHED" ]; then
+            echo "✅ Build completed successfully!"
+            break
+          elif [ "$BUILD_STATUS" = "ERRORED" ] || [ "$BUILD_STATUS" = "CANCELED" ]; then
+            echo "❌ Build failed with status: $BUILD_STATUS"
+            exit 1
+          fi
+          
+          sleep $INTERVAL
+          ELAPSED=$((ELAPSED + INTERVAL))
+        done
+        
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "❌ Build timed out after ${TIMEOUT}s"
+          exit 1
+        fi
+        
+    - name: Download APK
+      run: |
+        echo "📥 Downloading APK..."
+        BUILD_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
+        echo "Build URL: $BUILD_URL"
+        
+        if [ "$BUILD_URL" != "null" ] && [ ! -z "$BUILD_URL" ]; then
+          curl -L -o elitereply-preview.apk "$BUILD_URL"
+          echo "✅ APK downloaded successfully"
+          ls -la elitereply-preview.apk
+        else
+          echo "❌ No build URL found"
+          exit 1
+        fi
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: elitereply-preview-${{ github.run_number }}
+        path: elitereply-preview.apk
+        retention-days: 30
+        
+    - name: Create release on main branch
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.0-preview-${{ github.run_number }}
+        name: Preview Release ${{ github.run_number }}
+        body: |
+          ## 📱 EliteReply Preview Build
+          
+          **Build Details:**
+          - Profile: `${{ github.event.inputs.profile || 'preview' }}`
+          - Commit: `${{ github.sha }}`
+          - Run: #${{ github.run_number }}
+          - Built with: EAS Build Cloud
+          
+          **Installation:**
+          1. Download the APK file below
+          2. Enable "Install from unknown sources" on your Android device
+          3. Install the APK
+          
+          > 💡 This is a preview build for testing purposes.
+        files: elitereply-preview.apk
+        draft: false
+        prerelease: true
+        
+    - name: Comment PR with download link
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const { number: pull_number } = context.payload.pull_request;
+          
+          const comment = `## 📱 Preview APK Built Successfully!
+          
+          Your APK has been built and is ready for testing.
+          
+          **Build Details:**
+          - Profile: \`${{ github.event.inputs.profile || 'preview' }}\`
+          - Commit: \`${context.sha.substring(0, 7)}\`
+          - Run: #${{ github.run_number }}
+          - EAS Build ID: \`${process.env.BUILD_ID}\`
+          
+          **Download:** 
+          - [Workflow Artifacts](https://github.com/${owner}/${repo}/actions/runs/${{ github.run_id }})
+          
+          **Testing Instructions:**
+          1. Download the APK from the artifacts
+          2. Enable "Install from unknown sources" on your Android device  
+          3. Install and test the app
+          
+          > 💡 The APK will be available for 30 days.`;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pull_number,
+            body: comment
+          });

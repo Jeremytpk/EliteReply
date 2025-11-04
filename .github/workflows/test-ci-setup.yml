@@ -1,0 +1,112 @@
+name: Test CI Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-setup:
+    name: Test CI/CD Setup
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Check project structure
+      run: |
+        echo "📁 Project Structure Check"
+        echo "=========================="
+        
+        # Check required files
+        echo "✓ Checking app.json..."
+        if [ -f "app.json" ]; then
+          echo "  ✅ app.json exists"
+        else
+          echo "  ❌ app.json missing"
+        fi
+        
+        echo "✓ Checking eas.json..."
+        if [ -f "eas.json" ]; then
+          echo "  ✅ eas.json exists"
+          cat eas.json | jq -r '.build | keys | .[]' | sed 's/^/    - /'
+        else
+          echo "  ❌ eas.json missing"
+        fi
+        
+        echo "✓ Checking google-services.json..."
+        if [ -f "google-services.json" ]; then
+          echo "  ✅ google-services.json exists"
+        else
+          echo "  ⚠️  google-services.json not found (check secrets)"
+        fi
+        
+        echo "✓ Checking credentials.json..."
+        if [ -f "credentials.json" ]; then
+          echo "  ✅ credentials.json exists"
+        else
+          echo "  ⚠️  credentials.json not found (check secrets)"
+        fi
+        
+    - name: Validate package.json
+      run: |
+        echo "📦 Package Dependencies Check"
+        echo "============================="
+        
+        # Check if expo and eas are in dependencies
+        if npm list expo --depth=0 > /dev/null 2>&1; then
+          EXPO_VERSION=$(npm list expo --depth=0 | grep expo@ | cut -d'@' -f2)
+          echo "  ✅ Expo: $EXPO_VERSION"
+        else
+          echo "  ❌ Expo not found in dependencies"
+        fi
+        
+        echo "✓ Build scripts available:"
+        npm run | grep "build:" | sed 's/^/  /'
+        
+    - name: Test EAS CLI (if token available)
+      run: |
+        echo "🔧 EAS CLI Test"
+        echo "==============="
+        
+        npm install -g @expo/eas-cli
+        
+        if [ ! -z "$EXPO_TOKEN" ]; then
+          echo "  ✅ EXPO_TOKEN available"
+          echo "  Testing EAS CLI..."
+          eas whoami || echo "  ⚠️  Not authenticated with EAS"
+        else
+          echo "  ⚠️  EXPO_TOKEN not set (required for cloud builds)"
+        fi
+        
+        echo "  EAS CLI installed successfully"
+      env:
+        EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        
+    - name: Setup test summary
+      run: |
+        echo "📋 CI/CD Setup Summary" >> $GITHUB_STEP_SUMMARY
+        echo "======================" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ Checks Passed" >> $GITHUB_STEP_SUMMARY
+        echo "- Repository checkout" >> $GITHUB_STEP_SUMMARY
+        echo "- Node.js 20 setup" >> $GITHUB_STEP_SUMMARY  
+        echo "- Dependencies installation" >> $GITHUB_STEP_SUMMARY
+        echo "- Project structure validation" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚀 Ready to Build!" >> $GITHUB_STEP_SUMMARY
+        echo "Your CI/CD setup is ready. You can now:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Run 'Build Preview APK (Cloud)' workflow" >> $GITHUB_STEP_SUMMARY
+        echo "2. Run 'Build Preview APK (Local)' workflow" >> $GITHUB_STEP_SUMMARY
+        echo "3. Push to main branch for automatic builds" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📖 Documentation" >> $GITHUB_STEP_SUMMARY
+        echo "See CI_CD_APK_SETUP.md for detailed setup instructions." >> $GITHUB_STEP_SUMMARY

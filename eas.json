@@ -27,6 +27,19 @@
       "autoIncrement": true,
       "distribution": "store",
       "credentialsSource": "local"
+    },
+    "preview-local": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "development-local": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
