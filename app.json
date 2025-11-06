@@ -20,7 +20,6 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#0a8fdf",
           "androidMode": "default",
           "androidCollapsedTitle": "#{unread_notifications} nouveaux messages",
           "android": {
@@ -82,7 +81,7 @@
         "foregroundImage": "./assets/images/adaptiveIcon.png",
         "backgroundColor": "#ffffff"
       },
-  "package": "com.yourcompany.elitereply",
+  "package": "com.jeremytpk.elitereply",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
