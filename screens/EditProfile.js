@@ -12,15 +12,16 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { auth, db, storage } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 // Jey's Fix: Import getStorage and maxUploadRetryTime
 import { ref, uploadBytes, getDownloadURL, getStorage, maxUploadRetryTime } from 'firebase/storage';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, deleteUser } from 'firebase/auth';
 
 const EditProfile = () => {
   const navigation = useNavigation();
@@ -33,6 +34,11 @@ const EditProfile = () => {
   const [position, setPosition] = useState(initialUserData?.position || '');
   const [photoURL, setPhotoURL] = useState(initialUserData?.photoURL || null);
   const [loading, setLoading] = useState(false);
+  
+  // Delete account modal states
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteConfirmationEmail, setDeleteConfirmationEmail] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -148,6 +154,71 @@ const EditProfile = () => {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const user = auth.currentUser;
+    
+    if (!user) {
+      Alert.alert('Erreur', 'Aucun utilisateur connecté.');
+      return;
+    }
+
+    // Check if the email matches
+    if (deleteConfirmationEmail.trim() !== user.email) {
+      Alert.alert('Erreur', 'L\'adresse e-mail saisie ne correspond pas à votre compte.');
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      // First, delete user data from Firestore
+      await deleteDoc(doc(db, 'users', user.uid));
+      console.log("User document deleted from Firestore");
+
+      // Then, delete the authentication account
+      await deleteUser(user);
+      console.log("User authentication account deleted");
+
+      // Close the modal
+      setDeleteModalVisible(false);
+
+      // Show success message
+      Alert.alert(
+        'Compte supprimé',
+        'Votre compte et toutes vos données ont été supprimés avec succès.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to Login screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      
+      // Handle specific error cases
+      if (error.code === 'auth/requires-recent-login') {
+        Alert.alert(
+          'Réauthentification requise',
+          'Pour des raisons de sécurité, veuillez vous reconnecter et réessayer.'
+        );
+      } else {
+        Alert.alert(
+          'Erreur',
+          'Une erreur est survenue lors de la suppression du compte. Veuillez réessayer.'
+        );
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -240,7 +311,85 @@ const EditProfile = () => {
             <Text style={styles.submitButtonText}>Enregistrer les modifications</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => setDeleteModalVisible(true)}
+          disabled={loading}
+        >
+          <Ionicons name="trash-outline" size={20} color="#DC2626" style={styles.deleteIcon} />
+          <Text style={styles.deleteAccountButtonText}>Supprimer le compte</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="warning" size={50} color="#DC2626" />
+              <Text style={styles.modalTitle}>Êtes-vous sûr ?</Text>
+            </View>
+
+            <Text style={styles.modalMessage}>
+              Cette action est permanente et supprimera votre compte et toutes vos données (profil, commandes, chats).
+            </Text>
+
+            <Text style={styles.modalInstruction}>
+              Pour confirmer, veuillez taper votre adresse e-mail ci-dessous :
+            </Text>
+
+            <Text style={styles.emailDisplay}>
+              {auth.currentUser?.email}
+            </Text>
+
+            <TextInput
+              style={styles.confirmationInput}
+              value={deleteConfirmationEmail}
+              onChangeText={setDeleteConfirmationEmail}
+              placeholder="Entrez votre adresse e-mail"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setDeleteConfirmationEmail('');
+                }}
+                disabled={deleting}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmDeleteButton,
+                  (deleteConfirmationEmail.trim() !== auth.currentUser?.email || deleting) && 
+                    styles.confirmDeleteButtonDisabled
+                ]}
+                onPress={handleDeleteAccount}
+                disabled={deleteConfirmationEmail.trim() !== auth.currentUser?.email || deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmDeleteButtonText}>Supprimer mon compte</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -366,6 +515,124 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  deleteIcon: {
+    marginRight: 8,
+  },
+  deleteAccountButtonText: {
+    color: '#DC2626',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 25,
+    width: '100%',
+    maxWidth: 450,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 10,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#4B5563',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  modalInstruction: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  emailDisplay: {
+    fontSize: 14,
+    color: '#0a8fdf',
+    marginBottom: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    backgroundColor: '#EBF3F8',
+    padding: 10,
+    borderRadius: 8,
+  },
+  confirmationInput: {
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    color: '#4B5563',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteButtonDisabled: {
+    backgroundColor: '#FCA5A5',
+    opacity: 0.6,
+  },
+  confirmDeleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });
 

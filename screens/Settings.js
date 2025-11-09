@@ -12,7 +12,8 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
@@ -402,6 +403,45 @@ const Paramètres = () => {
           <View style={styles.settingItemContent}>
             <Ionicons name="receipt-outline" size={24} color="#28a745" style={{ marginRight: 18 }} />
             <Text style={styles.settingText}>Mes Reçus</Text>
+          </View>
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+        </TouchableOpacity>
+
+      </View>
+
+      {/* Legal & Support Section */}
+      <View style={styles.settingsSection}>
+        <Text style={styles.sectionTitle}>Informations Légales & Support</Text>
+
+        <TouchableOpacity
+          style={styles.settingItem}
+          onPress={() => Linking.openURL('https://elitereply.info/politique.html')}
+        >
+          <View style={styles.settingItemContent}>
+            <Ionicons name="shield-checkmark-outline" size={24} color="#6366F1" style={{ marginRight: 18 }} />
+            <Text style={styles.settingText}>Politique de Confidentialité</Text>
+          </View>
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.settingItem}
+          onPress={() => Linking.openURL('https://elitereply.info/conditions.html')}
+        >
+          <View style={styles.settingItemContent}>
+            <Ionicons name="document-text-outline" size={24} color="#8B5CF6" style={{ marginRight: 18 }} />
+            <Text style={styles.settingText}>Conditions d'Utilisation</Text>
+          </View>
+          <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.settingItem}
+          onPress={() => Linking.openURL('https://elitereply.info/contact.html')}
+        >
+          <View style={styles.settingItemContent}>
+            <Ionicons name="mail-outline" size={24} color="#10B981" style={{ marginRight: 18 }} />
+            <Text style={styles.settingText}>Nous Contacter</Text>
           </View>
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
         </TouchableOpacity>
