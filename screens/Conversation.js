@@ -2630,6 +2630,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
         backgroundColor: '#FFF',
+        paddingTop: Platform.OS === 'android' ? 35 : 50,
     },
     headerInfo: {
         flex: 1,

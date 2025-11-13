@@ -1,12 +1,15 @@
 import React from 'react';
-import { View, Platform, StatusBar } from 'react-native';
+import { Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Simple wrapper that provides safe area padding on iOS and status bar padding on Android
+// Simple wrapper that provides safe area padding
+// The header will handle top padding, so we only need edges for bottom/left/right
 const SafeAreaScreen = ({ children, style }) => {
-  const androidPaddingTop = Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0;
   return (
-    <SafeAreaView style={[{ flex: 1, paddingTop: androidPaddingTop }, style]}>
+    <SafeAreaView 
+      style={[{ flex: 1 }, style]}
+      edges={['bottom', 'left', 'right']}
+    >
       {children}
     </SafeAreaView>
   );

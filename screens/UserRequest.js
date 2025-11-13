@@ -234,27 +234,33 @@ const UserRequest = ({ navigation }) => {
   if (!user) {
     return (
       <View style={styles.authRequiredContainer}>
-        <Image
-          source={require('../assets/images/logoFace.png')}
-          style={styles.authImage}
-          resizeMode="contain"
-        />
-        <Text style={styles.authTitle}>Connexion Requise</Text>
-        <Text style={styles.authMessage}>
-          Vous devez être connecté pour soumettre une demande d'assistance.
-        </Text>
-        <TouchableOpacity
-          style={styles.authButton}
-          onPress={() => navigation.navigate('Login')}
-        >
-          <Text style={styles.authButtonText}>Se Connecter</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.authSecondaryButton}
-          onPress={() => navigation.navigate('Signup')}
-        >
-          <Text style={styles.authSecondaryButtonText}>Créer un Compte</Text>
-        </TouchableOpacity>
+        <View style={styles.authModalContent}>
+          <Image
+            source={require('../assets/images/logoFace.png')}
+            style={styles.authImage}
+            resizeMode="contain"
+          />
+          <MaterialIcons name="lock" size={60} color="#0a8fdf" style={styles.lockIcon} />
+          <Text style={styles.authTitle}>Connexion Requise</Text>
+          <Text style={styles.authMessage}>
+            L'assistance est un service exclusif pour les membres EliteReply. Veuillez vous connecter pour continuer.
+          </Text>
+          <View style={styles.authButtonsContainer}>
+            <TouchableOpacity
+              style={styles.authCancelButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.authCancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.authLoginButton}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <MaterialIcons name="login" size={20} color="white" style={styles.buttonIcon} />
+              <Text style={styles.authLoginButtonText}>Connexion</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
@@ -572,54 +578,87 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
-    backgroundColor: '#F8F9FA',
+    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  authModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   authImage: {
-    width: 250,
-    height: 250,
-    marginBottom: 30,
-    borderRadius: 100
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+    borderRadius: 60,
+  },
+  lockIcon: {
+    marginBottom: 20,
   },
   authTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2C2C2C',
-    marginBottom: 16,
+    color: '#1e293b',
+    marginBottom: 12,
     textAlign: 'center',
   },
   authMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#64748b',
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 24,
   },
-  authButton: {
-    backgroundColor: '#34C759',
-    borderRadius: 8,
-    padding: 16,
+  authButtonsContainer: {
+    flexDirection: 'row',
     width: '100%',
-    alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  authButtonText: {
+  authCancelButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  authCancelButtonText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  authLoginButton: {
+    flex: 1,
+    backgroundColor: '#0a8fdf',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  authLoginButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
-  authSecondaryButton: {
-    borderWidth: 1,
-    borderColor: '#34C759',
-    borderRadius: 8,
-    padding: 16,
-    width: '100%',
-    alignItems: 'center',
-  },
-  authSecondaryButtonText: {
-    color: '#34C759',
-    fontSize: 16,
-    fontWeight: '600',
+  buttonIcon: {
+    marginRight: 4,
   },
   // NEW STYLES FOR WEB
   webContainer: {

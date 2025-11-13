@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   ScrollView,
   Image,
 } from 'react-native';
@@ -31,11 +32,13 @@ const ClientReceipts = ({ navigation }) => {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) {
-      navigation.goBack();
+      setIsAuthChecked(true);
+      setLoading(false);
       return;
     }
 
@@ -361,6 +364,53 @@ const ClientReceipts = ({ navigation }) => {
     );
   };
 
+  if (isAuthChecked && !auth.currentUser) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Mes Reçus</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.authRequiredContainer}>
+          <View style={styles.authModalContent}>
+            <Ionicons name="lock-closed" size={80} color="#667eea" style={styles.lockIcon} />
+            <Text style={styles.authTitle}>Connexion requise</Text>
+            <Text style={styles.authMessage}>
+              Vous devez être connecté pour accéder à vos reçus.
+            </Text>
+            <View style={styles.authButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.authCancelButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={20} color="#64748B" style={styles.buttonIcon} />
+                <Text style={styles.authCancelButtonText}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.authLoginButton}
+                onPress={() => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  });
+                }}
+              >
+                <Ionicons name="log-in-outline" size={20} color="#FFF" style={styles.buttonIcon} />
+                <Text style={styles.authLoginButtonText}>Connexion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -430,6 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    paddingTop: Platform.OS === 'android' ? 40 : 55,
   },
   backButton: {
     padding: 5,
@@ -813,6 +864,91 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 4,
+  },
+
+  // Auth Required Modal Styles
+  authRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 20,
+  },
+  authModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  lockIcon: {
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  authCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  authCancelButtonText: {
+    color: '#64748B',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  authLoginButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#667eea',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  authLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  buttonIcon: {
+    marginRight: 2,
   },
 });
 

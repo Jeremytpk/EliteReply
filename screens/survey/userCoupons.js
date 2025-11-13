@@ -25,6 +25,7 @@ const UserCoupons = () => {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   // Helper function to format date safely
   const formatDate = (date) => {
@@ -54,10 +55,12 @@ const UserCoupons = () => {
       try {
         const currentUser = auth.currentUser;
         if (!currentUser) {
-          Alert.alert('Erreur', 'Vous devez être connecté pour voir vos coupons.');
-          navigation.goBack();
+          setIsAuthChecked(true);
+          setLoading(false);
           return;
         }
+
+        setIsAuthChecked(true);
 
         // Query the 'surveyResult' collection for responses by the current user
         // Using only userId filter to avoid composite index requirement
@@ -113,6 +116,35 @@ const UserCoupons = () => {
       <View style={styles.centeredContainer}>
         <ActivityIndicator size="large" color="#0a8fdf" />
         <Text style={styles.infoText}>Chargement de vos coupons...</Text>
+      </View>
+    );
+  }
+
+  if (!auth.currentUser) {
+    return (
+      <View style={styles.authRequiredContainer}>
+        <View style={styles.authModalContent}>
+          <Ionicons name="lock-closed" size={60} color="#0a8fdf" style={styles.lockIcon} />
+          <Text style={styles.authTitle}>Connexion Requise</Text>
+          <Text style={styles.authMessage}>
+            Vous devez vous connecter pour voir vos coupons.
+          </Text>
+          <View style={styles.authButtonsContainer}>
+            <TouchableOpacity
+              style={styles.authCancelButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.authCancelButtonText}>Retour</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.authLoginButton}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Ionicons name="log-in" size={20} color="white" style={styles.buttonIcon} />
+              <Text style={styles.authLoginButtonText}>Connexion</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
@@ -236,7 +268,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E2E8F0',
-    paddingTop: Platform.OS === 'android' ? 30 : 0,
+    paddingTop: Platform.OS === 'android' ? 40 : 55,
   },
   backButton: {
     padding: 8,
@@ -379,6 +411,86 @@ const styles = StyleSheet.create({
     color: '#718096',
     marginTop: 10,
     textAlign: 'center',
+  },
+  authRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  authModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  lockIcon: {
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  authCancelButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  authCancelButtonText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  authLoginButton: {
+    flex: 1,
+    backgroundColor: '#0a8fdf',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  authLoginButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  buttonIcon: {
+    marginRight: 4,
   },
 });
 

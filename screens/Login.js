@@ -35,12 +35,14 @@ const Login = () => {
   const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState('');
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const navigation = useNavigation();
 
   // Check auth state on component mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
+        setIsUserLoggedIn(true);
         // User is already logged in, redirect to Loading page
         navigation.reset({
           index: 0,
@@ -54,6 +56,8 @@ const Login = () => {
           email: user.email 
         });
         // --- End Jey's Addition ---
+      } else {
+        setIsUserLoggedIn(false);
       }
     });
     return unsubscribe;
@@ -223,6 +227,16 @@ const Login = () => {
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
+          {!isUserLoggedIn && (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('Dashboard')}
+              disabled={loading || resetLoading}
+            >
+              <Ionicons name="arrow-back" size={24} color="#1E293B" />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.logoContainer}>
             <Image
               source={require('../assets/images/logoVide.png')}
@@ -331,11 +345,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     //paddingTop: 50,
     paddingBottom: -25,
+    paddingTop: Platform.OS === 'android' ? 60 : 75,
   },
   scrollContainer: {
     paddingHorizontal: 24,
     //paddingBottom: 10,
-    paddingTop: 10,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 20,
+    left: 24,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   logoContainer: {
     alignItems: 'center',

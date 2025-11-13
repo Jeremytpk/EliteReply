@@ -21,6 +21,7 @@ const UserRdv = () => {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   // Helper function to format date/time safely (Kept as is)
   const formatDateTime = (date) => {
@@ -57,22 +58,25 @@ const UserRdv = () => {
         return;
       }
 
+      // Only query by clientId to avoid composite index requirement
       const q = query(
         collectionGroup(db, 'rdv_reservation'),
-        where('clientId', '==', currentUser.uid),
-        where('status', 'in', ['scheduled', 'rescheduled'])
+        where('clientId', '==', currentUser.uid)
       );
 
       const querySnapshot = await getDocs(q);
       let fetchedAppointments = [];
       querySnapshot.forEach((document) => {
         const data = document.data();
-        const partnerId = document.ref.parent.parent?.id || null; // Get partnerId from the ref path if available
-        fetchedAppointments.push({ 
-            id: document.id, 
-            partnerId: partnerId, // Save partnerId for deletion
-            ...data 
-        });
+        // Filter by status in memory
+        if (data.status === 'scheduled' || data.status === 'rescheduled') {
+          const partnerId = document.ref.parent.parent?.id || null; // Get partnerId from the ref path if available
+          fetchedAppointments.push({ 
+              id: document.id, 
+              partnerId: partnerId, // Save partnerId for deletion
+              ...data 
+          });
+        }
       });
 
       // Client-side sort by appointmentDateTime desc
@@ -93,6 +97,12 @@ const UserRdv = () => {
   };
 
   useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setIsAuthChecked(true);
+      setLoading(false);
+      return;
+    }
     fetchUserAppointments();
   }, []);
 
@@ -148,6 +158,43 @@ const UserRdv = () => {
     );
   };
 
+
+  if (isAuthChecked && !auth.currentUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.authRequiredContainer}>
+          <View style={styles.authModalContent}>
+            <Ionicons name="lock-closed" size={80} color="#FF9500" style={styles.lockIcon} />
+            <Text style={styles.authTitle}>Connexion requise</Text>
+            <Text style={styles.authMessage}>
+              Vous devez être connecté pour accéder à vos rendez-vous.
+            </Text>
+            <View style={styles.authButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.authCancelButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={20} color="#64748B" style={styles.buttonIcon} />
+                <Text style={styles.authCancelButtonText}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.authLoginButton}
+                onPress={() => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  });
+                }}
+              >
+                <Ionicons name="log-in-outline" size={20} color="#FFF" style={styles.buttonIcon} />
+                <Text style={styles.authLoginButtonText}>Connexion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
@@ -530,6 +577,91 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   // --- END NEW STYLE ---
+
+  // Auth Required Modal Styles
+  authRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 20,
+  },
+  authModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  lockIcon: {
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  authCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  authCancelButtonText: {
+    color: '#64748B',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  authLoginButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9500',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  authLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  buttonIcon: {
+    marginRight: 2,
+  },
 });
 
 export default UserRdv;

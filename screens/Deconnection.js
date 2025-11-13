@@ -24,10 +24,10 @@ const Deconnection = () => {
     try {
       await signOut(auth);
       console.log("User signed out!");
-      // Reset navigation stack to prevent going back to protected screens
+      // Reset navigation stack to Dashboard for guest browsing
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Login' }],
+        routes: [{ name: 'Dashboard' }],
       });
     } catch (error) {
       console.error("Error signing out:", error);

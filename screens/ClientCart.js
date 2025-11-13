@@ -40,6 +40,7 @@ const ClientCart = () => {
   const [total, setTotal] = useState(0);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('card');
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
 
   const handleCartPaymentSuccess = async (paymentResult) => {
@@ -91,7 +92,11 @@ const ClientCart = () => {
   };
 
   const fetchCartItems = useCallback(async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      setIsAuthChecked(true);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -118,6 +123,7 @@ const ClientCart = () => {
       console.error('Error fetching cart items:', error);
       Alert.alert('Erreur', 'Impossible de charger le panier.');
     } finally {
+      setIsAuthChecked(true);
       setLoading(false);
     }
   }, []);
@@ -338,6 +344,53 @@ const ClientCart = () => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0a8fdf" />
         <Text style={styles.loadingText}>Chargement du panier...</Text>
+      </View>
+    );
+  }
+
+  if (isAuthChecked && !auth.currentUser) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Mon Panier</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.authRequiredContainer}>
+          <View style={styles.authModalContent}>
+            <Ionicons name="lock-closed" size={80} color="#0a8fdf" style={styles.lockIcon} />
+            <Text style={styles.authTitle}>Connexion requise</Text>
+            <Text style={styles.authMessage}>
+              Le panier est un service exclusif pour les membres EliteReply. Veuillez vous connecter pour accéder à votre panier.
+            </Text>
+            <View style={styles.authButtonsContainer}>
+              <TouchableOpacity
+                style={styles.authCancelButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={20} color="#64748B" style={styles.buttonIcon} />
+                <Text style={styles.authCancelButtonText}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.authLoginButton}
+                onPress={() => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  });
+                }}
+              >
+                <Ionicons name="log-in-outline" size={20} color="#FFF" style={styles.buttonIcon} />
+                <Text style={styles.authLoginButtonText}>Connexion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
@@ -762,6 +815,91 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Auth Required Modal Styles
+  authRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 20,
+  },
+  authModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  lockIcon: {
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  authCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  authCancelButtonText: {
+    color: '#64748B',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  authLoginButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0a8fdf',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#0a8fdf',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  authLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  buttonIcon: {
+    marginRight: 2,
   },
 });
 

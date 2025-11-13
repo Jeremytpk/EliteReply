@@ -454,7 +454,26 @@ const Paramètres = () => {
 
         <TouchableOpacity
           style={styles.settingItem}
-          onPress={() => setShowPasswordModal(true)}
+          onPress={() => {
+            if (!auth.currentUser) {
+              Alert.alert(
+                'Connexion requise',
+                'Vous devez être connecté pour changer votre mot de passe.',
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  { 
+                    text: 'Connexion', 
+                    onPress: () => navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'Login' }],
+                    })
+                  }
+                ]
+              );
+              return;
+            }
+            setShowPasswordModal(true);
+          }}
         >
           <View style={styles.settingItemContent}>
             <Image source={LOCK_ICON} style={[styles.settingIconCustom, { tintColor: '#0a8fdf' }]} />
@@ -465,11 +484,22 @@ const Paramètres = () => {
 
         <TouchableOpacity
           style={[styles.settingItem, styles.logoutButton]}
-          onPress={() => navigation.navigate('Deconnection')}
+          onPress={() => {
+            if (!auth.currentUser) {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+              return;
+            }
+            navigation.navigate('Deconnection');
+          }}
         >
           <View style={styles.settingItemContent}>
             <Image source={LOGOUT_ICON} style={[styles.settingIconCustom, { tintColor: '#EF4444' }]} />
-            <Text style={[styles.settingText, styles.logoutText]}>Déconnexion</Text>
+            <Text style={[styles.settingText, styles.logoutText]}>
+              {auth.currentUser ? 'Déconnexion' : 'Connexion'}
+            </Text>
           </View>
         </TouchableOpacity>
       </View>

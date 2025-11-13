@@ -90,13 +90,17 @@ const Dashboard = () => {
     try {
       const user = auth.currentUser;
       if (!user) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        // Guest mode - allow access to Dashboard without authentication
+        setUserData(null);
+        setLoading(false);
         return;
       }
 
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (!userDoc.exists()) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        // User exists but no document - still allow access as guest
+        setUserData(null);
+        setLoading(false);
         return;
       }
 
@@ -106,7 +110,8 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error("Error fetching user data:", error);
-      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      // On error, allow guest mode
+      setUserData(null);
     } finally {
       setLoading(false);
     }
@@ -567,7 +572,15 @@ const Dashboard = () => {
   const handleChatPress = async () => {
     const user = auth.currentUser;
     if (!user) {
-      navigation.navigate('Login');
+      // Guest mode - show login prompt
+      Alert.alert(
+        'Connexion Requise',
+        'Vous devez vous connecter pour accéder aux conversations.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Se Connecter', onPress: () => navigation.navigate('Login') }
+        ]
+      );
       return;
     }
 
@@ -808,7 +821,11 @@ const Dashboard = () => {
     );
   }
 
-  const greetingText = `Bonjour, ${userData?.name || userData?.email?.split('@')[0] || 'Client'}  !`;
+  const greetingText = userData?.name 
+    ? `Bonjour, ${userData.name}  !` 
+    : auth.currentUser 
+      ? `Bonjour, ${auth.currentUser.email?.split('@')[0] || 'Client'}  !`
+      : 'Bonjour, Visiteur  !';
 
   return (
     <View style={{ flex: 1 }}>
@@ -825,27 +842,38 @@ const Dashboard = () => {
       >
         <View style={styles.header}>
           <View style={styles.greetingAndPremiumContainer}>
-            <Text style={styles.welcomeText}>{greetingText}</Text>
-            {userData?.isPremium && (
-              <MaterialCommunityIcons
-                name="medal"
-                size={22}
-                color="#FFD700"
-                style={styles.premiumIcon}
-              />
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.welcomeText}>{greetingText}</Text>
+              {userData?.isPremium && (
+                <MaterialCommunityIcons
+                  name="medal"
+                  size={22}
+                  color="#FFD700"
+                  style={styles.premiumIcon}
+                />
+              )}
+            </View>
             <Text style={styles.helpText}>Bienvenu(e) chez l'Elite du service client en Afrique.</Text>
           </View>
-          <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
-            {userData?.photoURL ? (
-              <Image
-                source={{ uri: userData.photoURL }}
-                style={{ width: 46, height: 46, borderRadius: 23 }}
-              />
-            ) : (
-              <Ionicons name="person-circle-outline" size={46} color="#25c15b" />
-            )}
-          </TouchableOpacity>
+          {auth.currentUser ? (
+            <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
+              {userData?.photoURL ? (
+                <Image
+                  source={{ uri: userData.photoURL }}
+                  style={{ width: 46, height: 46, borderRadius: 23 }}
+                />
+              ) : (
+                <Ionicons name="person-circle-outline" size={46} color="#25c15b" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Login')} 
+              style={styles.loginButton}
+            >
+              <Text style={styles.loginButtonText}>Connexion</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Search Bar */}
@@ -1045,12 +1073,19 @@ const Dashboard = () => {
       <Animated.View
         style={[
           styles.chatButton,
-          { transform: [{ scale: bounceAnim }] }
+          { 
+            transform: [{ scale: bounceAnim }],
+            opacity: auth.currentUser ? 1 : 0.5  // Dim for guests
+          }
         ]}
       >
-        <TouchableOpacity onPress={handleChatPress} activeOpacity={0.7}>
+        <TouchableOpacity 
+          onPress={handleChatPress} 
+          activeOpacity={0.7}
+          disabled={!auth.currentUser}  // Disable for guests
+        >
           <Image source={CHAT_BUBBLE_ICON} style={styles.customChatBubbleIcon} />
-          {unreadCount > 0 && (
+          {unreadCount > 0 && auth.currentUser && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
             </View>
@@ -1158,35 +1193,56 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-    bottom: 20,
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    paddingTop: Platform.OS === 'android' ? 20 : 35,
   },
   greetingAndPremiumContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     flex: 1,
+    marginRight: 12,
   },
   welcomeText: {
-    fontSize: 22,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#1e293b',
-    marginRight: 8,
+    marginBottom: 4,
   },
   premiumIcon: {
-    marginRight: 8,
+    marginLeft: 4,
+    marginTop: -2,
   },
   helpText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#64748b',
-    marginTop: 4,
-    width: '100%',
+    lineHeight: 20,
   },
   profileButton: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 8,
+    borderRadius: 23,
+    padding: 2,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  loginButton: {
+    backgroundColor: '#0a8fdf',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  loginButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
   },
   swiperWrapper: {
     height: 120,

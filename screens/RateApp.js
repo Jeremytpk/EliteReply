@@ -37,6 +37,7 @@ const EvaluerService = ({ navigation }) => {
   const [partenaireSelectionne, setPartenaireSelectionne] = useState(null);
   const [recherchePartenaire, setRecherchePartenaire] = useState('');
   const [totalEvaluations, setTotalEvaluations] = useState(0);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const auth = getAuth(app);
   const db = getFirestore(app);
@@ -108,6 +109,18 @@ const EvaluerService = ({ navigation }) => {
   };
 
   const demanderAffichageNom = () => {
+    // Check rating first
+    if (note === 0) {
+      Alert.alert('Attention', 'Veuillez donner une note avant de soumettre');
+      return;
+    }
+
+    // Check if user is authenticated
+    if (!auth.currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+
     Alert.alert(
       'Confidentialité',
       'Souhaitez-vous afficher votre nom dans les évaluations publiques ?',
@@ -344,9 +357,9 @@ const EvaluerService = ({ navigation }) => {
           />
 
           <TouchableOpacity
-            style={[styles.boutonSoumettre, envoiEnCours && styles.boutonDesactive]}
+            style={[styles.boutonSoumettre, (envoiEnCours || note === 0) && styles.boutonDesactive]}
             onPress={demanderAffichageNom}
-            disabled={envoiEnCours || note === 0}
+            disabled={envoiEnCours}
           >
             {envoiEnCours ? (
               <ActivityIndicator color="#FFF" />
@@ -416,6 +429,46 @@ const EvaluerService = ({ navigation }) => {
                 disabled={!partenaireSelectionne}
               >
                 <Text style={styles.modalButtonText}>Confirmer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Auth Required Modal */}
+      <Modal
+        visible={showAuthModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowAuthModal(false)}
+      >
+        <View style={styles.authModalOverlay}>
+          <View style={styles.authModalContent}>
+            <Ionicons name="lock-closed" size={80} color="#34C759" style={styles.lockIcon} />
+            <Text style={styles.authTitle}>Connexion requise</Text>
+            <Text style={styles.authMessage}>
+              Vous devez être connecté pour soumettre une évaluation.
+            </Text>
+            <View style={styles.authButtonsContainer}>
+              <TouchableOpacity
+                style={styles.authCancelButton}
+                onPress={() => setShowAuthModal(false)}
+              >
+                <Ionicons name="close" size={20} color="#64748B" style={styles.buttonIcon} />
+                <Text style={styles.authCancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.authLoginButton}
+                onPress={() => {
+                  setShowAuthModal(false);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  });
+                }}
+              >
+                <Ionicons name="log-in-outline" size={20} color="#FFF" style={styles.buttonIcon} />
+                <Text style={styles.authLoginButtonText}>Connexion</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -708,6 +761,90 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+
+  // Auth Required Modal Styles
+  authModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  authModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  lockIcon: {
+    marginBottom: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
+  },
+  authCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  authCancelButtonText: {
+    color: '#64748B',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  authLoginButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#34C759',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  authLoginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  buttonIcon: {
+    marginRight: 2,
   },
 });
 

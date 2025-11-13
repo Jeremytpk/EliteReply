@@ -75,11 +75,11 @@ const Loading = () => {
         }
       }
 
-      // Fallback: no user or user data resolution failed
+      // Fallback: no user or user data resolution failed - redirect to Dashboard as guest
       if (!isNavigating.current) {
         isNavigating.current = true; // Set flag
-        // Delay slightly less to speed up redirection for logged-out users
-        setTimeout(() => navigation.replace('Login'), 400); 
+        // Delay slightly less to speed up redirection for logged-out users (guest mode)
+        setTimeout(() => navigation.replace('Dashboard'), 400); 
       }
     };
 
