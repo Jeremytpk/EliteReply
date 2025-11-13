@@ -8,6 +8,10 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "elitereply",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/2ed09575-61d8-47b8-ae78-ee5bfbf930f9"
+    },
     "plugins": [
       [
         "expo-image-picker",
