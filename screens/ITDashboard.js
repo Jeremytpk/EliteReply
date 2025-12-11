@@ -39,6 +39,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { sendTicketNotification } from '../services/notificationHelpers';
+import UpdateBanner from '../components/UpdateBanner';
 
 // Responsive design helper function
 const getResponsiveValues = () => {
@@ -816,6 +817,9 @@ const ITDashboard = () => {
           />
         </TouchableOpacity>
 
+        {/* Update Banner */}
+        <UpdateBanner />
+
         {showStats && (
           <View style={styles.statisticsContainer}>
             <ScrollView 
@@ -1208,6 +1212,7 @@ const styles = StyleSheet.create({
     paddingTop: 45,
     paddingBottom: 20,
     paddingHorizontal: 20,
+    bottom: Platform.OS === 'android' ? -5 : 30,
   },
   headerContent: {
     flexDirection: 'row',

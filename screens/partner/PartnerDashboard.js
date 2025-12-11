@@ -89,6 +89,8 @@ const ARROW_RIGHT_SHORT_ICON = require('../../assets/icons/arrow_rightShort.png'
 const STORE_ICON = require('../../assets/icons/store.png');
 // --- END NEW IMPORTS ---
 
+import UpdateBanner from '../../components/UpdateBanner';
+
 import { sendPushNotification } from '../../services/notifications';
 import { formatAmount } from '../../utils/currency';
 
@@ -982,6 +984,9 @@ const PartnerDashboard = ({ navigation }) => {
             }
             showsVerticalScrollIndicator={false}
           >
+            {/* Update Banner */}
+            <UpdateBanner />
+
             {/* Modern Statistics Grid */}
             <View style={styles.statsSection}>
               <Text style={styles.sectionTitle}>📊 Activités Principales</Text>

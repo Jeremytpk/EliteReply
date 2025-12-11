@@ -28,6 +28,7 @@ import {
 import { sendSystemNotification, sendPaymentNotification, sendMessageNotification } from '../services/notificationHelpers';
 import { Ionicons, MaterialIcons, FontAwesome, Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import UpdateBanner from '../components/UpdateBanner';
 
 const AdminScreen = () => {
   const navigation = useNavigation();
@@ -389,6 +390,9 @@ const AdminScreen = () => {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Update Banner */}
+        <UpdateBanner />
+
         {/* Analytics Banner */}
         <TouchableOpacity
           style={styles.analyticsBanner}

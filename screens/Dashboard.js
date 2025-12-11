@@ -28,6 +28,7 @@ import { collection, query, where, onSnapshot, doc, getDoc, serverTimestamp, upd
 import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
 import *as Animatable from 'react-native-animatable';
+import UpdateBanner from '../components/UpdateBanner';
 
 const { width } = Dimensions.get('window');
 
@@ -853,7 +854,7 @@ const Dashboard = () => {
                 />
               )}
             </View>
-            <Text style={styles.helpText}>Bienvenu(e) chez l'Elite du service client en Afrique.</Text>
+            <Text style={styles.helpText}>Bienvenu(e) au Portail Commercial Africain.</Text>
           </View>
           {auth.currentUser ? (
             <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
@@ -875,6 +876,9 @@ const Dashboard = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Update Banner */}
+        <UpdateBanner />
 
         {/* Search Bar */}
         <View style={styles.searchContainer}>
