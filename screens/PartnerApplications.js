@@ -24,7 +24,8 @@ import {
   doc, 
   updateDoc,
   where,
-  getDocs
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -321,6 +322,48 @@ const PartnerApplications = ({ navigation }) => {
     }
   };
 
+  const handleDeleteApplication = (applicationId) => {
+    const application = applications.find(app => app.id === applicationId);
+    const applicantName = `${application?.applicantInfo?.firstName || application?.firstName} ${application?.applicantInfo?.lastName || application?.lastName}`;
+
+    Alert.alert(
+      'Supprimer la candidature',
+      `Êtes-vous sûr de vouloir supprimer définitivement la candidature de ${applicantName} ?\n\nCette action est irréversible.`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel'
+        },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => deleteApplication(applicationId)
+        }
+      ]
+    );
+  };
+
+  const deleteApplication = async (applicationId) => {
+    try {
+      setUpdatingStatus(true);
+      
+      // Delete from Firebase
+      await deleteDoc(doc(db, 'applications', applicationId));
+
+      // Update local state
+      setApplications(prev => prev.filter(app => app.id !== applicationId));
+
+      Alert.alert('Succès', 'La candidature a été supprimée');
+      setModalVisible(false);
+
+    } catch (error) {
+      console.error('Error deleting application:', error);
+      Alert.alert('Erreur', 'Impossible de supprimer la candidature');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const getStatusText = (status) => {
     switch (status) {
       case 'pending': return 'En Attente';
@@ -570,6 +613,16 @@ const PartnerApplications = ({ navigation }) => {
               <Text style={styles.actionButtonText}>Rejetée</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Delete Button */}
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteApplication(selectedApplication.id)}
+            disabled={updatingStatus}
+          >
+            <Ionicons name="trash-outline" size={20} color="#fff" />
+            <Text style={styles.deleteButtonText}>Supprimer la candidature</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     );
@@ -691,8 +744,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    height: Platform.OS === 'ios' ? 48 : 50,
-    paddingTop: Platform.OS === 'ios' ? 10 : 0,
+    paddingTop: Platform.OS === 'ios' ? 40 : 35,
   },
   backButton: {
     padding: 5,
@@ -929,6 +981,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
     minWidth: '48%',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 10,
+    width: '100%',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   actionButtonText: {
     fontSize: 14,

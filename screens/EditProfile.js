@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#EBF3F8',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   authModalContent: {
     backgroundColor: 'white',

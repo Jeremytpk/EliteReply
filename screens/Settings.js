@@ -20,6 +20,8 @@ import { auth, db } from '../firebase';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { doc, getDoc, collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { checkForUpdatesManually } from '../services/updateService';
+import Constants from 'expo-constants';
 
 // --- NEW: Import your custom icons ---
 const USER_ICON = require('../assets/icons/user.png');
@@ -100,6 +102,9 @@ const Paramètres = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+  
+  // --- State for Update Check ---
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   // --- END NEW STATES ---
 
   useEffect(() => {
@@ -480,6 +485,34 @@ const Paramètres = () => {
             <Text style={styles.settingText}>Changer Mot de Passe</Text>
           </View>
           <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.settingItem}
+          onPress={async () => {
+            setIsCheckingUpdate(true);
+            await checkForUpdatesManually(true);
+            setIsCheckingUpdate(false);
+          }}
+          disabled={isCheckingUpdate}
+        >
+          <View style={styles.settingItemContent}>
+            <Ionicons 
+              name={isCheckingUpdate ? "refresh" : "cloud-download-outline"} 
+              size={24} 
+              color="#10B981" 
+              style={{ marginRight: 18 }} 
+            />
+            <Text style={styles.settingText}>
+              {isCheckingUpdate ? 'Vérification...' : 'Vérifier les Mises à Jour'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: '#666', marginRight: 8 }}>
+              v{Constants.expoConfig?.version || '1.0.0'}
+            </Text>
+            <Image source={RIGHT_ENTER_ICON} style={styles.customArrowIcon} />
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -13,6 +13,7 @@ import Constants from 'expo-constants'; // Import Constants to access app.json c
 import * as ExpoLinking from 'expo-linking'; // Use Expo's Linking module
 import { StripeProvider } from './utils/StripeWrapper';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { checkForUpdatesOnLaunch } from './services/updateService';
 
 import { db, auth } from './firebase';
 import { STRIPE_PUBLISHABLE_KEY } from './config/stripe';
@@ -394,7 +395,12 @@ export default function App() {
     }
     createAndroidNotificationChannel();
 
-    // 2. Auth state observer
+    // 2. Check for OTA updates on app launch
+    checkForUpdatesOnLaunch().catch(error => {
+      console.error('Error checking for updates on launch:', error);
+    });
+
+    // 3. Auth state observer
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
       if (user) {
         setCurrentUserId(user.uid);
@@ -405,12 +411,12 @@ export default function App() {
       }
     });
 
-    // 3. Notification received listener (app in foreground)
+    // 4. Notification received listener (app in foreground)
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('Notification received (foreground):', notification);
     });
 
-    // 4. Notification response listener (user taps notification)
+    // 5. Notification response listener (user taps notification)
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification tapped/interacted with:', response.notification.request.content.data);
       const { link, type, ticketId, surveyId, appointmentId, partnerId, partnerName } = response.notification.request.content.data;

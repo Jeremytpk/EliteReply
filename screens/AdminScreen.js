@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 35,
     paddingHorizontal: 20,
     //paddingBottom: 10,
-    bottom: 30,
+    //bottom: 30,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -811,7 +811,8 @@ const styles = StyleSheet.create({
 
   // Analytics Banner
   analyticsBanner: {
-    marginBottom: 25,
+    marginBottom: 5,
+    //paddingTop: 10,
     borderBottomRightRadius: 20,
     borderBottomLeftRadius: 20,
     overflow: 'hidden',
