@@ -26,7 +26,7 @@ const About = ({ navigation }) => {
 
       <View style={styles.section}>
         <Text style={styles.text}>
-          EliteReply est une startup innovante basée à Kinshasa, RDC et Atlanta, USA spécialisée dans les solutions de support client par chat et Appel pour les entreprises de tous secteurs.
+          Notre mission est de simplifier l'accès aux services locaux pour les Africains, où qu'ils soient. En fusionnant l'intelligence artificielle et le contact humain, nous créons une expérience de service client unique, efficace et personnalisée.
         </Text>
       </View>
 
